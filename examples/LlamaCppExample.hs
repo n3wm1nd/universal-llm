@@ -58,23 +58,29 @@ instance Autodocodec.HasCodec GetTimeParams where
   codec = object "GetTimeParams" $
     GetTimeParams <$> optionalField "timezone" "Timezone" .= timezone
 
--- Tool type (zero-sized, no config needed)
-data GetTime = GetTime deriving (Show, Eq)
+-- Tool type that carries its implementation
+data GetTime m = GetTime
+  { getTimeImpl :: GetTimeParams -> m TimeResponse
+  }
 
-instance MonadIO m => Tool GetTime m where
-  type ToolParams GetTime = GetTimeParams
-  type ToolOutput GetTime = TimeResponse
+-- Eq instance (tools are equal if they have the same name, ignore the function)
+instance Eq (GetTime m) where
+  _ == _ = True
+
+instance Monad m => Tool (GetTime m) m where
+  type ToolParams (GetTime m) = GetTimeParams
+  type ToolOutput (GetTime m) = TimeResponse
   toolName _ = "get_time"
   toolDescription _ = "Get the current time"
-  call GetTime _params = do
-    now <- liftIO getCurrentTime
-    let timeStr = T.pack $ formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S UTC" now
-    liftIO $ putStrLn $ "    ⏰ " <> T.unpack timeStr
-    return $ TimeResponse timeStr
+  call (GetTime impl) params = impl params
 
--- Tool value
-getTimeTool :: GetTime
-getTimeTool = GetTime
+-- Tool value with actual implementation
+getTimeTool :: MonadIO m => GetTime m
+getTimeTool = GetTime $ \params -> do
+  now <- liftIO getCurrentTime
+  let timeStr = T.pack $ formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S UTC" now
+  liftIO $ putStrLn $ "    ⏰ " <> T.unpack timeStr
+  return $ TimeResponse timeStr
 
 -- HTTP call to llama.cpp server
 callLLM :: String -> OpenAIRequest -> ExceptT LLMError IO OpenAIResponse
@@ -90,7 +96,8 @@ callLLM baseUrl request = do
 agentLoop :: String -> MistralModel -> [Message MistralModel OpenAI] -> ExceptT LLMError IO ()
 agentLoop serverUrl model messages = do
   -- Available tools
-  let tools = [SomeTool getTimeTool]
+  let tools :: [SomeTool IO]
+      tools = [SomeTool (getTimeTool @IO)]
 
   -- Call LLM with tools
   let request = toRequest OpenAI model messages tools
