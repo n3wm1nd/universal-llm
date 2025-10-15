@@ -8,7 +8,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Main where
+module Main (main) where
 
 import UniversalLLM
 import UniversalLLM.Providers.OpenAI
@@ -19,7 +19,6 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Autodocodec (toJSONViaCodec, eitherDecodeJSONViaCodec, HasCodec, codec, object, optionalField, (.=))
 import qualified Autodocodec
-import Autodocodec.Schema (jsonSchemaViaCodec)
 import qualified Data.Aeson as Aeson
 import Network.HTTP.Simple
 import Control.Monad (unless)
@@ -59,15 +58,13 @@ instance Autodocodec.HasCodec GetTimeParams where
     GetTimeParams <$> optionalField "timezone" "Timezone" .= timezone
 
 -- Tool type that carries its implementation
-data GetTime m = GetTime
-  { getTimeImpl :: GetTimeParams -> m TimeResponse
-  }
+data GetTime m = GetTime (GetTimeParams -> m TimeResponse)
 
 -- Eq instance (tools are equal if they have the same name, ignore the function)
 instance Eq (GetTime m) where
   _ == _ = True
 
-instance Monad m => Tool (GetTime m) m where
+instance Tool (GetTime m) m where
   type ToolParams (GetTime m) = GetTimeParams
   type ToolOutput (GetTime m) = TimeResponse
   toolName _ = "get_time"
@@ -76,7 +73,7 @@ instance Monad m => Tool (GetTime m) m where
 
 -- Tool value with actual implementation
 getTimeTool :: MonadIO m => GetTime m
-getTimeTool = GetTime $ \params -> do
+getTimeTool = GetTime $ \_params -> do
   now <- liftIO getCurrentTime
   let timeStr = T.pack $ formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S UTC" now
   liftIO $ putStrLn $ "    ⏰ " <> T.unpack timeStr
@@ -125,9 +122,9 @@ handleResponse _ _ = return []
 
 -- Execute a single tool call with logging
 executeCall :: [SomeTool IO] -> ToolCall -> IO Aeson.Value
-executeCall tools call = do
-  putStrLn $ "  → " <> T.unpack (toolCallName call)
-  result <- executeToolCall tools call
+executeCall tools callTool = do
+  putStrLn $ "  → " <> T.unpack (toolCallName callTool)
+  result <- executeToolCall tools callTool
   case result of
     Nothing -> do
       putStrLn $ "    ❌ Tool not found or invalid parameters"
