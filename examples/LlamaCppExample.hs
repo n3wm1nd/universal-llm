@@ -5,6 +5,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Main where
 
@@ -22,7 +24,7 @@ import qualified Data.Aeson as Aeson
 import Network.HTTP.Simple
 import Control.Monad (unless)
 import Control.Monad.Trans.Except (ExceptT(..), runExceptT, except, withExceptT)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class (liftIO, MonadIO)
 import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
 
 -- Simple model configuration
@@ -38,6 +40,15 @@ instance MaxTokens MistralModel provider where getMaxTokens = mistralMaxTokens
 instance Seed MistralModel provider where getSeed = mistralSeed
 instance ModelName OpenAI MistralModel where modelName = "mistral-7b-instruct"
 
+-- Tool result type
+data TimeResponse = TimeResponse
+  { currentTime :: Text
+  } deriving (Show, Eq)
+
+instance Autodocodec.HasCodec TimeResponse where
+  codec = object "TimeResponse" $
+    TimeResponse <$> Autodocodec.requiredField "current_time" "Current time" .= currentTime
+
 -- Tool parameters type
 data GetTimeParams = GetTimeParams
   { timezone :: Maybe Text
@@ -50,10 +61,16 @@ instance Autodocodec.HasCodec GetTimeParams where
 -- Tool type (zero-sized, no config needed)
 data GetTime = GetTime deriving (Show, Eq)
 
-instance Tool GetTime where
+instance MonadIO m => Tool GetTime m where
   type ToolParams GetTime = GetTimeParams
+  type ToolOutput GetTime = TimeResponse
   toolName _ = "get_time"
   toolDescription _ = "Get the current time"
+  call GetTime _params = do
+    now <- liftIO getCurrentTime
+    let timeStr = T.pack $ formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S UTC" now
+    liftIO $ putStrLn $ "    ⏰ " <> T.unpack timeStr
+    return $ TimeResponse timeStr
 
 -- Tool value
 getTimeTool :: GetTime
@@ -72,41 +89,43 @@ callLLM baseUrl request = do
 -- Main agent loop - continues until text response (non-tool)
 agentLoop :: String -> MistralModel -> [Message MistralModel OpenAI] -> ExceptT LLMError IO ()
 agentLoop serverUrl model messages = do
+  -- Available tools
+  let tools = [SomeTool getTimeTool]
+
   -- Call LLM with tools
-  let request = toRequest OpenAI model messages [SomeTool getTimeTool]
+  let request = toRequest OpenAI model messages tools
   response <- callLLM serverUrl request
   responses <- except $ fromResponse response
 
-  newMsgs <- liftIO $ concat <$> mapM handleResponse responses
+  newMsgs <- liftIO $ concat <$> mapM (handleResponse tools) responses
   -- Continue loop only if there are tool results to send back
   unless (null newMsgs) $
     agentLoop serverUrl model (messages ++ responses ++ newMsgs)
 
 -- Handle different response types
 -- Returns empty list for text (stops loop), tool results for tool calls (continues loop)
-handleResponse :: Message MistralModel OpenAI -> IO [Message MistralModel OpenAI]
-handleResponse (AssistantText text) = do
+handleResponse :: [SomeTool IO] -> Message MistralModel OpenAI -> IO [Message MistralModel OpenAI]
+handleResponse _ (AssistantText text) = do
   putStrLn $ "🤖 " <> T.unpack text
   return [] -- Empty list stops the loop
 
-handleResponse (AssistantTool calls) = do
+handleResponse tools (AssistantTool calls) = do
   putStrLn $ "🔧 Calling " <> show (length calls) <> " tool(s)"
-  results <- mapM executeToolCall calls
+  results <- mapM (executeCall tools) calls
   return $ zipWith (\c r -> ToolResultMsg $ ToolResult (toolCallId c) r) calls results -- Tool results continue loop
 
-handleResponse _ = return []
+handleResponse _ _ = return []
 
--- Execute a tool call (simple dispatch with JSON Values)
-executeToolCall :: ToolCall -> IO Aeson.Value
-executeToolCall call = do
+-- Execute a single tool call with logging
+executeCall :: [SomeTool IO] -> ToolCall -> IO Aeson.Value
+executeCall tools call = do
   putStrLn $ "  → " <> T.unpack (toolCallName call)
-  case toolCallName call of
-    "get_time" -> do
-      now <- getCurrentTime
-      let timeStr = formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S UTC" now
-      putStrLn $ "    ⏰ " <> timeStr
-      return $ Aeson.object ["current_time" Aeson..= timeStr]
-    _ -> return $ Aeson.object ["error" Aeson..= ("Unknown tool" :: Text)]
+  result <- executeToolCall tools call
+  case result of
+    Nothing -> do
+      putStrLn $ "    ❌ Tool not found or invalid parameters"
+      return $ Aeson.object ["error" Aeson..= ("Tool execution failed" :: Text)]
+    Just value -> return value
 
 main :: IO ()
 main = do

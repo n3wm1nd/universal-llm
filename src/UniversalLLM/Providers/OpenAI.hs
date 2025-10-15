@@ -21,8 +21,8 @@ import Autodocodec (codec)
 data OpenAI = OpenAI deriving (Show, Eq)
 
 -- Pure functions: no IO, just transformations
-toRequest :: forall model. (ModelName OpenAI model, Temperature model OpenAI, MaxTokens model OpenAI, Seed model OpenAI)
-          => OpenAI -> model -> [Message model OpenAI] -> [SomeTool] -> OpenAIRequest
+toRequest :: forall model m. (ModelName OpenAI model, Temperature model OpenAI, MaxTokens model OpenAI, Seed model OpenAI)
+          => OpenAI -> model -> [Message model OpenAI] -> [SomeTool m] -> OpenAIRequest
 toRequest _provider model messages tools = OpenAIRequest
   { model = modelName @OpenAI @model
   , messages = map convertMessage messages
@@ -32,13 +32,13 @@ toRequest _provider model messages tools = OpenAIRequest
   , tools = if null tools then Nothing else Just (map toOpenAIToolDef tools)
   }
 
-toOpenAIToolDef :: SomeTool -> OpenAIToolDefinition
+toOpenAIToolDef :: forall m. SomeTool m -> OpenAIToolDefinition
 toOpenAIToolDef (SomeTool tool) = case tool of
   (t :: t) -> OpenAIToolDefinition
     { tool_type = "function"
     , function = OpenAIFunction
-        { name = toolName t
-        , description = toolDescription t
+        { name = toolName @t @m t
+        , description = toolDescription @t @m t
         , parameters = Aeson.toJSON $ jsonSchemaViaCodec @(ToolParams t)
         }
     }
