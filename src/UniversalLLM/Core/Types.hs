@@ -6,10 +6,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE FunctionalDependencies #-}
 
 module UniversalLLM.Core.Types where
 
 import Data.Text (Text)
+import Data.Aeson (Value)
+import Autodocodec (HasCodec)
 
 -- Core capabilities that models can have
 class HasVision model
@@ -34,15 +37,25 @@ class Seed model provider where
   getSeed :: model -> Maybe Int
 
 -- Tool use types
+-- The Tool class connects a tool type (which can hold config) to its parameters type
+class HasCodec (ToolParams tool) => Tool tool where
+  type ToolParams tool :: *
+  toolName :: tool -> Text
+  toolDescription :: tool -> Text
+
+-- Existential wrapper for heterogeneous tool lists
+data SomeTool where
+  SomeTool :: Tool tool => tool -> SomeTool
+
 data ToolCall = ToolCall
-  { toolId :: Text
-  , toolName :: Text
-  , toolParameters :: Text -- JSON string
+  { toolCallId :: Text
+  , toolCallName :: Text
+  , toolCallParameters :: Value
   } deriving (Show, Eq)
 
 data ToolResult = ToolResult
-  { toolCallId :: Text
-  , toolOutput :: Text
+  { toolResultCallId :: Text
+  , toolResultOutput :: Value
   } deriving (Show, Eq)
 
 -- | LLM operation errors

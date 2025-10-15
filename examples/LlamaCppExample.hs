@@ -1,148 +1,126 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Main where
 
 import UniversalLLM
 import UniversalLLM.Providers.OpenAI
-import UniversalLLM.Protocols.OpenAI
+import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import System.Environment (lookupEnv)
 import System.Exit (exitFailure)
 import Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import Autodocodec (toJSONViaCodec, eitherDecodeJSONViaCodec)
+import Autodocodec (toJSONViaCodec, eitherDecodeJSONViaCodec, HasCodec, codec, object, optionalField, (.=))
+import qualified Autodocodec
+import Autodocodec.Schema (jsonSchemaViaCodec)
 import qualified Data.Aeson as Aeson
-import qualified Data.ByteString.Lazy.Char8 as L8
 import Network.HTTP.Simple
-import Control.Exception (try, SomeException)
+import Control.Monad (unless)
+import Control.Monad.Trans.Except (ExceptT(..), runExceptT, except, withExceptT)
+import Control.Monad.IO.Class (liftIO)
+import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
 
--- Define our actual model ad-hoc for this example
+-- Simple model configuration
 data MistralModel = MistralModel
   { mistralTemperature :: Maybe Double
   , mistralMaxTokens :: Maybe Int
   , mistralSeed :: Maybe Int
   } deriving (Show, Eq)
 
--- This model doesn't have vision or JSON mode capabilities
--- instance HasVision MistralModel  -- Commented out - no vision
--- instance HasJSON MistralModel    -- Commented out - no JSON mode
+instance HasTools MistralModel
+instance Temperature MistralModel provider where getTemperature = mistralTemperature
+instance MaxTokens MistralModel provider where getMaxTokens = mistralMaxTokens
+instance Seed MistralModel provider where getSeed = mistralSeed
+instance ModelName OpenAI MistralModel where modelName = "mistral-7b-instruct"
 
--- Parameter extraction
-instance Temperature MistralModel provider where
-  getTemperature = mistralTemperature
+-- Tool parameters type
+data GetTimeParams = GetTimeParams
+  { timezone :: Maybe Text
+  } deriving (Show, Eq)
 
-instance MaxTokens MistralModel provider where
-  getMaxTokens = mistralMaxTokens
+instance Autodocodec.HasCodec GetTimeParams where
+  codec = object "GetTimeParams" $
+    GetTimeParams <$> optionalField "timezone" "Timezone" .= timezone
 
-instance Seed MistralModel provider where
-  getSeed = mistralSeed
+-- Tool type (zero-sized, no config needed)
+data GetTime = GetTime deriving (Show, Eq)
 
--- We'll pretend it's "gpt-4o" for the OpenAI-compatible API
--- (since llama.cpp ignores the model field anyway)
-instance ModelName OpenAI MistralModel where
-  modelName = "mistral-7b-instruct"
+instance Tool GetTime where
+  type ToolParams GetTime = GetTimeParams
+  toolName _ = "get_time"
+  toolDescription _ = "Get the current time"
 
--- HTTP transport function - part of the application, not the library
-callLlamaCpp :: String -> OpenAIRequest -> IO (Either LLMError OpenAIResponse)
-callLlamaCpp baseUrl request = do
-  result <- try $ do
-    let url = baseUrl ++ "/v1/chat/completions"
+-- Tool value
+getTimeTool :: GetTime
+getTimeTool = GetTime
 
-    -- Create HTTP request
-    initialRequest <- parseRequest ("POST " ++ url)
-    let headers = [ ("Content-Type", "application/json")
-                  , ("Accept", "application/json")
-                  ]
+-- HTTP call to llama.cpp server
+callLLM :: String -> OpenAIRequest -> ExceptT LLMError IO OpenAIResponse
+callLLM baseUrl request = do
+  req <- liftIO $ parseRequest $ "POST " ++ baseUrl ++ "/v1/chat/completions"
+  let req' = setRequestHeaders [("Content-Type", "application/json")]
+           $ setRequestBodyLBS (Aeson.encode $ toJSONViaCodec request) req
 
-    let httpRequest = setRequestHeaders headers
-                    $ setRequestBodyLBS (Aeson.encode (toJSONViaCodec request))
-                    $ initialRequest
+  response <- httpLBS req'
+  withExceptT (ParseError . T.pack) $ except $ eitherDecodeJSONViaCodec (getResponseBody response)
 
-    -- Make the request
-    response <- httpLBS httpRequest
+-- Main agent loop - continues until text response (non-tool)
+agentLoop :: String -> MistralModel -> [Message MistralModel OpenAI] -> ExceptT LLMError IO ()
+agentLoop serverUrl model messages = do
+  -- Call LLM with tools
+  let request = toRequest OpenAI model messages [SomeTool getTimeTool]
+  response <- callLLM serverUrl request
+  responses <- except $ fromResponse response
 
-    -- Parse response
-    let responseBody = getResponseBody response
-    case eitherDecodeJSONViaCodec responseBody of
-      Left err -> return $ Left $ ParseError $ "Failed to parse response: " <> T.pack err
-      Right openaiResp -> return $ Right openaiResp
+  newMsgs <- liftIO $ concat <$> mapM handleResponse responses
+  -- Continue loop only if there are tool results to send back
+  unless (null newMsgs) $
+    agentLoop serverUrl model (messages ++ responses ++ newMsgs)
 
-  case result of
-    Left (e :: SomeException) -> return $ Left $ NetworkError $ "HTTP request failed: " <> T.pack (show e)
-    Right res -> return res
+-- Handle different response types
+-- Returns empty list for text (stops loop), tool results for tool calls (continues loop)
+handleResponse :: Message MistralModel OpenAI -> IO [Message MistralModel OpenAI]
+handleResponse (AssistantText text) = do
+  putStrLn $ "🤖 " <> T.unpack text
+  return [] -- Empty list stops the loop
+
+handleResponse (AssistantTool calls) = do
+  putStrLn $ "🔧 Calling " <> show (length calls) <> " tool(s)"
+  results <- mapM executeToolCall calls
+  return $ zipWith (\c r -> ToolResultMsg $ ToolResult (toolCallId c) r) calls results -- Tool results continue loop
+
+handleResponse _ = return []
+
+-- Execute a tool call (simple dispatch with JSON Values)
+executeToolCall :: ToolCall -> IO Aeson.Value
+executeToolCall call = do
+  putStrLn $ "  → " <> T.unpack (toolCallName call)
+  case toolCallName call of
+    "get_time" -> do
+      now <- getCurrentTime
+      let timeStr = formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S UTC" now
+      putStrLn $ "    ⏰ " <> timeStr
+      return $ Aeson.object ["current_time" Aeson..= timeStr]
+    _ -> return $ Aeson.object ["error" Aeson..= ("Unknown tool" :: Text)]
 
 main :: IO ()
 main = do
-  -- Get server URL from environment
-  maybeUrl <- lookupEnv "LLAMA_SERVER_URL"
-  serverUrl <- case maybeUrl of
-    Nothing -> do
-      putStrLn "Error: LLAMA_SERVER_URL environment variable is required"
-      putStrLn "Example: export LLAMA_SERVER_URL=http://localhost:8080"
-      exitFailure
-    Just url -> do
-      putStrLn $ "Using server: " ++ url
-      return url
+  serverUrl <- lookupEnv "LLAMA_SERVER_URL" >>= \case
+    Nothing -> putStrLn "Set LLAMA_SERVER_URL environment variable" >> exitFailure
+    Just url -> return url
 
-  putStrLn $ "Demo: Preparing request for llama.cpp server at: " ++ serverUrl
+  putStrLn $ "Using server: " <> serverUrl
+  putStrLn "=== Tool Calling Demo ===\n"
 
-  -- Create a model configuration that matches what's actually running
-  let model = MistralModel
-        { mistralTemperature = Just 1.5
-        , mistralMaxTokens = Just 100
-        , mistralSeed = Nothing  -- Let server handle randomness
-        }
+  let model = MistralModel (Just 0.7) (Just 200) Nothing
+  let initialMsg = [UserText "Use the get_time tool to tell me what time it is."]
 
-  -- Create messages using our type-safe interface
-  let messages = [ UserText "Hello! Can you tell me a short knock-knock joke?"
-                 ]
-
-  -- Use our pure transformation functions (the core value of our library)
-  let provider = OpenAI
-  let request = toRequest provider model messages
-
-  putStrLn "\n=== Pure Transformation Demo ==="
-  putStrLn $ "Model name: " ++ T.unpack (UniversalLLM.Protocols.OpenAI.model request)
-  putStrLn $ "Temperature: " ++ show (temperature request)
-  putStrLn $ "Max tokens: " ++ show (max_tokens request)
-  putStrLn $ "Number of messages: " ++ show (length (UniversalLLM.Protocols.OpenAI.messages request))
-
-  -- Show the generated JSON (this would be sent via HTTP)
-  putStrLn "\n=== Generated JSON Request ==="
-  let jsonRequest = toJSONViaCodec request
-  L8.putStrLn $ Aeson.encode jsonRequest
-
-  putStrLn "\n=== Making Real API Call ==="
-  putStrLn $ "Calling: " ++ serverUrl ++ "/v1/chat/completions"
-
-  result <- callLlamaCpp serverUrl request
-
+  result <- runExceptT $ agentLoop serverUrl model initialMsg
   case result of
-    Left err -> do
-      putStrLn $ "❌ API Error: " ++ show err
-      exitFailure
-    Right response -> do
-      putStrLn "✅ Success! Response received:"
-      case fromResponse response of
-        Left parseErr -> do
-          putStrLn $ "❌ Parse Error: " ++ show parseErr
-          exitFailure
-        Right responseMessages -> do
-          putStrLn "\n=== LLM Response ==="
-          mapM_ printMessage responseMessages
-
-          putStrLn "\n=== Type Safety Demo ==="
-          putStrLn "✓ MistralModel defined ad-hoc for this example"
-          putStrLn "✓ No vision/JSON capabilities (compile-time enforced)"
-          putStrLn "✓ Temperature/tokens automatically extracted from model"
-          putStrLn "✓ Provider-specific formatting applied"
-          putStrLn "✓ Real HTTP call made and response parsed!"
-
-printMessage :: Message model provider -> IO ()
-printMessage (AssistantText text) = T.putStrLn $ "🤖 " <> text
-printMessage (UserText text) = T.putStrLn $ "👤 " <> text
-printMessage (SystemText text) = T.putStrLn $ "⚙️  " <> text
-printMessage _ = putStrLn "📄 Other message type"
+    Left err -> putStrLn $ "❌ Error: " <> show err
+    Right () -> return ()

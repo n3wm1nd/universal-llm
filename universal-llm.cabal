@@ -43,7 +43,10 @@ library
   build-depends:
     base >= 4.16 && < 5,
     autodocodec >= 0.2 && < 1,
-    text >= 1.2 && < 3
+    autodocodec-schema >= 0.2 && < 1,
+    text >= 1.2 && < 3,
+    aeson,
+    bytestring
 
 test-suite universal-llm-tests
   import: shared-properties
@@ -81,4 +84,7 @@ executable llama-cpp-example
     aeson,
     bytestring,
     autodocodec,
-    http-conduit
+    autodocodec-schema,
+    http-conduit,
+    time,
+    transformers
