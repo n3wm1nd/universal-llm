@@ -14,7 +14,9 @@ module UniversalLLM.Core.Types where
 
 import Data.Text (Text)
 import Data.Aeson (Value, encode)
-import Autodocodec (HasCodec, toJSONViaCodec, eitherDecodeJSONViaCodec)
+import qualified Data.Aeson as Aeson
+import Autodocodec (HasCodec, toJSONViaCodec, eitherDecodeJSONViaCodec, codec)
+import Autodocodec.Schema (jsonSchemaViaCodec)
 
 -- Core capabilities that models can have
 class HasVision model
@@ -39,6 +41,13 @@ class Seed model provider where
   getSeed :: model -> Maybe Int
 
 -- Tool use types
+-- Provider-agnostic tool definition (just metadata, no execution)
+data ToolDefinition = ToolDefinition
+  { toolDefName :: Text
+  , toolDefDescription :: Text
+  , toolDefParameters :: Value  -- JSON schema for parameters
+  } deriving (Show, Eq)
+
 -- The Tool class connects a tool type (which can hold config) to its parameters type
 class (HasCodec (ToolParams tool), HasCodec (ToolOutput tool), Eq tool) => Tool tool m where
   type ToolParams tool :: *
@@ -48,8 +57,20 @@ class (HasCodec (ToolParams tool), HasCodec (ToolOutput tool), Eq tool) => Tool 
   call :: tool -> ToolParams tool -> m (ToolOutput tool)
 
 -- Existential wrapper for heterogeneous tool lists
-data SomeTool m where
-  SomeTool :: Tool tool m => tool -> SomeTool m
+data LLMTool m where
+  LLMTool :: Tool tool m => tool -> LLMTool m
+
+-- Extract tool definition from any Tool instance
+toToolDefinition :: forall tool m. Tool tool m => tool -> ToolDefinition
+toToolDefinition tool = ToolDefinition
+  { toolDefName = toolName @tool @m tool
+  , toolDefDescription = toolDescription @tool @m tool
+  , toolDefParameters = Aeson.toJSON $ jsonSchemaViaCodec @(ToolParams tool)
+  }
+
+-- Extract tool definition from existential wrapper
+llmToolToDefinition :: forall m. LLMTool m -> ToolDefinition
+llmToolToDefinition (LLMTool (tool :: t)) = toToolDefinition @t @m tool
 
 data ToolCall = ToolCall
   { toolCallId :: Text
@@ -62,11 +83,11 @@ data ToolResult = ToolResult
   , toolResultOutput :: Value
   } deriving (Show, Eq)
 
--- | Match a ToolCall to a SomeTool from the available tools list
-matchToolCall :: forall m. [SomeTool m] -> ToolCall -> Maybe (SomeTool m)
+-- | Match a ToolCall to a LLMTool from the available tools list
+matchToolCall :: forall m. [LLMTool m] -> ToolCall -> Maybe (LLMTool m)
 matchToolCall tools tc =
   let name = toolCallName tc
-  in find (\(SomeTool tool) -> toolName @_ @m tool == name) tools
+  in find (\(LLMTool tool) -> toolName @_ @m tool == name) tools
   where
     find :: (a -> Bool) -> [a] -> Maybe a
     find _ [] = Nothing
@@ -75,13 +96,13 @@ matchToolCall tools tc =
 -- | Execute a tool call by matching and dispatching
 -- Takes available tools and the tool call from the LLM
 executeToolCall :: Monad m
-                => [SomeTool m]  -- available tools
+                => [LLMTool m]  -- available tools
                 -> ToolCall      -- call from LLM
                 -> m (Maybe Value)  -- result (Nothing if tool not found or params invalid)
 executeToolCall tools toolCall =
   case matchToolCall tools toolCall of
     Nothing -> return Nothing
-    Just (SomeTool tool) -> executeWithTool tool toolCall
+    Just (LLMTool tool) -> executeWithTool tool toolCall
 
 -- | Execute tool with typed params - all inside existential scope
 executeWithTool :: forall tool m. (Tool tool m, Monad m)

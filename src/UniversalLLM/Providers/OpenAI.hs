@@ -21,27 +21,26 @@ import Autodocodec (codec)
 data OpenAI = OpenAI deriving (Show, Eq)
 
 -- Pure functions: no IO, just transformations
-toRequest :: forall model m. (ModelName OpenAI model, Temperature model OpenAI, MaxTokens model OpenAI, Seed model OpenAI)
-          => OpenAI -> model -> [Message model OpenAI] -> [SomeTool m] -> OpenAIRequest
-toRequest _provider model messages tools = OpenAIRequest
+toRequest :: forall model. (ModelName OpenAI model, Temperature model OpenAI, MaxTokens model OpenAI, Seed model OpenAI)
+          => OpenAI -> model -> [Message model OpenAI] -> [ToolDefinition] -> OpenAIRequest
+toRequest _provider model messages toolDefs = OpenAIRequest
   { model = modelName @OpenAI @model
   , messages = map convertMessage messages
   , temperature = getTemperature @model @OpenAI model
   , max_tokens = getMaxTokens @model @OpenAI model
   , seed = getSeed @model @OpenAI model
-  , tools = if null tools then Nothing else Just (map toOpenAIToolDef tools)
+  , tools = if null toolDefs then Nothing else Just (map toOpenAIToolDef toolDefs)
   }
 
-toOpenAIToolDef :: forall m. SomeTool m -> OpenAIToolDefinition
-toOpenAIToolDef (SomeTool tool) = case tool of
-  (t :: t) -> OpenAIToolDefinition
-    { tool_type = "function"
-    , function = OpenAIFunction
-        { name = toolName @t @m t
-        , description = toolDescription @t @m t
-        , parameters = Aeson.toJSON $ jsonSchemaViaCodec @(ToolParams t)
-        }
-    }
+toOpenAIToolDef :: ToolDefinition -> OpenAIToolDefinition
+toOpenAIToolDef toolDef = OpenAIToolDefinition
+  { tool_type = "function"
+  , function = OpenAIFunction
+      { name = toolDefName toolDef
+      , description = toolDefDescription toolDef
+      , parameters = toolDefParameters toolDef
+      }
+  }
 
 fromResponse :: HasTools model => OpenAIResponse -> Either LLMError [Message model OpenAI]
 fromResponse (OpenAIError (OpenAIErrorResponse errDetail)) =

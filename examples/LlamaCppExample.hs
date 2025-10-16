@@ -93,11 +93,12 @@ callLLM baseUrl request = do
 agentLoop :: String -> MistralModel -> [Message MistralModel OpenAI] -> ExceptT LLMError IO ()
 agentLoop serverUrl model messages = do
   -- Available tools
-  let tools :: [SomeTool IO]
-      tools = [SomeTool (getTimeTool @IO)]
+  let tools :: [LLMTool IO]
+      tools = [LLMTool (getTimeTool @IO)]
 
-  -- Call LLM with tools
-  let request = toRequest OpenAI model messages tools
+  -- Call LLM with tools (convert to definitions first)
+  let toolDefs = map llmToolToDefinition tools
+      request = toRequest OpenAI model messages toolDefs
   response <- callLLM serverUrl request
   responses <- except $ fromResponse response
 
@@ -108,7 +109,7 @@ agentLoop serverUrl model messages = do
 
 -- Handle different response types
 -- Returns empty list for text (stops loop), tool results for tool calls (continues loop)
-handleResponse :: [SomeTool IO] -> Message MistralModel OpenAI -> IO [Message MistralModel OpenAI]
+handleResponse :: [LLMTool IO] -> Message MistralModel OpenAI -> IO [Message MistralModel OpenAI]
 handleResponse _ (AssistantText text) = do
   putStrLn $ "🤖 " <> T.unpack text
   return [] -- Empty list stops the loop
@@ -121,7 +122,7 @@ handleResponse tools (AssistantTool calls) = do
 handleResponse _ _ = return []
 
 -- Execute a single tool call with logging
-executeCall :: [SomeTool IO] -> ToolCall -> IO Aeson.Value
+executeCall :: [LLMTool IO] -> ToolCall -> IO Aeson.Value
 executeCall tools callTool = do
   putStrLn $ "  → " <> T.unpack (toolCallName callTool)
   result <- executeToolCall tools callTool
