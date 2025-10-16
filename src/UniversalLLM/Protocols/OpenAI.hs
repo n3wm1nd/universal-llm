@@ -1,12 +1,20 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module UniversalLLM.Protocols.OpenAI where
 
 import Autodocodec
 import Data.Text (Text)
 import Data.Aeson (Value)
+import qualified Data.Aeson as Aeson
+import qualified Data.Text.Encoding as TE
+import qualified Data.ByteString.Lazy as BSL
 import GHC.Generics (Generic)
+import UniversalLLM.Core.Types (ModelHasTools, getToolDefinitions, ToolDefinition, toolDefName, toolDefDescription, toolDefParameters, ToolCall(..))
 
 data OpenAIRequest = OpenAIRequest
   { model :: Text
@@ -151,3 +159,52 @@ instance HasCodec OpenAIErrorDetail where
       <$> requiredField "code" "Error code" .= code
       <*> requiredField "message" "Error message" .= errorMessage
       <*> requiredField "type" "Error type" .= errorType
+
+-- Protocol-level embedding classes
+-- These define how to embed capabilities into protocol wire formats
+-- Can be reused by any provider using the same protocol
+
+-- Generic tool embedding for any protocol
+class ProtocolEmbedTools protocol model where
+  embedTools :: model -> protocol -> protocol
+  embedTools _ req = req  -- Default: no-op
+
+-- Instance for embedding tools in OpenAI protocol
+instance ModelHasTools model => ProtocolEmbedTools OpenAIRequest model where
+  embedTools model req =
+    let toolDefs = getToolDefinitions model
+    in req { tools = Just (map toOpenAIToolDef toolDefs) }
+
+-- Helper: Convert ToolDefinition to OpenAI wire format
+toOpenAIToolDef :: ToolDefinition -> OpenAIToolDefinition
+toOpenAIToolDef toolDef = OpenAIToolDefinition
+  { tool_type = "function"
+  , function = OpenAIFunction
+      { name = toolDefName toolDef
+      , description = toolDefDescription toolDef
+      , parameters = toolDefParameters toolDef
+      }
+  }
+
+-- Helper: Convert OpenAI tool call to generic ToolCall
+convertToolCall :: OpenAIToolCall -> ToolCall
+convertToolCall tc =
+  let argsText = toolFunctionArguments (toolFunction tc)
+      argsValue = case Aeson.eitherDecodeStrict (TE.encodeUtf8 argsText) of
+        Left _ -> Aeson.object [] -- fallback to empty object on parse error
+        Right v -> v
+  in ToolCall
+    { toolCallId = callId tc
+    , toolCallName = toolFunctionName (toolFunction tc)
+    , toolCallParameters = argsValue
+    }
+
+convertFromToolCall :: ToolCall -> OpenAIToolCall
+convertFromToolCall tc = OpenAIToolCall
+  { callId = toolCallId tc
+  , toolCallType = "function"
+  , toolFunction = OpenAIToolFunction
+      { toolFunctionName = toolCallName tc
+      , toolFunctionArguments = TE.decodeUtf8 $ BSL.toStrict $ Aeson.encode $ toolCallParameters tc
+      }
+  }
