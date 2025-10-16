@@ -15,8 +15,9 @@ module UniversalLLM.Core.Types where
 import Data.Text (Text)
 import Data.Aeson (Value, encode)
 import qualified Data.Aeson as Aeson
-import Autodocodec (HasCodec, toJSONViaCodec, eitherDecodeJSONViaCodec, codec)
+import Autodocodec (HasCodec, toJSONViaCodec, eitherDecodeJSONViaCodec)
 import Autodocodec.Schema (jsonSchemaViaCodec)
+import Data.Kind (Type)
 
 -- Core capabilities that models can have
 class HasVision model
@@ -50,8 +51,8 @@ data ToolDefinition = ToolDefinition
 
 -- The Tool class connects a tool type (which can hold config) to its parameters type
 class (HasCodec (ToolParams tool), HasCodec (ToolOutput tool), Eq tool) => Tool tool m where
-  type ToolParams tool :: *
-  type ToolOutput tool :: *
+  type ToolParams tool :: Type
+  type ToolOutput tool :: Type
   toolName :: tool -> Text
   toolDescription :: tool -> Text
   call :: tool -> ToolParams tool -> m (ToolOutput tool)

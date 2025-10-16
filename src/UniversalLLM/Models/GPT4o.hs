@@ -5,7 +5,6 @@
 
 module UniversalLLM.Models.GPT4o where
 
-import Data.Text (Text)
 import UniversalLLM.Core.Types
 import UniversalLLM.Providers.OpenAI
 

@@ -7,7 +7,6 @@ import UniversalLLM.Models.GPT4o
 import UniversalLLM.Models.Claude35Sonnet
 import UniversalLLM.Providers.OpenAI
 import UniversalLLM.Providers.Anthropic
-import Data.Text (Text)
 
 main :: IO ()
 main = do

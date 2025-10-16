@@ -8,14 +8,10 @@ module UniversalLLM.Providers.OpenAI where
 
 import UniversalLLM.Core.Types
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest(..), OpenAIResponse(..), OpenAISuccessResponse(..), OpenAIErrorResponse(..), OpenAIErrorDetail(..), OpenAIMessage(..), OpenAIChoice(..), OpenAIToolDefinition(..), OpenAIToolCall(..), OpenAIToolFunction(..), OpenAIFunction(..))
-import qualified UniversalLLM.Protocols.OpenAI as OpenAIProtocol
 import Data.Text (Text)
-import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as BSL
-import Autodocodec.Schema (jsonSchemaViaCodec)
-import Autodocodec (codec)
 
 -- OpenAI provider (phantom type)
 data OpenAI = OpenAI deriving (Show, Eq)
