@@ -16,6 +16,8 @@ main = do
       gpt4oModel = GPT4o
         { gpt4oTemperature = Just 0.7
         , gpt4oMaxTokens = Just 100
+        , gpt4oSeed = Nothing
+        , gpt4oToolDefinitions = []
         }
 
       anthropicProvider = Anthropic

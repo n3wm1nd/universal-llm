@@ -2,6 +2,9 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE GADTs #-}
 
 module UniversalLLM.Providers.OpenAI where
@@ -16,17 +19,31 @@ import qualified Data.ByteString.Lazy as BSL
 -- OpenAI provider (phantom type)
 data OpenAI = OpenAI deriving (Show, Eq)
 
+-- Typeclass to optionally embed tools in OpenAI requests
+class OpenAIEmbedTools model where
+  embedTools :: model -> OpenAIRequest -> OpenAIRequest
+  -- Default: no tools
+  embedTools _ req = req { tools = Nothing }
+
+-- Specific instance: embed tools (for models with HasTools)
+instance HasTools model => OpenAIEmbedTools model where
+  embedTools model req =
+    let toolDefs = getToolDefinitions model
+    in req { tools = Just (map toOpenAIToolDef toolDefs) }
+
 -- Pure functions: no IO, just transformations
-toRequest :: forall model. (ModelName OpenAI model, Temperature model OpenAI, MaxTokens model OpenAI, Seed model OpenAI)
-          => OpenAI -> model -> [Message model OpenAI] -> [ToolDefinition] -> OpenAIRequest
-toRequest _provider model messages toolDefs = OpenAIRequest
-  { model = modelName @OpenAI @model
-  , messages = map convertMessage messages
-  , temperature = getTemperature @model @OpenAI model
-  , max_tokens = getMaxTokens @model @OpenAI model
-  , seed = getSeed @model @OpenAI model
-  , tools = if null toolDefs then Nothing else Just (map toOpenAIToolDef toolDefs)
-  }
+toRequest :: forall model. (ModelName OpenAI model, Temperature model OpenAI, MaxTokens model OpenAI, Seed model OpenAI, OpenAIEmbedTools model)
+          => OpenAI -> model -> [Message model OpenAI] -> OpenAIRequest
+toRequest _provider model messages =
+  let baseRequest = OpenAIRequest
+        { model = modelName @OpenAI @model
+        , messages = map convertMessage messages
+        , temperature = getTemperature @model @OpenAI model
+        , max_tokens = getMaxTokens @model @OpenAI model
+        , seed = getSeed @model @OpenAI model
+        , tools = Nothing
+        }
+  in embedTools model baseRequest
 
 toOpenAIToolDef :: ToolDefinition -> OpenAIToolDefinition
 toOpenAIToolDef toolDef = OpenAIToolDefinition

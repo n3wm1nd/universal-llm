@@ -31,9 +31,13 @@ data MistralModel = MistralModel
   { mistralTemperature :: Maybe Double
   , mistralMaxTokens :: Maybe Int
   , mistralSeed :: Maybe Int
+  , mistralToolDefinitions :: [ToolDefinition]
   } deriving (Show, Eq)
 
-instance HasTools MistralModel
+instance HasTools MistralModel where
+  getToolDefinitions = mistralToolDefinitions
+  setToolDefinitions toolDefs model = model { mistralToolDefinitions = toolDefs }
+
 instance Temperature MistralModel provider where getTemperature = mistralTemperature
 instance MaxTokens MistralModel provider where getMaxTokens = mistralMaxTokens
 instance Seed MistralModel provider where getSeed = mistralSeed
@@ -92,20 +96,23 @@ callLLM baseUrl request = do
 -- Main agent loop - continues until text response (non-tool)
 agentLoop :: String -> MistralModel -> [Message MistralModel OpenAI] -> ExceptT LLMError IO ()
 agentLoop serverUrl model messages = do
-  -- Available tools
+  -- Available tools (for execution)
   let tools :: [LLMTool IO]
       tools = [LLMTool (getTimeTool @IO)]
 
-  -- Call LLM with tools (convert to definitions first)
-  let toolDefs = map llmToolToDefinition tools
-      request = toRequest OpenAI model messages toolDefs
+      -- Set tool definitions in model
+      toolDefs = map llmToolToDefinition tools
+      model' = setToolDefinitions toolDefs model
+
+  -- Call LLM (tool definitions are in model')
+  let request = toRequest OpenAI model' messages
   response <- callLLM serverUrl request
   responses <- except $ fromResponse response
 
   newMsgs <- liftIO $ concat <$> mapM (handleResponse tools) responses
   -- Continue loop only if there are tool results to send back
   unless (null newMsgs) $
-    agentLoop serverUrl model (messages ++ responses ++ newMsgs)
+    agentLoop serverUrl model' (messages ++ responses ++ newMsgs)
 
 -- Handle different response types
 -- Returns empty list for text (stops loop), tool results for tool calls (continues loop)
@@ -141,7 +148,7 @@ main = do
   putStrLn $ "Using server: " <> serverUrl
   putStrLn "=== Tool Calling Demo ===\n"
 
-  let model = MistralModel (Just 0.7) (Just 200) Nothing
+  let model = MistralModel (Just 0.7) (Just 200) Nothing []
   let initialMsg = [UserText "Use the get_time tool to tell me what time it is."]
 
   result <- runExceptT $ agentLoop serverUrl model initialMsg

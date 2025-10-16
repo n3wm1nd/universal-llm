@@ -30,6 +30,7 @@ library
   exposed-modules:
     UniversalLLM
     UniversalLLM.Core.Types
+    UniversalLLM.Models.BasicModel
     UniversalLLM.Models.GPT4o
     UniversalLLM.Models.Claude35Sonnet
     UniversalLLM.Protocols.OpenAI

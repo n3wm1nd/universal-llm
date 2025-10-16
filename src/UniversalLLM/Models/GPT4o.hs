@@ -13,12 +13,15 @@ data GPT4o = GPT4o
   { gpt4oTemperature :: Maybe Double
   , gpt4oMaxTokens :: Maybe Int
   , gpt4oSeed :: Maybe Int
+  , gpt4oToolDefinitions :: [ToolDefinition]
   } deriving (Show, Eq)
 
 -- Capabilities
 instance HasVision GPT4o
 instance HasJSON GPT4o
-instance HasTools GPT4o
+instance HasTools GPT4o where
+  getToolDefinitions = gpt4oToolDefinitions
+  setToolDefinitions toolDefs model = model { gpt4oToolDefinitions = toolDefs }
 
 -- Parameter extraction for any provider
 instance Temperature GPT4o provider where

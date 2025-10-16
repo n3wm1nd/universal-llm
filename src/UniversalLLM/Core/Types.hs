@@ -22,7 +22,9 @@ import Data.Kind (Type)
 -- Core capabilities that models can have
 class HasVision model
 class HasJSON model
-class HasTools model
+class HasTools model where
+  getToolDefinitions :: model -> [ToolDefinition]
+  setToolDefinitions :: [ToolDefinition] -> model -> model
 
 -- Provider-specific model names
 class ModelName provider model where
