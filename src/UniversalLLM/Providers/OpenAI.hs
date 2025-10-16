@@ -44,14 +44,6 @@ instance (ModelName OpenAI model, Temperature model OpenAI, MaxTokens model Open
 
   fromResponse = fromResponse'
 
--- Generic tool call handling for any protocol/provider combination
-class ProtocolHandleTools protocolToolCall model provider where
-  handleToolCalls :: [protocolToolCall] -> [Message model provider]
-  handleToolCalls _ = []  -- Default: ignore (shouldn't happen for non-tool models)
-
-instance (ModelHasTools model, ProviderSupportsTools provider) => ProtocolHandleTools OpenAIToolCall model provider where
-  handleToolCalls calls = [AssistantTool (map convertToolCall calls)]
-
 fromResponse' :: forall model. ProtocolHandleTools OpenAIToolCall model OpenAI => OpenAIResponse -> Either LLMError [Message model OpenAI]
 fromResponse' (OpenAIError (OpenAIErrorResponse errDetail)) =
   Left $ ProviderError (code errDetail) $ errorMessage errDetail <> " (" <> errorType errDetail <> ")"

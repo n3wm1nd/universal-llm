@@ -4,6 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TypeApplications #-}
 
 module UniversalLLM.Protocols.OpenAI where
 
@@ -14,7 +15,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString.Lazy as BSL
 import GHC.Generics (Generic)
-import UniversalLLM.Core.Types (ModelHasTools, getToolDefinitions, ToolDefinition, toolDefName, toolDefDescription, toolDefParameters, ToolCall(..))
+import UniversalLLM.Core.Types (ModelHasTools, getToolDefinitions, ToolDefinition, toolDefName, toolDefDescription, toolDefParameters, ToolCall(..), ProtocolEmbedTools(..), ProtocolHandleTools(..), ProviderSupportsTools, Message(..))
 
 data OpenAIRequest = OpenAIRequest
   { model :: Text
@@ -122,21 +123,13 @@ instance HasCodec OpenAIToolFunction where
       <*> requiredField "arguments" "Function arguments" .= toolFunctionArguments
 
 instance HasCodec OpenAIResponse where
-  codec = dimapCodec fromEither toEither $ eitherCodec successCodec errorCodec
+  codec = dimapCodec fromEither toEither $ eitherCodec (codec @OpenAISuccessResponse) (codec @OpenAIErrorResponse)
     where
       fromEither (Left success) = OpenAISuccess success
       fromEither (Right err) = OpenAIError err
 
       toEither (OpenAISuccess success) = Left success
       toEither (OpenAIError err) = Right err
-
-      successCodec = object "OpenAISuccessResponse" $
-        OpenAISuccessResponse
-          <$> requiredField "choices" "Choices" .= choices
-
-      errorCodec = object "OpenAIErrorResponse" $
-        OpenAIErrorResponse
-          <$> requiredField "error" "Error" .= errorDetail
 
 instance HasCodec OpenAISuccessResponse where
   codec = object "OpenAISuccessResponse" $
@@ -159,15 +152,6 @@ instance HasCodec OpenAIErrorDetail where
       <$> requiredField "code" "Error code" .= code
       <*> requiredField "message" "Error message" .= errorMessage
       <*> requiredField "type" "Error type" .= errorType
-
--- Protocol-level embedding classes
--- These define how to embed capabilities into protocol wire formats
--- Can be reused by any provider using the same protocol
-
--- Generic tool embedding for any protocol
-class ProtocolEmbedTools protocol model where
-  embedTools :: model -> protocol -> protocol
-  embedTools _ req = req  -- Default: no-op
 
 -- Instance for embedding tools in OpenAI protocol
 instance ModelHasTools model => ProtocolEmbedTools OpenAIRequest model where
@@ -208,3 +192,7 @@ convertFromToolCall tc = OpenAIToolCall
       , toolFunctionArguments = TE.decodeUtf8 $ BSL.toStrict $ Aeson.encode $ toolCallParameters tc
       }
   }
+
+-- Instance for handling OpenAI tool calls
+instance (ModelHasTools model, ProviderSupportsTools provider) => ProtocolHandleTools OpenAIToolCall model provider where
+  handleToolCalls calls = [AssistantTool (map convertToolCall calls)]

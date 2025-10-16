@@ -156,6 +156,20 @@ class ProviderSupportsTools provider
 class (ModelHasTools model, ProviderSupportsTools provider) => HasTools model provider
 instance (ModelHasTools model, ProviderSupportsTools provider) => HasTools model provider
 
+-- Protocol-level embedding classes
+-- These define how to embed capabilities into protocol wire formats
+-- Can be reused by any provider using the same protocol
+
+-- Generic tool embedding for any protocol
+class ProtocolEmbedTools protocol model where
+  embedTools :: model -> protocol -> protocol
+  embedTools _ req = req  -- Default: no-op
+
+-- Generic tool call handling for any protocol/provider combination
+class ProtocolHandleTools protocolToolCall model provider where
+  handleToolCalls :: [protocolToolCall] -> [Message model provider]
+  handleToolCalls _ = []  -- Default: ignore (shouldn't happen for non-tool models)
+
 -- GADT Messages with capability constraints
 data Message model provider where
   UserText :: Text -> Message model provider
