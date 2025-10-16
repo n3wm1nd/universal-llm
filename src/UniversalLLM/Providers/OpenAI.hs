@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE GADTs #-}
 
@@ -19,31 +20,43 @@ import qualified Data.ByteString.Lazy as BSL
 -- OpenAI provider (phantom type)
 data OpenAI = OpenAI deriving (Show, Eq)
 
--- Typeclass to optionally embed tools in OpenAI requests
+-- Declare that OpenAI supports tools
+instance ProviderSupportsTools OpenAI
+
+-- Provider-specific tool embedding
 class OpenAIEmbedTools model where
   embedTools :: model -> OpenAIRequest -> OpenAIRequest
-  -- Default: no tools
-  embedTools _ req = req { tools = Nothing }
+  embedTools _ req = req { tools = Nothing }  -- Default: no tools
 
--- Specific instance: embed tools (for models with HasTools)
-instance HasTools model => OpenAIEmbedTools model where
+  handleToolCalls :: [OpenAIToolCall] -> [Message model OpenAI]
+  handleToolCalls _ = []  -- Default: ignore tool calls (shouldn't happen for non-tool models)
+
+-- For models with tools, actually embed them and handle tool call responses
+instance (ModelHasTools model, ProviderSupportsTools OpenAI) => OpenAIEmbedTools model where
   embedTools model req =
     let toolDefs = getToolDefinitions model
     in req { tools = Just (map toOpenAIToolDef toolDefs) }
 
--- Pure functions: no IO, just transformations
-toRequest :: forall model. (ModelName OpenAI model, Temperature model OpenAI, MaxTokens model OpenAI, Seed model OpenAI, OpenAIEmbedTools model)
-          => OpenAI -> model -> [Message model OpenAI] -> OpenAIRequest
-toRequest _provider model messages =
-  let baseRequest = OpenAIRequest
-        { model = modelName @OpenAI @model
-        , messages = map convertMessage messages
-        , temperature = getTemperature @model @OpenAI model
-        , max_tokens = getMaxTokens @model @OpenAI model
-        , seed = getSeed @model @OpenAI model
-        , tools = Nothing
-        }
-  in embedTools model baseRequest
+  handleToolCalls calls = [AssistantTool (map convertToolCall calls)]
+
+-- Provider typeclass implementation
+instance (ModelName OpenAI model, Temperature model OpenAI, MaxTokens model OpenAI, Seed model OpenAI, OpenAIEmbedTools model)
+         => Provider OpenAI model where
+  type ProviderRequest OpenAI = OpenAIRequest
+  type ProviderResponse OpenAI = OpenAIResponse
+
+  toRequest _provider model messages =
+    let baseRequest = OpenAIRequest
+          { model = modelName @OpenAI @model
+          , messages = map convertMessage messages
+          , temperature = getTemperature @model @OpenAI model
+          , max_tokens = getMaxTokens @model @OpenAI model
+          , seed = getSeed @model @OpenAI model
+          , tools = Nothing
+          }
+    in embedTools model baseRequest
+
+  fromResponse = fromResponse'
 
 toOpenAIToolDef :: ToolDefinition -> OpenAIToolDefinition
 toOpenAIToolDef toolDef = OpenAIToolDefinition
@@ -55,15 +68,15 @@ toOpenAIToolDef toolDef = OpenAIToolDefinition
       }
   }
 
-fromResponse :: HasTools model => OpenAIResponse -> Either LLMError [Message model OpenAI]
-fromResponse (OpenAIError (OpenAIErrorResponse errDetail)) =
+fromResponse' :: forall model. OpenAIEmbedTools model => OpenAIResponse -> Either LLMError [Message model OpenAI]
+fromResponse' (OpenAIError (OpenAIErrorResponse errDetail)) =
   Left $ ProviderError (code errDetail) $ errorMessage errDetail <> " (" <> errorType errDetail <> ")"
-fromResponse (OpenAISuccess (OpenAISuccessResponse choices)) = case choices of
+fromResponse' (OpenAISuccess (OpenAISuccessResponse choices)) = case choices of
   (choice:_) ->
     let msg = message choice
     in case (content msg, tool_calls msg) of
       (Just txt, Nothing) -> Right [AssistantText txt]
-      (_, Just calls) -> Right [AssistantTool (map convertToolCall calls)]
+      (_, Just calls) -> Right $ handleToolCalls @model calls
       (Nothing, Nothing) -> Left $ ParseError "No content or tool calls in response"
   [] -> Left $ ParseError "No choices returned in OpenAI response"
 

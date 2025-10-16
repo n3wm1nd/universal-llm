@@ -19,7 +19,7 @@ data GPT4o = GPT4o
 -- Capabilities
 instance HasVision GPT4o
 instance HasJSON GPT4o
-instance HasTools GPT4o where
+instance ModelHasTools GPT4o where
   getToolDefinitions = gpt4oToolDefinitions
   setToolDefinitions toolDefs model = model { gpt4oToolDefinitions = toolDefs }
 

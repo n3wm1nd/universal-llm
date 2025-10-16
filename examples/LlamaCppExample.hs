@@ -34,7 +34,7 @@ data MistralModel = MistralModel
   , mistralToolDefinitions :: [ToolDefinition]
   } deriving (Show, Eq)
 
-instance HasTools MistralModel where
+instance ModelHasTools MistralModel where
   getToolDefinitions = mistralToolDefinitions
   setToolDefinitions toolDefs model = model { mistralToolDefinitions = toolDefs }
 

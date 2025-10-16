@@ -2,6 +2,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
@@ -22,7 +24,9 @@ import Data.Kind (Type)
 -- Core capabilities that models can have
 class HasVision model
 class HasJSON model
-class HasTools model where
+
+-- Model-level tool capability
+class ModelHasTools model where
   getToolDefinitions :: model -> [ToolDefinition]
   setToolDefinitions :: [ToolDefinition] -> model -> model
 
@@ -132,11 +136,31 @@ data LLMError
   | ProviderError Int Text     -- HTTP status + raw response for debugging
   deriving (Show, Eq)
 
+-- Provider typeclass with associated types
+class Provider provider model where
+  type ProviderRequest provider
+  type ProviderResponse provider
+
+  toRequest :: provider
+            -> model
+            -> [Message model provider]
+            -> ProviderRequest provider
+
+  fromResponse :: ProviderResponse provider
+               -> Either LLMError [Message model provider]
+
+-- Provider-level capability markers
+class ProviderSupportsTools provider
+
+-- Combined constraint: BOTH model AND provider must support tools
+class (ModelHasTools model, ProviderSupportsTools provider) => HasTools model provider
+instance (ModelHasTools model, ProviderSupportsTools provider) => HasTools model provider
+
 -- GADT Messages with capability constraints
 data Message model provider where
   UserText :: Text -> Message model provider
   UserImage :: HasVision model => Text -> Text -> Message model provider
   AssistantText :: Text -> Message model provider
-  AssistantTool :: HasTools model => [ToolCall] -> Message model provider
+  AssistantTool :: HasTools model provider => [ToolCall] -> Message model provider
   SystemText :: Text -> Message model provider
-  ToolResultMsg :: HasTools model => ToolResult -> Message model provider
+  ToolResultMsg :: HasTools model provider => ToolResult -> Message model provider
