@@ -65,10 +65,6 @@ instance Autodocodec.HasCodec TimeResponse where
 -- Tool type that carries its implementation
 data GetTime m = GetTime (GetTimeParams -> m TimeResponse)
 
--- Eq instance (tools are equal if they have the same name, ignore the function)
-instance Eq (GetTime m) where
-  _ == _ = True
-
 instance Tool (GetTime m) m where
   type ToolParams (GetTime m) = GetTimeParams
   type ToolOutput (GetTime m) = TimeResponse

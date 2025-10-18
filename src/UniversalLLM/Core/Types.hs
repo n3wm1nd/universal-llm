@@ -57,7 +57,7 @@ data ToolDefinition = ToolDefinition
   } deriving (Show, Eq)
 
 -- The Tool class connects a tool type (which can hold config) to its parameters type
-class (HasCodec (ToolParams tool), HasCodec (ToolOutput tool), Eq tool) => Tool tool m where
+class (HasCodec (ToolParams tool), HasCodec (ToolOutput tool)) => Tool tool m where
   type ToolParams tool :: Type
   type ToolOutput tool :: Type
   toolName :: tool -> Text
