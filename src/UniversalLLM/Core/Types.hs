@@ -15,6 +15,7 @@
 module UniversalLLM.Core.Types where
 
 import Data.Text (Text)
+import qualified Data.Text as Text
 import Data.Aeson (Value, encode)
 import qualified Data.Aeson as Aeson
 import Autodocodec (HasCodec, toJSONViaCodec, eitherDecodeJSONViaCodec)
@@ -86,9 +87,10 @@ data ToolCall = ToolCall
   , toolCallParameters :: Value
   } deriving (Show, Eq)
 
+-- Tool execution result - either success or error
 data ToolResult = ToolResult
-  { toolResultCallId :: Text
-  , toolResultOutput :: Value
+  { toolResultCall :: ToolCall  -- The call we're responding to
+  , toolResultOutput :: Either Text Value  -- Left = error message, Right = success value
   } deriving (Show, Eq)
 
 -- | Match a ToolCall to a LLMTool from the available tools list
@@ -103,29 +105,39 @@ matchToolCall tools tc =
 
 -- | Execute a tool call by matching and dispatching
 -- Takes available tools and the tool call from the LLM
+-- Returns a ToolResult with either success value or error message
 executeToolCall :: Monad m
                 => [LLMTool m]  -- available tools
                 -> ToolCall      -- call from LLM
-                -> m (Maybe Value)  -- result (Nothing if tool not found or params invalid)
+                -> m ToolResult
 executeToolCall tools toolCall =
   case matchToolCall tools toolCall of
-    Nothing -> return Nothing
+    Nothing -> return $ ToolResult
+      { toolResultCall = toolCall
+      , toolResultOutput = Left $ "Tool not found: " <> toolCallName toolCall
+      }
     Just (LLMTool tool) -> executeWithTool tool toolCall
 
 -- | Execute tool with typed params - all inside existential scope
 executeWithTool :: forall tool m. (Tool tool m, Monad m)
                 => tool
                 -> ToolCall
-                -> m (Maybe Value)
+                -> m ToolResult
 executeWithTool tool toolCall = do
   -- Decode JSON params to typed ToolParams
   case eitherDecodeJSONViaCodec (encode $ toolCallParameters toolCall) of
-    Left _err -> return Nothing
+    Left err -> return $ ToolResult
+      { toolResultCall = toolCall
+      , toolResultOutput = Left $ "Invalid parameters: " <> Text.pack err
+      }
     Right (params :: ToolParams tool) -> do
       -- Call tool's call method with typed params
       result <- call tool params
       -- Encode result back to JSON
-      return $ Just $ toJSONViaCodec result
+      return $ ToolResult
+        { toolResultCall = toolCall
+        , toolResultOutput = Right $ toJSONViaCodec result
+        }
 
 -- | LLM operation errors
 data LLMError

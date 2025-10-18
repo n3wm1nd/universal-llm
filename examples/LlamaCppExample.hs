@@ -129,20 +129,19 @@ handleResponse _ (AssistantText text) = do
 handleResponse tools (AssistantTool calls) = do
   putStrLn $ "🔧 Calling " <> show (length calls) <> " tool(s)"
   results <- mapM (executeCall tools) calls
-  return $ zipWith (\c r -> ToolResultMsg $ ToolResult (toolCallId c) r) calls results -- Tool results continue loop
+  return $ map ToolResultMsg results  -- Tool results continue loop
 
 handleResponse _ _ = return []
 
 -- Execute a single tool call with logging
-executeCall :: [LLMTool IO] -> ToolCall -> IO Aeson.Value
+executeCall :: [LLMTool IO] -> ToolCall -> IO ToolResult
 executeCall tools callTool = do
   putStrLn $ "  → " <> T.unpack (toolCallName callTool)
   result <- executeToolCall tools callTool
-  case result of
-    Nothing -> do
-      putStrLn $ "    ❌ Tool not found or invalid parameters"
-      return $ Aeson.object ["error" Aeson..= ("Tool execution failed" :: Text)]
-    Just value -> return value
+  case toolResultOutput result of
+    Left errMsg -> putStrLn $ "    ❌ " <> T.unpack errMsg
+    Right _ -> return ()
+  return result
 
 -- ============================================================================
 -- Main Entry Point

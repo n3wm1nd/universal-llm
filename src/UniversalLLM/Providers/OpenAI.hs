@@ -78,7 +78,9 @@ convertMessage (UserImage text _imageData) = OpenAIMessage "user" (Just text) No
 convertMessage (AssistantText text) = OpenAIMessage "assistant" (Just text) Nothing Nothing
 convertMessage (AssistantTool calls) = OpenAIMessage "assistant" Nothing (Just $ map convertFromToolCall calls) Nothing
 convertMessage (SystemText text) = OpenAIMessage "system" (Just text) Nothing Nothing
-convertMessage (ToolResultMsg result) = OpenAIMessage "tool" (Just $ encodeValue $ toolResultOutput result) Nothing (Just $ toolResultCallId result)
-  where
-    encodeValue :: Aeson.Value -> Text
-    encodeValue = TE.decodeUtf8 . BSL.toStrict . Aeson.encode
+convertMessage (ToolResultMsg result) =
+  let resultCallId = toolCallId (toolResultCall result)
+      resultContent = case toolResultOutput result of
+        Left errMsg -> errMsg  -- Error message as text
+        Right value -> TE.decodeUtf8 $ BSL.toStrict $ Aeson.encode value  -- Success value as JSON
+  in OpenAIMessage "tool" (Just resultContent) Nothing (Just resultCallId)
