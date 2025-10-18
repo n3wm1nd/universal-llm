@@ -26,6 +26,10 @@ import Control.Monad.Trans.Except (ExceptT(..), runExceptT, except, withExceptT)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
 
+-- ============================================================================
+-- Model Definition
+-- ============================================================================
+
 -- Simple model (just model identity)
 data MistralModel = MistralModel deriving (Show, Eq)
 
@@ -36,14 +40,9 @@ instance ModelName OpenAI MistralModel where
 
 instance ProviderSupportsModel OpenAI MistralModel
 
--- Tool result type
-data TimeResponse = TimeResponse
-  { currentTime :: Text
-  } deriving (Show, Eq)
-
-instance Autodocodec.HasCodec TimeResponse where
-  codec = object "TimeResponse" $
-    TimeResponse <$> Autodocodec.requiredField "current_time" "Current time" .= currentTime
+-- ============================================================================
+-- Tool Definition
+-- ============================================================================
 
 -- Tool parameters type
 data GetTimeParams = GetTimeParams
@@ -53,6 +52,15 @@ data GetTimeParams = GetTimeParams
 instance Autodocodec.HasCodec GetTimeParams where
   codec = object "GetTimeParams" $
     GetTimeParams <$> optionalField "timezone" "Timezone" .= timezone
+
+-- Tool result type
+data TimeResponse = TimeResponse
+  { currentTime :: Text
+  } deriving (Show, Eq)
+
+instance Autodocodec.HasCodec TimeResponse where
+  codec = object "TimeResponse" $
+    TimeResponse <$> Autodocodec.requiredField "current_time" "Current time" .= currentTime
 
 -- Tool type that carries its implementation
 data GetTime m = GetTime (GetTimeParams -> m TimeResponse)
@@ -76,6 +84,10 @@ getTimeTool = GetTime $ \_params -> do
   liftIO $ putStrLn $ "    ⏰ " <> T.unpack timeStr
   return $ TimeResponse timeStr
 
+-- ============================================================================
+-- HTTP Transport
+-- ============================================================================
+
 -- HTTP call to llama.cpp server
 callLLM :: String -> OpenAIRequest -> ExceptT LLMError IO OpenAIResponse
 callLLM baseUrl request = do
@@ -85,6 +97,10 @@ callLLM baseUrl request = do
 
   response <- httpLBS req'
   withExceptT (ParseError . T.pack) $ except $ eitherDecodeJSONViaCodec (getResponseBody response)
+
+-- ============================================================================
+-- Agent Loop
+-- ============================================================================
 
 -- Main agent loop - continues until text response (non-tool)
 agentLoop :: String -> [ModelConfig OpenAI MistralModel] -> [Message MistralModel OpenAI] -> ExceptT LLMError IO ()
@@ -131,6 +147,10 @@ executeCall tools callTool = do
       putStrLn $ "    ❌ Tool not found or invalid parameters"
       return $ Aeson.object ["error" Aeson..= ("Tool execution failed" :: Text)]
     Just value -> return value
+
+-- ============================================================================
+-- Main Entry Point
+-- ============================================================================
 
 main :: IO ()
 main = do
