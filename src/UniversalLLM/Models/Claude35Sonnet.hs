@@ -5,7 +5,6 @@
 
 module UniversalLLM.Models.Claude35Sonnet where
 
-import Data.Text (Text)
 import UniversalLLM.Core.Types
 import UniversalLLM.Providers.Anthropic
 

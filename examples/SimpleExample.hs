@@ -1,9 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
+-- this is just an example, not everything defined here is also used
+{-# OPTIONS_GHC -Wno-unused-local-binds #-}
 
 module Main where
 
 import UniversalLLM
-import UniversalLLM.Core.Types (ModelConfig(..), Message(..))
 import UniversalLLM.Models.GPT4o
 import UniversalLLM.Models.Claude35Sonnet
 import UniversalLLM.Providers.OpenAI
