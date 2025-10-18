@@ -36,7 +36,7 @@ data MistralModel = MistralModel deriving (Show, Eq)
 instance ModelHasTools MistralModel
 
 instance ModelName OpenAI MistralModel where
-  modelName = "mistral-7b-instruct"
+  modelName _ = "mistral-7b-instruct"
 
 -- ============================================================================
 -- Tool Definition

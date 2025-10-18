@@ -47,9 +47,9 @@ instance (ModelName OpenAI model, ProtocolHandleTools OpenAIToolCall model OpenA
   type ProviderRequest OpenAI = OpenAIRequest
   type ProviderResponse OpenAI = OpenAIResponse
 
-  toRequest _provider _model configs messages =
+  toRequest _provider model configs messages =
     let baseRequest = OpenAIRequest
-          { model = modelName @OpenAI @model
+          { model = modelName @OpenAI model
           , messages = map convertMessage messages
           , temperature = Nothing
           , max_tokens = Nothing

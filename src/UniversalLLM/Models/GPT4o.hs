@@ -18,4 +18,4 @@ instance ModelHasTools GPT4o
 
 -- Provider-specific model names and support
 instance ModelName OpenAI GPT4o where
-  modelName = "gpt-4o"
+  modelName _ = "gpt-4o"

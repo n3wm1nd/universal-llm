@@ -16,4 +16,4 @@ instance HasVision Claude35Sonnet
 
 -- Provider-specific model names and support
 instance ModelName Anthropic Claude35Sonnet where
-  modelName = "claude-3-5-sonnet-20241022"
+  modelName _ = "claude-3-5-sonnet-20241022"

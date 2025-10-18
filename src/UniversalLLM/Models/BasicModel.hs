@@ -13,7 +13,6 @@ data BasicModel = BasicModel Text deriving (Show, Eq)
 -- Default basic model instances
 instance ModelHasTools BasicModel
 
--- Universal ModelName instances - works with any provider
+-- Universal ModelName instance - works with any provider
 instance ModelName provider BasicModel where
-  modelName = case undefined :: BasicModel of
-    BasicModel name -> name
+  modelName (BasicModel name) = name

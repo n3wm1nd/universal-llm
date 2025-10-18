@@ -34,10 +34,10 @@ instance ApplyConfig AnthropicRequest Anthropic model where
 -- Pure functions: no IO, just transformations
 toRequest :: forall model. ModelName Anthropic model
           => Anthropic -> model -> [ModelConfig Anthropic model] -> [Message model Anthropic] -> AnthropicRequest
-toRequest _provider _model configs messages =
+toRequest _provider model configs messages =
   let (systemMsg, otherMsgs) = extractSystem messages
       baseRequest = AnthropicRequest
-        { model = modelName @Anthropic @model
+        { model = modelName @Anthropic model
         , messages = map convertMessage otherMsgs
         , max_tokens = 1000  -- default, will be overridden by config if present
         , temperature = Nothing

@@ -47,7 +47,7 @@ class ModelHasTools model
 
 -- Provider-specific model names
 class ModelName provider model where
-  modelName :: Text
+  modelName :: model -> Text
 
 -- Tool use types
 -- Provider-agnostic tool definition (just metadata, no execution)
