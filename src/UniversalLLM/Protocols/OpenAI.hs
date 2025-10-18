@@ -15,7 +15,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString.Lazy as BSL
 import GHC.Generics (Generic)
-import UniversalLLM.Core.Types (ModelHasTools, getToolDefinitions, ToolDefinition, toolDefName, toolDefDescription, toolDefParameters, ToolCall(..), ProtocolEmbedTools(..), ProtocolHandleTools(..), ProviderSupportsTools, Message(..))
+import UniversalLLM.Core.Types
 
 data OpenAIRequest = OpenAIRequest
   { model :: Text
@@ -152,12 +152,6 @@ instance HasCodec OpenAIErrorDetail where
       <$> requiredField "code" "Error code" .= code
       <*> requiredField "message" "Error message" .= errorMessage
       <*> requiredField "type" "Error type" .= errorType
-
--- Instance for embedding tools in OpenAI protocol
-instance ModelHasTools model => ProtocolEmbedTools OpenAIRequest model where
-  embedTools model req =
-    let toolDefs = getToolDefinitions model
-    in req { tools = Just (map toOpenAIToolDef toolDefs) }
 
 -- Helper: Convert ToolDefinition to OpenAI wire format
 toOpenAIToolDef :: ToolDefinition -> OpenAIToolDefinition

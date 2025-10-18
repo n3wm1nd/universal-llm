@@ -9,26 +9,14 @@ import Data.Text (Text)
 import UniversalLLM.Core.Types
 import UniversalLLM.Providers.Anthropic
 
--- Claude 3.5 Sonnet model with parameters
-data Claude35Sonnet = Claude35Sonnet
-  { claudeTemperature :: Maybe Double
-  , claudeMaxTokens :: Maybe Int
-  , claudeSystemPrompt :: Maybe Text
-  } deriving (Show, Eq)
+-- Claude 3.5 Sonnet model (just model identity)
+data Claude35Sonnet = Claude35Sonnet deriving (Show, Eq)
 
 -- Capabilities
 instance HasVision Claude35Sonnet
 
--- Parameter extraction
-instance Temperature Claude35Sonnet provider where
-  getTemperature = claudeTemperature
-
-instance MaxTokens Claude35Sonnet provider where
-  getMaxTokens = claudeMaxTokens
-
-instance SystemPrompt Claude35Sonnet provider where
-  getSystemPrompt = claudeSystemPrompt
-
--- Provider-specific model names
+-- Provider-specific model names and support
 instance ModelName Anthropic Claude35Sonnet where
   modelName = "claude-3-5-sonnet-20241022"
+
+instance ProviderSupportsModel Anthropic Claude35Sonnet

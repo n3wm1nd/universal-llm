@@ -26,22 +26,15 @@ import Control.Monad.Trans.Except (ExceptT(..), runExceptT, except, withExceptT)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
 
--- Simple model configuration
-data MistralModel = MistralModel
-  { mistralTemperature :: Maybe Double
-  , mistralMaxTokens :: Maybe Int
-  , mistralSeed :: Maybe Int
-  , mistralToolDefinitions :: [ToolDefinition]
-  } deriving (Show, Eq)
+-- Simple model (just model identity)
+data MistralModel = MistralModel deriving (Show, Eq)
 
-instance ModelHasTools MistralModel where
-  getToolDefinitions = mistralToolDefinitions
-  setToolDefinitions toolDefs model = model { mistralToolDefinitions = toolDefs }
+instance ModelHasTools MistralModel
 
-instance Temperature MistralModel provider where getTemperature = mistralTemperature
-instance MaxTokens MistralModel provider where getMaxTokens = mistralMaxTokens
-instance Seed MistralModel provider where getSeed = mistralSeed
-instance ModelName OpenAI MistralModel where modelName = "mistral-7b-instruct"
+instance ModelName OpenAI MistralModel where
+  modelName = "mistral-7b-instruct"
+
+instance ProviderSupportsModel OpenAI MistralModel
 
 -- Tool result type
 data TimeResponse = TimeResponse
@@ -94,25 +87,25 @@ callLLM baseUrl request = do
   withExceptT (ParseError . T.pack) $ except $ eitherDecodeJSONViaCodec (getResponseBody response)
 
 -- Main agent loop - continues until text response (non-tool)
-agentLoop :: String -> MistralModel -> [Message MistralModel OpenAI] -> ExceptT LLMError IO ()
-agentLoop serverUrl model messages = do
+agentLoop :: String -> [ModelConfig OpenAI MistralModel] -> [Message MistralModel OpenAI] -> ExceptT LLMError IO ()
+agentLoop serverUrl configs messages = do
   -- Available tools (for execution)
   let tools :: [LLMTool IO]
       tools = [LLMTool (getTimeTool @IO)]
 
-      -- Set tool definitions in model
+      -- Build config with tools added
       toolDefs = map llmToolToDefinition tools
-      model' = setToolDefinitions toolDefs model
+      configs' = configs ++ [Tools toolDefs]
 
-  -- Call LLM (tool definitions are in model')
-  let request = toRequest OpenAI model' messages
+  -- Call LLM (model + config)
+  let request = toRequest OpenAI MistralModel configs' messages
   response <- callLLM serverUrl request
   responses <- except $ fromResponse response
 
   newMsgs <- liftIO $ concat <$> mapM (handleResponse tools) responses
   -- Continue loop only if there are tool results to send back
   unless (null newMsgs) $
-    agentLoop serverUrl model' (messages ++ responses ++ newMsgs)
+    agentLoop serverUrl configs' (messages ++ responses ++ newMsgs)
 
 -- Handle different response types
 -- Returns empty list for text (stops loop), tool results for tool calls (continues loop)
@@ -148,10 +141,13 @@ main = do
   putStrLn $ "Using server: " <> serverUrl
   putStrLn "=== Tool Calling Demo ===\n"
 
-  let model = MistralModel (Just 0.7) (Just 200) Nothing []
+  -- Build config for MistralModel with OpenAI provider
+  let configs = [ Temperature 0.7
+                , MaxTokens 200
+                ]
   let initialMsg = [UserText "Use the get_time tool to tell me what time it is."]
 
-  result <- runExceptT $ agentLoop serverUrl model initialMsg
+  result <- runExceptT $ agentLoop serverUrl configs initialMsg
   case result of
     Left err -> putStrLn $ "❌ Error: " <> show err
     Right () -> return ()

@@ -23,24 +23,40 @@ data OpenAI = OpenAI deriving (Show, Eq)
 -- Declare that OpenAI supports tools
 instance ProviderSupportsTools OpenAI
 
+-- Declare OpenAI parameter support
+instance ProviderSupportsTemperature OpenAI
+instance ProviderSupportsMaxTokens OpenAI
+instance ProviderSupportsSeed OpenAI
+instance ProviderSupportsSystemPrompt OpenAI
+
+-- Apply configuration to OpenAI request
+instance ApplyConfig OpenAIRequest OpenAI model where
+  applyConfig configs req = foldr applyOne req configs
+    where
+      applyOne (Temperature t) r = r { temperature = Just t }
+      applyOne (MaxTokens mt) r = r { max_tokens = Just mt }
+      applyOne (Seed s) r = r { seed = Just s }
+      applyOne (SystemPrompt sp) r =
+        let sysMsg = OpenAIMessage "system" (Just sp) Nothing Nothing
+        in r { messages = sysMsg : messages r }
+      applyOne (Tools toolDefs) r = r { tools = Just (map toOpenAIToolDef toolDefs) }
+
 -- Provider typeclass implementation
--- Uses protocol-level ProtocolEmbedTools for tool embedding
--- Uses generic ProtocolHandleTools for parsing tool calls from responses
-instance (ModelName OpenAI model, Temperature model OpenAI, MaxTokens model OpenAI, Seed model OpenAI, ProtocolEmbedTools OpenAIRequest model, ProtocolHandleTools OpenAIToolCall model OpenAI)
+instance (ModelName OpenAI model, ProtocolHandleTools OpenAIToolCall model OpenAI)
          => Provider OpenAI model where
   type ProviderRequest OpenAI = OpenAIRequest
   type ProviderResponse OpenAI = OpenAIResponse
 
-  toRequest _provider model messages =
+  toRequest _provider _model configs messages =
     let baseRequest = OpenAIRequest
           { model = modelName @OpenAI @model
           , messages = map convertMessage messages
-          , temperature = getTemperature @model @OpenAI model
-          , max_tokens = getMaxTokens @model @OpenAI model
-          , seed = getSeed @model @OpenAI model
+          , temperature = Nothing
+          , max_tokens = Nothing
+          , seed = Nothing
           , tools = Nothing
           }
-    in embedTools model baseRequest
+    in applyConfig configs baseRequest
 
   fromResponse = fromResponse'
 

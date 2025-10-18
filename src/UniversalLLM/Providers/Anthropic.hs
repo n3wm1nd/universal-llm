@@ -2,6 +2,8 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module UniversalLLM.Providers.Anthropic where
 
@@ -12,20 +14,36 @@ import Data.Text (Text)
 -- Anthropic provider (phantom type)
 data Anthropic = Anthropic deriving (Show, Eq)
 
+-- Declare Anthropic parameter support
+instance ProviderSupportsTemperature Anthropic
+instance ProviderSupportsMaxTokens Anthropic
+instance ProviderSupportsSystemPrompt Anthropic
+-- Note: Anthropic does NOT support Seed
+
+-- Apply configuration to Anthropic request
+instance ApplyConfig AnthropicRequest Anthropic model where
+  applyConfig configs req = foldr applyOne req configs
+    where
+      applyOne (Temperature t) r = r { temperature = Just t }
+      applyOne (MaxTokens mt) r = r { max_tokens = mt }
+      applyOne (SystemPrompt sp) r = r { system = Just sp }
+      -- Tools, Seed not supported by Anthropic, but we need a catch-all to avoid warnings
+      -- This pattern should never be reached due to GADT constraints, but GHC doesn't know that
+      applyOne _ r = r
+
 -- Pure functions: no IO, just transformations
-toRequest :: forall model. (ModelName Anthropic model, Temperature model Anthropic, MaxTokens model Anthropic, SystemPrompt model Anthropic)
-          => Anthropic -> model -> [Message model Anthropic] -> AnthropicRequest
-toRequest _provider model messages =
+toRequest :: forall model. ModelName Anthropic model
+          => Anthropic -> model -> [ModelConfig Anthropic model] -> [Message model Anthropic] -> AnthropicRequest
+toRequest _provider _model configs messages =
   let (systemMsg, otherMsgs) = extractSystem messages
-      systemFromModel = getSystemPrompt @model @Anthropic model
-      finalSystem = systemMsg <> systemFromModel
-  in AnthropicRequest
-    { model = modelName @Anthropic @model
-    , messages = map convertMessage otherMsgs
-    , max_tokens = maybe 1000 id (getMaxTokens @model @Anthropic model)
-    , temperature = getTemperature @model @Anthropic model
-    , system = finalSystem
-    }
+      baseRequest = AnthropicRequest
+        { model = modelName @Anthropic @model
+        , messages = map convertMessage otherMsgs
+        , max_tokens = 1000  -- default, will be overridden by config if present
+        , temperature = Nothing
+        , system = systemMsg
+        }
+  in applyConfig configs baseRequest
 
 fromResponse :: AnthropicResponse -> Either LLMError [Message model Anthropic]
 fromResponse resp = case responseContent resp of

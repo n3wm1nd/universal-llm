@@ -21,31 +21,32 @@ import Autodocodec (HasCodec, toJSONViaCodec, eitherDecodeJSONViaCodec)
 import Autodocodec.Schema (jsonSchemaViaCodec)
 import Data.Kind (Type)
 
+-- Provider capability markers - indicate what parameters a provider supports
+class ProviderSupportsTemperature provider
+class ProviderSupportsMaxTokens provider
+class ProviderSupportsSeed provider
+class ProviderSupportsSystemPrompt provider
+class ProviderSupportsModel provider model
+
+-- ModelConfig GADT - configuration values with provider and model constraints
+-- Only constructible if the provider supports the parameter and/or model
+data ModelConfig provider model where
+  Temperature :: ProviderSupportsTemperature provider => Double -> ModelConfig provider model
+  MaxTokens :: ProviderSupportsMaxTokens provider => Int -> ModelConfig provider model
+  Seed :: ProviderSupportsSeed provider => Int -> ModelConfig provider model
+  SystemPrompt :: ProviderSupportsSystemPrompt provider => Text -> ModelConfig provider model
+  Tools :: ModelHasTools model => [ToolDefinition] -> ModelConfig provider model
+
 -- Core capabilities that models can have
 class HasVision model
 class HasJSON model
 
--- Model-level tool capability
-class ModelHasTools model where
-  getToolDefinitions :: model -> [ToolDefinition]
-  setToolDefinitions :: [ToolDefinition] -> model -> model
+-- Model-level tool capability (just a marker, tools go in config)
+class ModelHasTools model
 
 -- Provider-specific model names
 class ModelName provider model where
   modelName :: Text
-
--- Parameter extraction classes
-class Temperature model provider where
-  getTemperature :: model -> Maybe Double
-
-class MaxTokens model provider where
-  getMaxTokens :: model -> Maybe Int
-
-class SystemPrompt model provider where
-  getSystemPrompt :: model -> Maybe Text
-
-class Seed model provider where
-  getSeed :: model -> Maybe Int
 
 -- Tool use types
 -- Provider-agnostic tool definition (just metadata, no execution)
@@ -143,6 +144,7 @@ class Provider provider model where
 
   toRequest :: provider
             -> model
+            -> [ModelConfig provider model]
             -> [Message model provider]
             -> ProviderRequest provider
 
@@ -160,10 +162,10 @@ instance (ModelHasTools model, ProviderSupportsTools provider) => HasTools model
 -- These define how to embed capabilities into protocol wire formats
 -- Can be reused by any provider using the same protocol
 
--- Generic tool embedding for any protocol
-class ProtocolEmbedTools protocol model where
-  embedTools :: model -> protocol -> protocol
-  embedTools _ req = req  -- Default: no-op
+-- Protocol configuration application
+-- Protocols define how to apply ModelConfig values to their request format
+class ApplyConfig protocol provider model where
+  applyConfig :: [ModelConfig provider model] -> protocol -> protocol
 
 -- Generic tool call handling for any protocol/provider combination
 class ProtocolHandleTools protocolToolCall model provider where
