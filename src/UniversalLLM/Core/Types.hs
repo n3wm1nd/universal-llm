@@ -21,13 +21,13 @@ import qualified Data.Aeson as Aeson
 import Autodocodec (HasCodec, toJSONViaCodec, eitherDecodeJSONViaCodec)
 import Autodocodec.Schema (jsonSchemaViaCodec)
 import Data.Kind (Type)
+import Data.List (find)
 
 -- Provider capability markers - indicate what parameters a provider supports
 class ProviderSupportsTemperature provider
 class ProviderSupportsMaxTokens provider
 class ProviderSupportsSeed provider
 class ProviderSupportsSystemPrompt provider
-class ProviderSupportsModel provider model
 
 -- ModelConfig GADT - configuration values with provider and model constraints
 -- Only constructible if the provider supports the parameter and/or model
@@ -98,10 +98,6 @@ matchToolCall :: forall m. [LLMTool m] -> ToolCall -> Maybe (LLMTool m)
 matchToolCall tools tc =
   let name = toolCallName tc
   in find (\(LLMTool tool) -> toolName @_ @m tool == name) tools
-  where
-    find :: (a -> Bool) -> [a] -> Maybe a
-    find _ [] = Nothing
-    find p (x:xs) = if p x then Just x else find p xs
 
 -- | Execute a tool call by matching and dispatching
 -- Takes available tools and the tool call from the LLM

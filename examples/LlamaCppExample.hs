@@ -38,8 +38,6 @@ instance ModelHasTools MistralModel
 instance ModelName OpenAI MistralModel where
   modelName = "mistral-7b-instruct"
 
-instance ProviderSupportsModel OpenAI MistralModel
-
 -- ============================================================================
 -- Tool Definition
 -- ============================================================================
