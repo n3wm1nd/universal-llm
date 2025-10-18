@@ -95,9 +95,10 @@ data ToolResult = ToolResult
 
 -- | Match a ToolCall to a LLMTool from the available tools list
 matchToolCall :: forall m. [LLMTool m] -> ToolCall -> Maybe (LLMTool m)
-matchToolCall tools tc =
-  let name = toolCallName tc
-  in find (\(LLMTool tool) -> toolName @_ @m tool == name) tools
+matchToolCall tools tc = find matches tools
+  where
+    name = toolCallName tc
+    matches (LLMTool tool) = toolName @_ @m tool == name
 
 -- | Execute a tool call by matching and dispatching
 -- Takes available tools and the tool call from the LLM
@@ -119,21 +120,16 @@ executeWithTool :: forall tool m. (Tool tool m, Monad m)
                 => tool
                 -> ToolCall
                 -> m ToolResult
-executeWithTool tool toolCall = do
+executeWithTool tool toolCall =
   -- Decode JSON params to typed ToolParams
-  case eitherDecodeJSONViaCodec (encode $ toolCallParameters toolCall) of
-    Left err -> return $ ToolResult
-      { toolResultCall = toolCall
-      , toolResultOutput = Left $ "Invalid parameters: " <> Text.pack err
-      }
+  case eitherDecodeJSONViaCodec . encode $ toolCallParameters toolCall of
+    Left err -> return $ ToolResult toolCall
+      (Left $ "Invalid parameters: " <> Text.pack err)
     Right (params :: ToolParams tool) -> do
       -- Call tool's call method with typed params
       result <- call tool params
       -- Encode result back to JSON
-      return $ ToolResult
-        { toolResultCall = toolCall
-        , toolResultOutput = Right $ toJSONViaCodec result
-        }
+      return $ ToolResult toolCall (Right $ toJSONViaCodec result)
 
 -- | LLM operation errors
 data LLMError

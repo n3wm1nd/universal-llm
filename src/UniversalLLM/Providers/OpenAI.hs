@@ -12,7 +12,6 @@ module UniversalLLM.Providers.OpenAI where
 
 import UniversalLLM.Core.Types
 import UniversalLLM.Protocols.OpenAI
-import Data.Text (Text)
 import qualified Data.Text.Encoding as TE
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as BSL
@@ -47,10 +46,10 @@ instance (ModelName OpenAI model, ProtocolHandleTools OpenAIToolCall model OpenA
   type ProviderRequest OpenAI = OpenAIRequest
   type ProviderResponse OpenAI = OpenAIResponse
 
-  toRequest _provider model configs messages =
+  toRequest _provider mdl configs msgs =
     let baseRequest = OpenAIRequest
-          { model = modelName @OpenAI model
-          , messages = map convertMessage messages
+          { model = modelName @OpenAI mdl
+          , messages = map convertMessage msgs
           , temperature = Nothing
           , max_tokens = Nothing
           , seed = Nothing
@@ -63,14 +62,14 @@ instance (ModelName OpenAI model, ProtocolHandleTools OpenAIToolCall model OpenA
 fromResponse' :: forall model. ProtocolHandleTools OpenAIToolCall model OpenAI => OpenAIResponse -> Either LLMError [Message model OpenAI]
 fromResponse' (OpenAIError (OpenAIErrorResponse errDetail)) =
   Left $ ProviderError (code errDetail) $ errorMessage errDetail <> " (" <> errorType errDetail <> ")"
-fromResponse' (OpenAISuccess (OpenAISuccessResponse choices)) = case choices of
-  (choice:_) ->
-    let msg = message choice
-    in case (content msg, tool_calls msg) of
+fromResponse' (OpenAISuccess (OpenAISuccessResponse chcs)) =
+  case chcs of
+    (choice:_) -> case (content msg, tool_calls msg) of
       (Just txt, Nothing) -> Right [AssistantText txt]
       (_, Just calls) -> Right $ handleToolCalls @OpenAIToolCall @model @OpenAI calls
       (Nothing, Nothing) -> Left $ ParseError "No content or tool calls in response"
-  [] -> Left $ ParseError "No choices returned in OpenAI response"
+      where msg = message choice
+    [] -> Left $ ParseError "No choices returned in OpenAI response"
 
 convertMessage :: Message model OpenAI -> OpenAIMessage
 convertMessage (UserText text) = OpenAIMessage "user" (Just text) Nothing Nothing
@@ -79,8 +78,8 @@ convertMessage (AssistantText text) = OpenAIMessage "assistant" (Just text) Noth
 convertMessage (AssistantTool calls) = OpenAIMessage "assistant" Nothing (Just $ map convertFromToolCall calls) Nothing
 convertMessage (SystemText text) = OpenAIMessage "system" (Just text) Nothing Nothing
 convertMessage (ToolResultMsg result) =
-  let resultCallId = toolCallId (toolResultCall result)
-      resultContent = case toolResultOutput result of
-        Left errMsg -> errMsg  -- Error message as text
-        Right value -> TE.decodeUtf8 $ BSL.toStrict $ Aeson.encode value  -- Success value as JSON
-  in OpenAIMessage "tool" (Just resultContent) Nothing (Just resultCallId)
+  OpenAIMessage "tool" (Just resultContent) Nothing (Just resultCallId)
+  where
+    resultCallId = toolCallId (toolResultCall result)
+    resultContent = either id (TE.decodeUtf8 . BSL.toStrict . Aeson.encode)
+                  $ toolResultOutput result

@@ -166,16 +166,14 @@ toOpenAIToolDef toolDef = OpenAIToolDefinition
 
 -- Helper: Convert OpenAI tool call to generic ToolCall
 convertToolCall :: OpenAIToolCall -> ToolCall
-convertToolCall tc =
-  let argsText = toolFunctionArguments (toolFunction tc)
-      argsValue = case Aeson.eitherDecodeStrict (TE.encodeUtf8 argsText) of
-        Left _ -> Aeson.object [] -- fallback to empty object on parse error
-        Right v -> v
-  in ToolCall
-    { toolCallId = callId tc
-    , toolCallName = toolFunctionName (toolFunction tc)
-    , toolCallParameters = argsValue
-    }
+convertToolCall tc = ToolCall
+  { toolCallId = callId tc
+  , toolCallName = toolFunctionName (toolFunction tc)
+  , toolCallParameters = parseArgs $ toolFunctionArguments (toolFunction tc)
+  }
+  where
+    parseArgs = either (const $ Aeson.object []) id
+              . Aeson.eitherDecodeStrict . TE.encodeUtf8
 
 convertFromToolCall :: ToolCall -> OpenAIToolCall
 convertFromToolCall tc = OpenAIToolCall
@@ -183,7 +181,7 @@ convertFromToolCall tc = OpenAIToolCall
   , toolCallType = "function"
   , toolFunction = OpenAIToolFunction
       { toolFunctionName = toolCallName tc
-      , toolFunctionArguments = TE.decodeUtf8 $ BSL.toStrict $ Aeson.encode $ toolCallParameters tc
+      , toolFunctionArguments = TE.decodeUtf8 . BSL.toStrict . Aeson.encode $ toolCallParameters tc
       }
   }
 
