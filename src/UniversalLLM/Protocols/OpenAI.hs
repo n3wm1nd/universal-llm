@@ -10,6 +10,7 @@ module UniversalLLM.Protocols.OpenAI where
 
 import Autodocodec
 import Data.Text (Text)
+import qualified Data.Text as Text
 import Data.Aeson (Value)
 import qualified Data.Aeson as Aeson
 import qualified Data.Text.Encoding as TE
@@ -166,22 +167,37 @@ toOpenAIToolDef toolDef = OpenAIToolDefinition
 
 -- Helper: Convert OpenAI tool call to generic ToolCall
 convertToolCall :: OpenAIToolCall -> ToolCall
-convertToolCall tc = ToolCall
-  { toolCallId = callId tc
-  , toolCallName = toolFunctionName (toolFunction tc)
-  , toolCallParameters = parseArgs $ toolFunctionArguments (toolFunction tc)
-  }
+convertToolCall tc =
+  case Aeson.eitherDecodeStrict (TE.encodeUtf8 argsText) of
+    Right params -> ToolCall
+      { toolCallId = callId tc
+      , toolCallName = toolFunctionName (toolFunction tc)
+      , toolCallParameters = params
+      }
+    Left err -> InvalidToolCall
+      { invalidToolCallId = callId tc
+      , invalidToolCallName = toolFunctionName (toolFunction tc)
+      , invalidToolCallArguments = argsText  -- Preserve original invalid string
+      , invalidToolCallError = "Malformed JSON in tool call arguments: " <> Text.pack err
+      }
   where
-    parseArgs = either (const $ Aeson.object []) id
-              . Aeson.eitherDecodeStrict . TE.encodeUtf8
+    argsText = toolFunctionArguments (toolFunction tc)
 
 convertFromToolCall :: ToolCall -> OpenAIToolCall
-convertFromToolCall tc = OpenAIToolCall
-  { callId = toolCallId tc
+convertFromToolCall (ToolCall tcId tcName tcParams) = OpenAIToolCall
+  { callId = tcId
   , toolCallType = "function"
   , toolFunction = OpenAIToolFunction
-      { toolFunctionName = toolCallName tc
-      , toolFunctionArguments = TE.decodeUtf8 . BSL.toStrict . Aeson.encode $ toolCallParameters tc
+      { toolFunctionName = tcName
+      , toolFunctionArguments = TE.decodeUtf8 . BSL.toStrict . Aeson.encode $ tcParams
+      }
+  }
+convertFromToolCall (InvalidToolCall tcId tcName tcArgs _err) = OpenAIToolCall
+  { callId = tcId
+  , toolCallType = "function"
+  , toolFunction = OpenAIToolFunction
+      { toolFunctionName = tcName
+      , toolFunctionArguments = tcArgs  -- Return original invalid arguments unchanged
       }
   }
 

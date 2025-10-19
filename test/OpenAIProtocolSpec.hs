@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-x-partial -Wno-unused-imports -Wno-name-shadowing #-}
 
 module OpenAIProtocolSpec (spec) where
 
@@ -183,7 +184,7 @@ spec = do
             _ -> expectationFailure "Expected location to be 'Paris'"
         _ -> expectationFailure "Expected parameters to be an object"
 
-    it "handles malformed tool call arguments gracefully" $ do
+    it "handles malformed tool call arguments as InvalidToolCall" $ do
       let oaiToolCall = OpenAIToolCall
             { callId = "call_456"
             , toolCallType = "function"
@@ -194,8 +195,14 @@ spec = do
             }
           toolCall = convertToolCall oaiToolCall
 
-      -- Should create empty object for invalid JSON
-      toolCallParameters toolCall `shouldBe` Aeson.Object mempty
+      -- Should create InvalidToolCall for malformed JSON
+      case toolCall of
+        InvalidToolCall tcId tcName tcArgs err -> do
+          tcId `shouldBe` "call_456"
+          tcName `shouldBe` "test"
+          tcArgs `shouldBe` "not valid json"  -- Original string preserved
+          T.isInfixOf "Malformed JSON" err `shouldBe` True
+        ToolCall{} -> expectationFailure "Expected InvalidToolCall for malformed JSON"
 
     it "converts internal ToolCall to OpenAI format" $ do
       let params = Aeson.Object $ KM.fromList [("city", Aeson.String "London")]
@@ -265,3 +272,24 @@ spec = do
           case head msgs of
             AssistantTool calls -> length calls `shouldBe` 2
             _ -> expectationFailure "Expected AssistantTool"
+
+  describe "OpenAI Protocol - InvalidToolCall Execution" $ do
+
+    it "executeToolCall returns error for InvalidToolCall" $ do
+      let invalidCall = InvalidToolCall "call_bad" "broken_tool" "{bad json}" "Bad JSON"
+          result = executeToolCall ([] :: [LLMTool IO]) invalidCall
+
+      executed <- result
+      case toolResultOutput executed of
+        Left err -> err `shouldBe` "Bad JSON"
+        Right _ -> expectationFailure "Expected error result for InvalidToolCall"
+      toolResultCall executed `shouldBe` invalidCall
+
+    it "converts InvalidToolCall back to OpenAI format with original args" $ do
+      let invalidCall = InvalidToolCall "call_err" "bad_tool" "malformed{json" "Parse error"
+          oaiCall = convertFromToolCall invalidCall
+
+      callId oaiCall `shouldBe` "call_err"
+      toolFunctionName (toolFunction oaiCall) `shouldBe` "bad_tool"
+      -- Original invalid string is preserved
+      toolFunctionArguments (toolFunction oaiCall) `shouldBe` "malformed{json"

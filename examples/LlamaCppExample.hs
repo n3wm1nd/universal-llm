@@ -134,7 +134,7 @@ handleResponse _ _ = return []
 -- Execute a single tool call with logging
 executeCall :: [LLMTool IO] -> ToolCall -> IO ToolResult
 executeCall tools callTool = do
-  putStrLn $ "  → " <> T.unpack (toolCallName callTool)
+  putStrLn $ "  → " <> T.unpack (getToolCallName callTool)
   result <- executeToolCall tools callTool
   case toolResultOutput result of
     Left errMsg -> putStrLn $ "    ❌ " <> T.unpack errMsg

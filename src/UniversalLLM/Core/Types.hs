@@ -81,11 +81,29 @@ toToolDefinition tool = ToolDefinition
 llmToolToDefinition :: forall m. LLMTool m -> ToolDefinition
 llmToolToDefinition (LLMTool (tool :: t)) = toToolDefinition @t @m tool
 
-data ToolCall = ToolCall
-  { toolCallId :: Text
-  , toolCallName :: Text
-  , toolCallParameters :: Value
-  } deriving (Show, Eq)
+data ToolCall
+  = ToolCall
+      { toolCallId :: Text
+      , toolCallName :: Text
+      , toolCallParameters :: Value
+      }
+  | InvalidToolCall
+      { invalidToolCallId :: Text
+      , invalidToolCallName :: Text
+      , invalidToolCallArguments :: Text  -- Original malformed arguments string
+      , invalidToolCallError :: Text      -- Parse error message
+      }
+  deriving (Show, Eq)
+
+-- | Get the ID from either variant of ToolCall
+getToolCallId :: ToolCall -> Text
+getToolCallId (ToolCall tcId _ _) = tcId
+getToolCallId (InvalidToolCall tcId _ _ _) = tcId
+
+-- | Get the name from either variant of ToolCall
+getToolCallName :: ToolCall -> Text
+getToolCallName (ToolCall _ tcName _) = tcName
+getToolCallName (InvalidToolCall _ tcName _ _) = tcName
 
 -- Tool execution result - either success or error
 data ToolResult = ToolResult
@@ -95,10 +113,10 @@ data ToolResult = ToolResult
 
 -- | Match a ToolCall to a LLMTool from the available tools list
 matchToolCall :: forall m. [LLMTool m] -> ToolCall -> Maybe (LLMTool m)
-matchToolCall tools tc = find matches tools
+matchToolCall tools (ToolCall { toolCallName = name }) = find matches tools
   where
-    name = toolCallName tc
     matches (LLMTool tool) = toolName @_ @m tool == name
+matchToolCall _ InvalidToolCall{} = Nothing
 
 -- | Execute a tool call by matching and dispatching
 -- Takes available tools and the tool call from the LLM
@@ -107,11 +125,16 @@ executeToolCall :: Monad m
                 => [LLMTool m]  -- available tools
                 -> ToolCall      -- call from LLM
                 -> m ToolResult
-executeToolCall tools toolCall =
+executeToolCall _ invalid@(InvalidToolCall _ _ _ err) =
+  return $ ToolResult
+    { toolResultCall = invalid
+    , toolResultOutput = Left err
+    }
+executeToolCall tools toolCall@(ToolCall _ name _) =
   case matchToolCall tools toolCall of
     Nothing -> return $ ToolResult
       { toolResultCall = toolCall
-      , toolResultOutput = Left $ "Tool not found: " <> toolCallName toolCall
+      , toolResultOutput = Left $ "Tool not found: " <> name
       }
     Just (LLMTool tool) -> executeWithTool tool toolCall
 

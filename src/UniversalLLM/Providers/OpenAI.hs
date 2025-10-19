@@ -80,6 +80,6 @@ convertMessage (SystemText text) = OpenAIMessage "system" (Just text) Nothing No
 convertMessage (ToolResultMsg result) =
   OpenAIMessage "tool" (Just resultContent) Nothing (Just resultCallId)
   where
-    resultCallId = toolCallId (toolResultCall result)
+    resultCallId = getToolCallId (toolResultCall result)
     resultContent = either id (TE.decodeUtf8 . BSL.toStrict . Aeson.encode)
                   $ toolResultOutput result
