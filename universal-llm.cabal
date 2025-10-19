@@ -54,6 +54,8 @@ test-suite universal-llm-tests
   main-is: Main.hs
   other-modules:
     OpenAIProtocolSpec
+    AnthropicTransportSpec
+    TestModels
   hs-source-dirs: test
 
   build-depends:
@@ -63,7 +65,8 @@ test-suite universal-llm-tests
     QuickCheck >= 2.14 && < 3,
     aeson,
     text,
-    bytestring
+    bytestring,
+    autodocodec
 
 executable simple-example
   import: shared-properties
@@ -91,3 +94,21 @@ executable llama-cpp-example
     http-conduit,
     time,
     transformers
+
+executable claude-example
+  import: shared-properties
+  main-is: ClaudeExample.hs
+  hs-source-dirs: examples
+
+  build-depends:
+    base,
+    universal-llm,
+    text,
+    aeson,
+    bytestring,
+    autodocodec,
+    autodocodec-schema,
+    http-conduit,
+    time,
+    transformers,
+    case-insensitive
