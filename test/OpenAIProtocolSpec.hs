@@ -174,11 +174,11 @@ spec = do
             }
           toolCall = convertToolCall oaiToolCall
 
-      toolCallId toolCall `shouldBe` "call_123"
-      toolCallName toolCall `shouldBe` "get_weather"
+      getToolCallId toolCall `shouldBe` "call_123"
+      getToolCallName toolCall `shouldBe` "get_weather"
       -- Verify parameters parsed correctly
-      case toolCallParameters toolCall of
-        Aeson.Object obj ->
+      case toolCall of
+        ToolCall _ _ (Aeson.Object obj) ->
           case KM.lookup "location" obj of
             Just (Aeson.String "Paris") -> return ()
             _ -> expectationFailure "Expected location to be 'Paris'"
@@ -206,11 +206,7 @@ spec = do
 
     it "converts internal ToolCall to OpenAI format" $ do
       let params = Aeson.Object $ KM.fromList [("city", Aeson.String "London")]
-          toolCall = ToolCall
-            { toolCallId = "call_789"
-            , toolCallName = "get_weather"
-            , toolCallParameters = params
-            }
+          toolCall = ToolCall "call_789" "get_weather" params
           oaiToolCall = convertFromToolCall toolCall
 
       callId oaiToolCall `shouldBe` "call_789"
@@ -240,8 +236,8 @@ spec = do
             AssistantTool calls -> do
               length calls `shouldBe` 1
               let call = head calls
-              toolCallId call `shouldBe` "JsvEr09tquvDy6veg6KkfepTLmKspQ1u"
-              toolCallName call `shouldBe` "get_weather"
+              getToolCallId call `shouldBe` "JsvEr09tquvDy6veg6KkfepTLmKspQ1u"
+              getToolCallName call `shouldBe` "get_weather"
             _ -> expectationFailure "Expected AssistantTool message"
 
     it "translates tool result message to OpenAI format" $ do

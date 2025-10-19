@@ -193,11 +193,7 @@ toAnthropicToolDef toolDef = AnthropicToolDefinition
 -- Instance for tool-capable models: converts tool_use blocks to AssistantTool
 instance (ModelHasTools model, ProviderSupportsTools provider) => ProtocolHandleTools AnthropicContentBlock model provider where
   handleToolCalls blocks =
-    let toolCalls = [ ToolCall
-                        { toolCallId = tid
-                        , toolCallName = tname
-                        , toolCallParameters = tinput
-                        }
+    let toolCalls = [ ToolCall tid tname tinput
                     | AnthropicToolUseBlock tid tname tinput <- blocks
                     ]
     in if null toolCalls

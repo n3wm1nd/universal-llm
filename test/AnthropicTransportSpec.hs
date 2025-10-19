@@ -263,8 +263,8 @@ spec = do
         Right response -> do
           case Provider.fromResponse' @ClaudeSonnet45 response of
             Right [AssistantTool [toolCall]] -> do
-              toolCallId toolCall `shouldBe` "toolu_01MiAg7qRTuJAYUjNBDBN9AS"
-              toolCallName toolCall `shouldBe` "get_weather"
+              getToolCallId toolCall `shouldBe` "toolu_01MiAg7qRTuJAYUjNBDBN9AS"
+              getToolCallName toolCall `shouldBe` "get_weather"
 
               -- Step 3: Simulate tool execution
               let toolResult = ToolResult

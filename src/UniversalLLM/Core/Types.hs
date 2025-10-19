@@ -81,18 +81,16 @@ toToolDefinition tool = ToolDefinition
 llmToolToDefinition :: forall m. LLMTool m -> ToolDefinition
 llmToolToDefinition (LLMTool (tool :: t)) = toToolDefinition @t @m tool
 
+-- Type aliases for ToolCall parameters (for documentation)
+type ToolCallId = Text
+type ToolCallName = Text
+type ToolCallArguments = Value
+type RawArguments = Text
+type ErrorMessage = Text
+
 data ToolCall
-  = ToolCall
-      { toolCallId :: Text
-      , toolCallName :: Text
-      , toolCallParameters :: Value
-      }
-  | InvalidToolCall
-      { invalidToolCallId :: Text
-      , invalidToolCallName :: Text
-      , invalidToolCallArguments :: Text  -- Original malformed arguments string
-      , invalidToolCallError :: Text      -- Parse error message
-      }
+  = ToolCall ToolCallId ToolCallName ToolCallArguments
+  | InvalidToolCall ToolCallId ToolCallName RawArguments ErrorMessage
   deriving (Show, Eq)
 
 -- | Get the ID from either variant of ToolCall
@@ -113,10 +111,11 @@ data ToolResult = ToolResult
 
 -- | Match a ToolCall to a LLMTool from the available tools list
 matchToolCall :: forall m. [LLMTool m] -> ToolCall -> Maybe (LLMTool m)
-matchToolCall tools (ToolCall { toolCallName = name }) = find matches tools
+matchToolCall tools toolCall@(ToolCall _ _ _) = find matches tools
   where
+    name = getToolCallName toolCall
     matches (LLMTool tool) = toolName @_ @m tool == name
-matchToolCall _ InvalidToolCall{} = Nothing
+matchToolCall _ (InvalidToolCall _ _ _ _) = Nothing
 
 -- | Execute a tool call by matching and dispatching
 -- Takes available tools and the tool call from the LLM
@@ -143,16 +142,18 @@ executeWithTool :: forall tool m. (Tool tool m, Monad m)
                 => tool
                 -> ToolCall
                 -> m ToolResult
-executeWithTool tool toolCall =
+executeWithTool tool toolCall@(ToolCall _ _ params) =
   -- Decode JSON params to typed ToolParams
-  case eitherDecodeJSONViaCodec . encode $ toolCallParameters toolCall of
+  case eitherDecodeJSONViaCodec . encode $ params of
     Left err -> return $ ToolResult toolCall
       (Left $ "Invalid parameters: " <> Text.pack err)
-    Right (params :: ToolParams tool) -> do
+    Right (typedParams :: ToolParams tool) -> do
       -- Call tool's call method with typed params
-      result <- call tool params
+      result <- call tool typedParams
       -- Encode result back to JSON
       return $ ToolResult toolCall (Right $ toJSONViaCodec result)
+executeWithTool _ (InvalidToolCall _ _ _ _) =
+  error "executeWithTool called with InvalidToolCall (should never happen)"
 
 -- | LLM operation errors
 data LLMError

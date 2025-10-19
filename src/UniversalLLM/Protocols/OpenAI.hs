@@ -170,16 +170,14 @@ convertToolCall :: OpenAIToolCall -> ToolCall
 convertToolCall tc =
   case Aeson.eitherDecodeStrict (TE.encodeUtf8 argsText) of
     Right params -> ToolCall
-      { toolCallId = callId tc
-      , toolCallName = toolFunctionName (toolFunction tc)
-      , toolCallParameters = params
-      }
+      (callId tc)
+      (toolFunctionName (toolFunction tc))
+      params
     Left err -> InvalidToolCall
-      { invalidToolCallId = callId tc
-      , invalidToolCallName = toolFunctionName (toolFunction tc)
-      , invalidToolCallArguments = argsText  -- Preserve original invalid string
-      , invalidToolCallError = "Malformed JSON in tool call arguments: " <> Text.pack err
-      }
+      (callId tc)
+      (toolFunctionName (toolFunction tc))
+      argsText  -- Preserve original invalid string
+      ("Malformed JSON in tool call arguments: " <> Text.pack err)
   where
     argsText = toolFunctionArguments (toolFunction tc)
 

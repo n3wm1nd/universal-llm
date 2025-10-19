@@ -119,9 +119,9 @@ agentLoop oauthToken configs messages = do
       configs' = configs ++ [Tools toolDefs]
 
   -- Call LLM (model + config)
-  let request = Provider.toRequest Anthropic ClaudeSonnet45 configs' messages
+  let request = Provider.toRequest' Anthropic ClaudeSonnet45 configs' messages
   response <- callClaude oauthToken request
-  responses <- except $ Provider.fromResponse response
+  responses <- except $ Provider.fromResponse' response
 
   newMsgs <- liftIO $ concat <$> mapM (handleResponse tools) responses
   -- Continue loop only if there are tool results to send back
