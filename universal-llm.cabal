@@ -52,6 +52,8 @@ test-suite universal-llm-tests
   import: shared-properties
   type: exitcode-stdio-1.0
   main-is: Main.hs
+  other-modules:
+    OpenAIProtocolSpec
   hs-source-dirs: test
 
   build-depends:
@@ -60,7 +62,8 @@ test-suite universal-llm-tests
     hspec >= 2.7 && < 3,
     QuickCheck >= 2.14 && < 3,
     aeson,
-    text
+    text,
+    bytestring
 
 executable simple-example
   import: shared-properties
