@@ -16,9 +16,10 @@ module UniversalLLM.Core.Types where
 
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Data.Aeson (Value, encode)
+import Data.Aeson (Value, Result (..))
+import Data.Aeson.Types (parse)
 import qualified Data.Aeson as Aeson
-import Autodocodec (HasCodec, toJSONViaCodec, eitherDecodeJSONViaCodec)
+import Autodocodec (HasCodec, toJSONViaCodec, parseJSONViaCodec)
 import Autodocodec.Schema (jsonSchemaViaCodec)
 import Data.Kind (Type)
 import Data.List (find)
@@ -144,10 +145,10 @@ executeWithTool :: forall tool m. (Tool tool m, Monad m)
                 -> m ToolResult
 executeWithTool tool toolCall@(ToolCall _ _ params) =
   -- Decode JSON params to typed ToolParams
-  case eitherDecodeJSONViaCodec . encode $ params of
-    Left err -> return $ ToolResult toolCall
+  case parse parseJSONViaCodec $ params of
+    Error err -> return $ ToolResult toolCall
       (Left $ "Invalid parameters: " <> Text.pack err)
-    Right (typedParams :: ToolParams tool) -> do
+    Success (typedParams :: ToolParams tool) -> do
       -- Call tool's call method with typed params
       result <- call tool typedParams
       -- Encode result back to JSON
