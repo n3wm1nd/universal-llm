@@ -45,10 +45,10 @@ instance (ModelName Anthropic model, ProtocolHandleTools AnthropicContentBlock m
 -- Pure functions: no IO, just transformations
 toRequest' :: forall model. ModelName Anthropic model
           => Anthropic -> model -> [ModelConfig Anthropic model] -> [Message model Anthropic] -> AnthropicRequest
-toRequest' _provider model configs messages =
-  let (systemMsg, otherMsgs) = extractSystem messages
+toRequest' _provider mdl configs msgs =
+  let (systemMsg, otherMsgs) = extractSystem msgs
       baseRequest = AnthropicRequest
-        { model = modelName @Anthropic model
+        { model = modelName @Anthropic mdl
         , messages = map convertMessage otherMsgs
         , max_tokens = 1000  -- default, will be overridden by config if present
         , temperature = Nothing
@@ -96,10 +96,10 @@ convertMessage (ToolResultMsg result) = AnthropicMessage "user" [convertToolResu
     convertToolResult :: ToolResult -> AnthropicContentBlock
     convertToolResult (ToolResult toolCall output) =
       let callId = getToolCallId toolCall
-          content = case output of
+          resultContent = case output of
             Left errMsg -> errMsg
             Right jsonVal -> Text.pack $ show jsonVal  -- TODO: better JSON to text conversion
-      in AnthropicToolResultBlock callId content
+      in AnthropicToolResultBlock callId resultContent
 convertMessage (SystemText _) = error "System messages should be extracted"
 
 -- | Add magic system prompt for OAuth authentication
