@@ -53,7 +53,7 @@ library examples-helper
   exposed-modules:
     Common.HTTP
 
-  hs-source-dirs: examples-helper
+  hs-source-dirs: examples/helper
 
   build-depends:
     base >= 4.16 && < 5,
@@ -87,8 +87,8 @@ test-suite universal-llm-tests
 
 executable simple-example
   import: shared-properties
-  main-is: SimpleExample.hs
-  hs-source-dirs: examples
+  main-is: Main.hs
+  hs-source-dirs: examples/simple
 
   build-depends:
     base,
@@ -97,8 +97,8 @@ executable simple-example
 
 executable llama-cpp-example
   import: shared-properties
-  main-is: LlamaCppExample.hs
-  hs-source-dirs: examples
+  main-is: Main.hs
+  hs-source-dirs: examples/llama-cpp
 
   build-depends:
     base,
@@ -113,8 +113,8 @@ executable llama-cpp-example
 
 executable claude-example
   import: shared-properties
-  main-is: ClaudeExample.hs
-  hs-source-dirs: examples
+  main-is: Main.hs
+  hs-source-dirs: examples/claude
 
   build-depends:
     base,
