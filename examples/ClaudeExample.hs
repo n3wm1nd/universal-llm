@@ -32,7 +32,7 @@ import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
 -- Claude Sonnet 4.5 model
 data ClaudeSonnet45 = ClaudeSonnet45 deriving (Show, Eq)
 
-instance ModelHasTools ClaudeSonnet45
+instance HasTools ClaudeSonnet45
 
 instance ModelName Anthropic ClaudeSonnet45 where
   modelName _ = "claude-sonnet-4-5-20250929"

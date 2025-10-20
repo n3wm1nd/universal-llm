@@ -192,7 +192,7 @@ toAnthropicToolDef toolDef = AnthropicToolDefinition
 -- This allows models without tool support to still parse text responses
 
 -- Instance for tool-capable models: converts tool_use blocks to AssistantTool
-instance (ModelHasTools model, ProviderSupportsTools provider) => ProtocolHandleTools AnthropicContentBlock model provider where
+instance (HasTools model, HasTools provider) => ProtocolHandleTools AnthropicContentBlock model provider where
   handleToolCalls blocks =
     let toolCalls = [ ToolCall tid tname tinput
                     | AnthropicToolUseBlock tid tname tinput <- blocks

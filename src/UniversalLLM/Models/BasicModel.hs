@@ -11,7 +11,7 @@ import Data.Text (Text)
 data BasicModel = BasicModel Text deriving (Show, Eq)
 
 -- Default basic model instances
-instance ModelHasTools BasicModel
+instance HasTools BasicModel
 
 -- Universal ModelName instance - works with any provider
 instance ModelName provider BasicModel where

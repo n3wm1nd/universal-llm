@@ -14,7 +14,7 @@ data GPT4o = GPT4o deriving (Show, Eq)
 -- Capabilities
 instance HasVision GPT4o
 instance HasJSON GPT4o
-instance ModelHasTools GPT4o
+instance HasTools GPT4o
 
 -- Provider-specific model names and support
 instance ModelName OpenAI GPT4o where

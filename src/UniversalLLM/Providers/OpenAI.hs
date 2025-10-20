@@ -19,14 +19,12 @@ import qualified Data.ByteString.Lazy as BSL
 -- OpenAI provider (phantom type)
 data OpenAI = OpenAI deriving (Show, Eq)
 
--- Declare that OpenAI supports tools
-instance ProviderSupportsTools OpenAI
-
--- Declare OpenAI parameter support
-instance ProviderSupportsTemperature OpenAI
-instance ProviderSupportsMaxTokens OpenAI
-instance ProviderSupportsSeed OpenAI
-instance ProviderSupportsSystemPrompt OpenAI
+-- Declare OpenAI capabilities
+instance HasTools OpenAI
+instance SupportsTemperature OpenAI
+instance SupportsMaxTokens OpenAI
+instance SupportsSeed OpenAI
+instance SupportsSystemPrompt OpenAI
 
 -- Apply configuration to OpenAI request
 instance ApplyConfig OpenAIRequest OpenAI model where

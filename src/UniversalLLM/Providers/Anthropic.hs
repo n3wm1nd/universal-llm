@@ -17,11 +17,11 @@ import qualified Data.Text as Text
 -- Anthropic provider (phantom type)
 data Anthropic = Anthropic deriving (Show, Eq)
 
--- Declare Anthropic parameter support
-instance ProviderSupportsTemperature Anthropic
-instance ProviderSupportsMaxTokens Anthropic
-instance ProviderSupportsSystemPrompt Anthropic
-instance ProviderSupportsTools Anthropic
+-- Declare Anthropic capabilities
+instance HasTools Anthropic
+instance SupportsTemperature Anthropic
+instance SupportsMaxTokens Anthropic
+instance SupportsSystemPrompt Anthropic
 -- Note: Anthropic does NOT support Seed
 
 -- Apply configuration to Anthropic request

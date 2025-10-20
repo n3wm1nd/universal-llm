@@ -24,27 +24,26 @@ import Autodocodec.Schema (jsonSchemaViaCodec)
 import Data.Kind (Type)
 import Data.List (find)
 
--- Provider capability markers - indicate what parameters a provider supports
-class ProviderSupportsTemperature provider
-class ProviderSupportsMaxTokens provider
-class ProviderSupportsSeed provider
-class ProviderSupportsSystemPrompt provider
+-- Unified capability classes
+-- SupportsX for parameters (things providers accept)
+class SupportsTemperature a
+class SupportsMaxTokens a
+class SupportsSeed a
+class SupportsSystemPrompt a
+
+-- HasX for capabilities (features models/providers have)
+class HasTools a
+class HasVision a
+class HasJSON a
 
 -- ModelConfig GADT - configuration values with provider and model constraints
 -- Only constructible if the provider supports the parameter and/or model
 data ModelConfig provider model where
-  Temperature :: ProviderSupportsTemperature provider => Double -> ModelConfig provider model
-  MaxTokens :: ProviderSupportsMaxTokens provider => Int -> ModelConfig provider model
-  Seed :: ProviderSupportsSeed provider => Int -> ModelConfig provider model
-  SystemPrompt :: ProviderSupportsSystemPrompt provider => Text -> ModelConfig provider model
-  Tools :: ModelHasTools model => [ToolDefinition] -> ModelConfig provider model
-
--- Core capabilities that models can have
-class HasVision model
-class HasJSON model
-
--- Model-level tool capability (just a marker, tools go in config)
-class ModelHasTools model
+  Temperature :: SupportsTemperature provider => Double -> ModelConfig provider model
+  MaxTokens :: SupportsMaxTokens provider => Int -> ModelConfig provider model
+  Seed :: SupportsSeed provider => Int -> ModelConfig provider model
+  SystemPrompt :: SupportsSystemPrompt provider => Text -> ModelConfig provider model
+  Tools :: (HasTools model, HasTools provider) => [ToolDefinition] -> ModelConfig provider model
 
 -- Provider-specific model names
 class ModelName provider model where
@@ -110,50 +109,27 @@ data ToolResult = ToolResult
   , toolResultOutput :: Either Text Value  -- Left = error message, Right = success value
   } deriving (Show, Eq)
 
--- | Match a ToolCall to a LLMTool from the available tools list
-matchToolCall :: forall m. [LLMTool m] -> ToolCall -> Maybe (LLMTool m)
-matchToolCall tools (ToolCall _ name _) = find matches tools
-  where
-    matches (LLMTool tool) = toolName @_ @m tool == name
-matchToolCall _ (InvalidToolCall _ _ _ _) = Nothing
-
 -- | Execute a tool call by matching and dispatching
 -- Takes available tools and the tool call from the LLM
 -- Returns a ToolResult with either success value or error message
-executeToolCall :: Monad m
-                => [LLMTool m]  -- available tools
-                -> ToolCall      -- call from LLM
-                -> m ToolResult
+executeToolCall :: forall m. Monad m => [LLMTool m] -> ToolCall -> m ToolResult
 executeToolCall _ invalid@(InvalidToolCall _ _ _ err) =
-  return $ ToolResult
-    { toolResultCall = invalid
-    , toolResultOutput = Left err
-    }
-executeToolCall tools toolCall@(ToolCall _ name _) =
-  case matchToolCall tools toolCall of
-    Nothing -> return $ ToolResult
-      { toolResultCall = toolCall
-      , toolResultOutput = Left $ "Tool not found: " <> name
-      }
-    Just (LLMTool tool) -> executeWithTool tool toolCall
+  return $ ToolResult invalid (Left err)
 
--- | Execute tool with typed params - all inside existential scope
-executeWithTool :: forall tool m. (Tool tool m, Monad m)
-                => tool
-                -> ToolCall
-                -> m ToolResult
-executeWithTool tool toolCall@(ToolCall _ _ params) =
-  -- Decode JSON params to typed ToolParams
-  case parse parseJSONViaCodec $ params of
-    Error err -> return $ ToolResult toolCall
-      (Left $ "Invalid parameters: " <> Text.pack err)
-    Success (typedParams :: ToolParams tool) -> do
-      -- Call tool's call method with typed params
-      result <- call tool typedParams
-      -- Encode result back to JSON
-      return $ ToolResult toolCall (Right $ toJSONViaCodec result)
-executeWithTool _ (InvalidToolCall _ _ _ _) =
-  error "executeWithTool called with InvalidToolCall (should never happen)"
+executeToolCall tools tc@(ToolCall _ name params) =
+  case find matchesTool tools of
+    Nothing ->
+      return $ ToolResult tc (Left $ "Tool not found: " <> name)
+    Just (LLMTool tool) ->
+      case parse parseJSONViaCodec params of
+        Error err ->
+          return $ ToolResult tc (Left $ "Invalid parameters: " <> Text.pack err)
+        Success typedParams -> do
+          result <- call tool typedParams
+          return $ ToolResult tc (Right $ toJSONViaCodec result)
+  where
+    matchesTool :: LLMTool m -> Bool
+    matchesTool (LLMTool tool) = toolName @_ @m tool == name
 
 -- | LLM operation errors
 data LLMError
@@ -179,12 +155,6 @@ class Provider provider model where
   fromResponse :: ProviderResponse provider
                -> Either LLMError [Message model provider]
 
--- Provider-level capability markers
-class ProviderSupportsTools provider
-
--- Combined constraint: BOTH model AND provider must support tools
-class (ModelHasTools model, ProviderSupportsTools provider) => HasTools model provider
-instance (ModelHasTools model, ProviderSupportsTools provider) => HasTools model provider
 
 -- Protocol-level embedding classes
 -- These define how to embed capabilities into protocol wire formats
@@ -205,6 +175,6 @@ data Message model provider where
   UserText :: Text -> Message model provider
   UserImage :: HasVision model => Text -> Text -> Message model provider
   AssistantText :: Text -> Message model provider
-  AssistantTool :: HasTools model provider => [ToolCall] -> Message model provider
+  AssistantTool :: (HasTools model, HasTools provider) => [ToolCall] -> Message model provider
   SystemText :: Text -> Message model provider
-  ToolResultMsg :: HasTools model provider => ToolResult -> Message model provider
+  ToolResultMsg :: (HasTools model, HasTools provider) => ToolResult -> Message model provider
