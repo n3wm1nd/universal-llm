@@ -13,16 +13,15 @@ module Main (main) where
 import UniversalLLM
 import UniversalLLM.Providers.OpenAI
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
+import Common.HTTP (LLMCall, mkLLMCall)
 import System.Environment (lookupEnv)
 import System.Exit (exitFailure)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Autodocodec (toJSONViaCodec, eitherDecodeJSONViaCodec, HasCodec, codec, object, optionalField, (.=))
+import Autodocodec (HasCodec, codec, object, optionalField, (.=))
 import qualified Autodocodec
-import qualified Data.Aeson as Aeson
-import Network.HTTP.Simple
 import Control.Monad (unless)
-import Control.Monad.Trans.Except (ExceptT(..), runExceptT, except, withExceptT)
+import Control.Monad.Trans.Except (ExceptT(..), runExceptT, except)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
 
@@ -78,27 +77,14 @@ getTimeTool = GetTime $ \_params -> do
   liftIO $ putStrLn $ "    ⏰ " <> T.unpack timeStr
   return $ TimeResponse timeStr
 
--- ============================================================================
--- HTTP Transport
--- ============================================================================
-
--- HTTP call to llama.cpp server
-callLLM :: String -> OpenAIRequest -> ExceptT LLMError IO OpenAIResponse
-callLLM baseUrl request = do
-  req <- liftIO $ parseRequest $ "POST " ++ baseUrl ++ "/v1/chat/completions"
-  let req' = setRequestHeaders [("Content-Type", "application/json")]
-           $ setRequestBodyLBS (Aeson.encode $ toJSONViaCodec request) req
-
-  response <- httpLBS req'
-  withExceptT (ParseError . T.pack) $ except $ eitherDecodeJSONViaCodec (getResponseBody response)
 
 -- ============================================================================
 -- Agent Loop
 -- ============================================================================
 
 -- Main agent loop - continues until text response (non-tool)
-agentLoop :: String -> [ModelConfig OpenAI MistralModel] -> [Message MistralModel OpenAI] -> ExceptT LLMError IO ()
-agentLoop serverUrl configs messages = do
+agentLoop :: LLMCall OpenAIRequest OpenAIResponse -> [ModelConfig OpenAI MistralModel] -> [Message MistralModel OpenAI] -> ExceptT LLMError IO ()
+agentLoop callLLM configs messages = do
   -- Available tools (for execution)
   let tools :: [LLMTool IO]
       tools = [LLMTool (getTimeTool @IO)]
@@ -109,13 +95,13 @@ agentLoop serverUrl configs messages = do
 
   -- Call LLM (model + config)
   let request = toRequest OpenAI MistralModel configs' messages
-  response <- callLLM serverUrl request
+  response <- callLLM request
   responses <- except $ fromResponse response
 
   newMsgs <- liftIO $ concat <$> mapM (handleResponse tools) responses
   -- Continue loop only if there are tool results to send back
   unless (null newMsgs) $
-    agentLoop serverUrl configs' (messages ++ responses ++ newMsgs)
+    agentLoop callLLM configs' (messages ++ responses ++ newMsgs)
 
 -- Handle different response types
 -- Returns empty list for text (stops loop), tool results for tool calls (continues loop)
@@ -154,13 +140,16 @@ main = do
   putStrLn $ "Using server: " <> serverUrl
   putStrLn "=== Tool Calling Demo ===\n"
 
+  -- Build LLM call function with endpoint and headers
+  let callLLM = mkLLMCall (serverUrl ++ "/v1/chat/completions") [("Content-Type", "application/json")]
+
   -- Build config for MistralModel with OpenAI provider
   let configs = [ Temperature 0.7
                 , MaxTokens 200
                 ]
   let initialMsg = [UserText "Use the get_time tool to tell me what time it is."]
 
-  result <- runExceptT $ agentLoop serverUrl configs initialMsg
+  result <- runExceptT $ agentLoop callLLM configs initialMsg
   case result of
     Left err -> putStrLn $ "❌ Error: " <> show err
     Right () -> return ()

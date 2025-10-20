@@ -48,6 +48,23 @@ library
     aeson,
     bytestring
 
+library examples-helper
+  import: shared-properties
+  exposed-modules:
+    Common.HTTP
+
+  hs-source-dirs: examples-helper
+
+  build-depends:
+    base >= 4.16 && < 5,
+    universal-llm,
+    text >= 1.2 && < 3,
+    aeson,
+    autodocodec >= 0.2 && < 1,
+    http-conduit,
+    case-insensitive,
+    transformers
+
 test-suite universal-llm-tests
   import: shared-properties
   type: exitcode-stdio-1.0
@@ -86,12 +103,11 @@ executable llama-cpp-example
   build-depends:
     base,
     universal-llm,
+    examples-helper,
     text,
     aeson,
-    bytestring,
     autodocodec,
     autodocodec-schema,
-    http-conduit,
     time,
     transformers
 
@@ -103,12 +119,10 @@ executable claude-example
   build-depends:
     base,
     universal-llm,
+    examples-helper,
     text,
     aeson,
-    bytestring,
     autodocodec,
     autodocodec-schema,
-    http-conduit,
     time,
-    transformers,
-    case-insensitive
+    transformers

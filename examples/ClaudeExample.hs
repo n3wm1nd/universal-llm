@@ -11,21 +11,17 @@
 module Main (main) where
 
 import UniversalLLM
-import qualified UniversalLLM.Providers.Anthropic as Provider
 import UniversalLLM.Providers.Anthropic (Anthropic(..), withMagicSystemPrompt, oauthHeaders)
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
+import Common.HTTP (LLMCall, mkLLMCall)
 import System.Environment (lookupEnv)
 import System.Exit (exitFailure)
 import Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as TE
-import Autodocodec (toJSONViaCodec, eitherDecodeJSONViaCodec, HasCodec, codec, object, optionalField, (.=))
+import Autodocodec (HasCodec, codec, object, optionalField, (.=))
 import qualified Autodocodec
-import qualified Data.Aeson as Aeson
-import Network.HTTP.Simple
-import qualified Data.CaseInsensitive as CI
 import Control.Monad (unless)
-import Control.Monad.Trans.Except (ExceptT(..), runExceptT, except, withExceptT)
+import Control.Monad.Trans.Except (ExceptT(..), runExceptT, except)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
 
@@ -85,31 +81,20 @@ getTimeTool = GetTime $ \_params -> do
 -- HTTP Transport
 -- ============================================================================
 
--- HTTP call to Anthropic API with OAuth
-callClaude :: Text -> AnthropicRequest -> ExceptT LLMError IO AnthropicResponse
-callClaude oauthToken request = do
-  -- Add magic system prompt for OAuth
-  let requestWithMagic = withMagicSystemPrompt request
-
-  -- Build HTTP request
-  req <- liftIO $ parseRequest "POST https://api.anthropic.com/v1/messages"
-
-  -- Apply OAuth headers (convert from [(Text, Text)] to proper header format)
-  let headerList = oauthHeaders oauthToken
-      headers = [(CI.mk $ TE.encodeUtf8 k, TE.encodeUtf8 v) | (k, v) <- headerList]
-  let req' = setRequestHeaders headers
-           $ setRequestBodyLBS (Aeson.encode $ toJSONViaCodec requestWithMagic) req
-
-  response <- httpLBS req'
-  withExceptT (ParseError . T.pack) $ except $ eitherDecodeJSONViaCodec (getResponseBody response)
+-- | Build an Anthropic-specific LLM call function with OAuth
+-- Automatically applies magic system prompt to all requests
+mkAnthropicCall :: Text -> LLMCall AnthropicRequest AnthropicResponse
+mkAnthropicCall oauthToken =
+  let baseLLMCall = mkLLMCall "https://api.anthropic.com/v1/messages" (oauthHeaders oauthToken)
+  in \request -> baseLLMCall (withMagicSystemPrompt request)
 
 -- ============================================================================
 -- Agent Loop
 -- ============================================================================
 
 -- Main agent loop - continues until text response (non-tool)
-agentLoop :: Text -> [ModelConfig Anthropic ClaudeSonnet45] -> [Message ClaudeSonnet45 Anthropic] -> ExceptT LLMError IO ()
-agentLoop oauthToken configs messages = do
+agentLoop :: LLMCall AnthropicRequest AnthropicResponse -> [ModelConfig Anthropic ClaudeSonnet45] -> [Message ClaudeSonnet45 Anthropic] -> ExceptT LLMError IO ()
+agentLoop callClaude configs messages = do
   -- Available tools (for execution)
   let tools :: [LLMTool IO]
       tools = [LLMTool (getTimeTool @IO)]
@@ -119,14 +104,14 @@ agentLoop oauthToken configs messages = do
       configs' = configs ++ [Tools toolDefs]
 
   -- Call LLM (model + config)
-  let request = Provider.toRequest' Anthropic ClaudeSonnet45 configs' messages
-  response <- callClaude oauthToken request
-  responses <- except $ Provider.fromResponse' response
+  let request = toRequest Anthropic ClaudeSonnet45 configs' messages
+  response <- callClaude request
+  responses <- except $ fromResponse response
 
   newMsgs <- liftIO $ concat <$> mapM (handleResponse tools) responses
   -- Continue loop only if there are tool results to send back
   unless (null newMsgs) $
-    agentLoop oauthToken configs' (messages ++ responses ++ newMsgs)
+    agentLoop callClaude configs' (messages ++ responses ++ newMsgs)
 
 -- Handle different response types
 -- Returns empty list for text (stops loop), tool results for tool calls (continues loop)
@@ -165,13 +150,16 @@ main = do
   putStrLn "Using Claude Sonnet 4.5 with OAuth"
   putStrLn "=== Tool Calling Demo ===\n"
 
+  -- Build LLM call function for Anthropic (automatically applies magic system prompt)
+  let callClaude = mkAnthropicCall oauthToken
+
   -- Build config for ClaudeSonnet45 with Anthropic provider
   let configs = [ Temperature 0.7
                 , MaxTokens 200
                 ]
   let initialMsg = [UserText "Use the get_time tool to tell me what time it is."]
 
-  result <- runExceptT $ agentLoop oauthToken configs initialMsg
+  result <- runExceptT $ agentLoop callClaude configs initialMsg
   case result of
     Left err -> putStrLn $ "❌ Error: " <> show err
     Right () -> return ()
