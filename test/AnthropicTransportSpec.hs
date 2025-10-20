@@ -31,7 +31,8 @@ spec = do
       model request `shouldBe` "claude-sonnet-4-5-20250929"
       length (messages request) `shouldBe` 1
       case system request of
-        Just sys -> sys `shouldBe` "You are Claude Code, Anthropic's official CLI for Claude."
+        Just [AnthropicSystemBlock txt _] -> txt `shouldBe` "You are Claude Code, Anthropic's official CLI for Claude."
+        Just _ -> expectationFailure "Expected single system block"
         Nothing -> expectationFailure "System prompt should be present"
       max_tokens request `shouldBe` 50
 

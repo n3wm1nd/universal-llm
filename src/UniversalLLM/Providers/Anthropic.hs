@@ -30,7 +30,7 @@ instance ApplyConfig AnthropicRequest Anthropic model where
     where
       applyOne (Temperature t) r = r { temperature = Just t }
       applyOne (MaxTokens mt) r = r { max_tokens = mt }
-      applyOne (SystemPrompt sp) r = r { system = Just sp }
+      applyOne (SystemPrompt sp) r = r { system = Just [AnthropicSystemBlock sp "text"] }
       applyOne (Tools toolDefs) r = r { tools = Just (map toAnthropicToolDef toolDefs) }
       applyOne _ r = r  -- Catch-all for future config options (e.g., Seed not supported by Anthropic)
 
@@ -75,8 +75,13 @@ fromResponse' (AnthropicSuccess resp) =
              then Left $ ProviderError 0 "No text or tool content in response"
              else Right toolMessages
 
-extractSystem :: [Message model Anthropic] -> (Maybe Text, [Message model Anthropic])
-extractSystem (SystemText txt : rest) = (Just txt, rest)
+-- Note: SystemText messages are reminders/context, not the system prompt
+-- The system prompt comes from the SystemPrompt config, not from messages
+extractSystem :: [Message model Anthropic] -> (Maybe [AnthropicSystemBlock], [Message model Anthropic])
+extractSystem (SystemText txt : rest) =
+  -- System text messages should be converted to user messages in Anthropic
+  -- as Anthropic doesn't support system messages in the message array
+  (Nothing, UserText txt : rest)
 extractSystem msgs = (Nothing, msgs)
 
 -- Message direction for grouping
@@ -126,13 +131,13 @@ groupMessages (msg:msgs) =
 
 
 -- | Add magic system prompt for OAuth authentication
--- Prepends the Claude Code authentication prompt to user's system prompt
+-- Prepends the Claude Code authentication prompt to user's system prompts
 withMagicSystemPrompt :: AnthropicRequest -> AnthropicRequest
 withMagicSystemPrompt request =
-  let magicPrompt = "You are Claude Code, Anthropic's official CLI for Claude."
+  let magicBlock = AnthropicSystemBlock "You are Claude Code, Anthropic's official CLI for Claude." "text"
       combinedSystem = case system request of
-        Nothing -> magicPrompt
-        Just userPrompt -> magicPrompt <> "\n\n" <> userPrompt
+        Nothing -> [magicBlock]
+        Just userBlocks -> magicBlock : userBlocks
   in request { system = Just combinedSystem }
 
 -- | Headers for OAuth authentication (Claude Code subscription)

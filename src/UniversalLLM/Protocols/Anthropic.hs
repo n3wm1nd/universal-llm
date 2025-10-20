@@ -22,13 +22,19 @@ data AnthropicRequest = AnthropicRequest
   , messages :: [AnthropicMessage]
   , max_tokens :: Int
   , temperature :: Maybe Double
-  , system :: Maybe Text
+  , system :: Maybe [AnthropicSystemBlock]
   , tools :: Maybe [AnthropicToolDefinition]
   } deriving (Generic, Show, Eq)
 
 data AnthropicMessage = AnthropicMessage
   { role :: Text
   , content :: [AnthropicContentBlock]
+  } deriving (Generic, Show, Eq)
+
+-- System prompt blocks
+data AnthropicSystemBlock = AnthropicSystemBlock
+  { systemText :: Text
+  , systemType :: Text  -- Always "text"
   } deriving (Generic, Show, Eq)
 
 -- Type aliases for AnthropicContentBlock parameters (for documentation)
@@ -82,6 +88,12 @@ data AnthropicErrorDetail = AnthropicErrorDetail
   } deriving (Generic, Show, Eq)
 
 -- Codec instances
+instance HasCodec AnthropicSystemBlock where
+  codec = object "AnthropicSystemBlock" $
+    AnthropicSystemBlock
+      <$> requiredField "text" "System prompt text" .= systemText
+      <*> requiredField "type" "Block type (always 'text')" .= systemType
+
 instance HasCodec AnthropicRequest where
   codec = object "AnthropicRequest" $
     AnthropicRequest

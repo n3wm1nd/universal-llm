@@ -73,6 +73,11 @@ test-suite universal-llm-tests
     OpenAIProtocolSpec
     AnthropicTransportSpec
     TestModels
+    TestCache
+    TestHTTP
+    CachedIntegrationSpec
+    OpenAIProviderSpec
+    AnthropicProviderSpec
   hs-source-dirs: test
 
   build-depends:
@@ -83,7 +88,14 @@ test-suite universal-llm-tests
     aeson,
     text,
     bytestring,
-    autodocodec
+    autodocodec,
+    cryptohash-sha256,
+    base16-bytestring,
+    directory,
+    filepath,
+    temporary,
+    http-conduit,
+    case-insensitive
 
 executable simple-example
   import: shared-properties
