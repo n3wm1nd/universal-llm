@@ -31,17 +31,18 @@ data AnthropicMessage = AnthropicMessage
   , content :: [AnthropicContentBlock]
   } deriving (Generic, Show, Eq)
 
+-- Type aliases for AnthropicContentBlock parameters (for documentation)
+type TextContent = Text
+type ToolUseId = Text
+type ToolUseName = Text
+type ToolUseInput = Value
+type ToolResultId = Text
+type ToolResultContent = Text
+
 data AnthropicContentBlock
-  = AnthropicTextBlock { textContent :: Text }
-  | AnthropicToolUseBlock
-      { toolUseId :: Text
-      , toolUseName :: Text
-      , toolUseInput :: Value
-      }
-  | AnthropicToolResultBlock
-      { toolResultId :: Text
-      , toolResultContent :: Text
-      }
+  = AnthropicTextBlock TextContent
+  | AnthropicToolUseBlock ToolUseId ToolUseName ToolUseInput
+  | AnthropicToolResultBlock ToolResultId ToolResultContent
   deriving (Generic, Show, Eq)
 
 data AnthropicToolDefinition = AnthropicToolDefinition
@@ -94,32 +95,32 @@ instance HasCodec AnthropicRequest where
 instance HasCodec AnthropicContentBlock where
   codec = object "AnthropicContentBlock" $
     dimapCodec fromEither toEither $
-      possiblyJointEitherCodec textCodec (possiblyJointEitherCodec toolUseCodec toolResultCodec)
+      possiblyJointEitherCodec textBlockCodec (possiblyJointEitherCodec toolUseBlockCodec toolResultBlockCodec)
     where
-      fromEither (Left text) = text
-      fromEither (Right (Left toolUse)) = toolUse
-      fromEither (Right (Right toolResult)) = toolResult
+      fromEither (Left txt) = AnthropicTextBlock txt
+      fromEither (Right (Left (tid, tname, tinput))) = AnthropicToolUseBlock tid tname tinput
+      fromEither (Right (Right (rid, rcontent))) = AnthropicToolResultBlock rid rcontent
 
-      toEither (AnthropicTextBlock txt) = Left (AnthropicTextBlock txt)
-      toEither (AnthropicToolUseBlock a b c) = Right (Left (AnthropicToolUseBlock a b c))
-      toEither (AnthropicToolResultBlock a b) = Right (Right (AnthropicToolResultBlock a b))
+      toEither (AnthropicTextBlock txt) = Left txt
+      toEither (AnthropicToolUseBlock tid tname tinput) = Right (Left (tid, tname, tinput))
+      toEither (AnthropicToolResultBlock rid rcontent) = Right (Right (rid, rcontent))
 
-      textCodec =
+      textBlockCodec =
         requiredField "type" "Block type" .= const ("text" :: Text)
-        *> (AnthropicTextBlock <$> requiredField "text" "Text content" .= textContent)
+        *> requiredField "text" "Text content" .= id
 
-      toolUseCodec =
+      toolUseBlockCodec =
         requiredField "type" "Block type" .= const ("tool_use" :: Text)
-        *> (AnthropicToolUseBlock
-          <$> requiredField "id" "Tool use ID" .= toolUseId
-          <*> requiredField "name" "Tool name" .= toolUseName
-          <*> requiredField "input" "Tool input" .= toolUseInput)
+        *> ((,,)
+          <$> requiredField "id" "Tool use ID" .= (\(tid, _, _) -> tid)
+          <*> requiredField "name" "Tool name" .= (\(_, tname, _) -> tname)
+          <*> requiredField "input" "Tool input" .= (\(_, _, tinput) -> tinput))
 
-      toolResultCodec =
+      toolResultBlockCodec =
         requiredField "type" "Block type" .= const ("tool_result" :: Text)
-        *> (AnthropicToolResultBlock
-          <$> requiredField "tool_use_id" "Tool use ID" .= toolResultId
-          <*> requiredField "content" "Result content" .= toolResultContent)
+        *> ((,)
+          <$> requiredField "tool_use_id" "Tool use ID" .= fst
+          <*> requiredField "content" "Result content" .= snd)
 
 instance HasCodec AnthropicMessage where
   codec = object "AnthropicMessage" $

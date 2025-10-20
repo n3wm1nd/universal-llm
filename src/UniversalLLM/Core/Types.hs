@@ -112,9 +112,8 @@ data ToolResult = ToolResult
 
 -- | Match a ToolCall to a LLMTool from the available tools list
 matchToolCall :: forall m. [LLMTool m] -> ToolCall -> Maybe (LLMTool m)
-matchToolCall tools toolCall@(ToolCall _ _ _) = find matches tools
+matchToolCall tools (ToolCall _ name _) = find matches tools
   where
-    name = getToolCallName toolCall
     matches (LLMTool tool) = toolName @_ @m tool == name
 matchToolCall _ (InvalidToolCall _ _ _ _) = Nothing
 
