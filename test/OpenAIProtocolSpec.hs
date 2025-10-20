@@ -289,3 +289,93 @@ spec = do
       toolFunctionName (toolFunction oaiCall) `shouldBe` "bad_tool"
       -- Original invalid string is preserved
       toolFunctionArguments (toolFunction oaiCall) `shouldBe` "malformed{json"
+
+  describe "OpenAI Protocol - JSON Mode End-to-End" $ do
+
+    it "builds request with response_format when UserRequestJSON is used" $ do
+      let schema = object
+            [ "type" .= ("object" :: Text)
+            , "properties" .= object
+                [ "colors" .= object
+                    [ "type" .= ("array" :: Text)
+                    , "items" .= object ["type" .= ("string" :: Text)]
+                    ]
+                ]
+            , "required" .= (["colors"] :: [Text])
+            ]
+          msgs = [UserRequestJSON "List 3 colors as a JSON array" schema :: Message GPT4o OpenAI]
+          req = toRequest OpenAI GPT4o [] msgs
+
+      -- Verify response_format is set
+      case response_format req of
+        Nothing -> expectationFailure "Expected response_format to be set"
+        Just format -> do
+          responseType format `shouldBe` "json_schema"
+          case json_schema format of
+            Nothing -> expectationFailure "Expected json_schema to be present"
+            Just s -> do
+              -- Verify schema structure
+              case s of
+                Aeson.Object obj ->
+                  case KM.lookup "properties" obj of
+                    Just _ -> return ()  -- Schema has properties field
+                    Nothing -> expectationFailure "Schema missing 'properties' field"
+                _ -> expectationFailure "Schema is not an object"
+
+      -- Verify message is converted to regular user message
+      length (messages req) `shouldBe` 1
+      let userMsg = head (messages req)
+      role userMsg `shouldBe` "user"
+      content userMsg `shouldBe` Just "List 3 colors as a JSON array"
+
+    it "handles JSON response from server correctly" $ do
+      -- Simulate server response with JSON content (like our test server returned)
+      let jsonContent = "{\"colors\": [\"red\", \"green\", \"blue\"]}"
+          response = OpenAISuccess $ OpenAISuccessResponse
+            [ OpenAIChoice $ OpenAIMessage "assistant" (Just jsonContent) Nothing Nothing ]
+          result = fromResponse @OpenAI @GPT4o response
+
+      case result of
+        Left err -> expectationFailure $ "Parse failed: " ++ show err
+        Right [AssistantJSON jsonVal] -> do
+          -- Verify the JSON was parsed correctly
+          case jsonVal of
+            Aeson.Object obj ->
+              case KM.lookup "colors" obj of
+                Just (Aeson.Array arr) -> length arr `shouldBe` 3
+                _ -> expectationFailure "JSON missing 'colors' array"
+            _ -> expectationFailure "Response not a JSON object"
+        Right other -> expectationFailure $ "Expected [AssistantJSON], got: " ++ show other
+
+    it "only uses response_format from last UserRequestJSON message" $ do
+      let schema1 = object ["type" .= ("string" :: Text)]
+          schema2 = object ["type" .= ("number" :: Text)]
+          msgs = [ UserRequestJSON "First question" schema1 :: Message GPT4o OpenAI
+                 , AssistantJSON (Aeson.Number 42)
+                 , UserText "Now just text"
+                 ]
+          req = toRequest OpenAI GPT4o [] msgs
+
+      -- Last message was UserText, so no response_format should be set
+      response_format req `shouldBe` Nothing
+
+    it "latest UserRequestJSON overwrites previous schema" $ do
+      let schema1 = object ["type" .= ("string" :: Text)]
+          schema2 = object ["type" .= ("number" :: Text)]
+          msgs = [ UserRequestJSON "First question" schema1 :: Message GPT4o OpenAI
+                 , AssistantJSON (Aeson.String "answer")
+                 , UserRequestJSON "Second question" schema2
+                 ]
+          req = toRequest OpenAI GPT4o [] msgs
+
+      -- Should use schema2, not schema1
+      case response_format req of
+        Nothing -> expectationFailure "Expected response_format to be set"
+        Just format ->
+          case json_schema format of
+            Just (Aeson.Object obj) ->
+              case KM.lookup "type" obj of
+                Just (Aeson.String "number") -> return ()  -- Correct, used schema2
+                Just (Aeson.String "string") -> expectationFailure "Used wrong schema (schema1 instead of schema2)"
+                _ -> expectationFailure "Schema has unexpected 'type' value"
+            _ -> expectationFailure "Invalid json_schema"

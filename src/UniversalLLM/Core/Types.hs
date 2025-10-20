@@ -170,11 +170,30 @@ class ProtocolHandleTools protocolToolCall model provider where
   handleToolCalls :: [protocolToolCall] -> [Message model provider]
   handleToolCalls _ = []  -- Default: ignore (shouldn't happen for non-tool models)
 
+-- Generic JSON response handling for any protocol/provider combination
+class ProtocolHandleJSON model provider where
+  handleJSONResponse :: Value -> Message model provider
+  -- Default: This should never be called for non-JSON models in practice,
+  -- but we provide a default to avoid requiring the constraint everywhere
+  handleJSONResponse _ = error "JSON response for non-JSON-capable model"
+
 -- GADT Messages with capability constraints
 data Message model provider where
   UserText :: Text -> Message model provider
   UserImage :: HasVision model => Text -> Text -> Message model provider
+  UserRequestJSON :: (HasJSON model, HasJSON provider) => Text -> Value -> Message model provider  -- Text query + JSON schema
   AssistantText :: Text -> Message model provider
   AssistantTool :: (HasTools model, HasTools provider) => ToolCall -> Message model provider
+  AssistantJSON :: (HasJSON model, HasJSON provider) => Value -> Message model provider
   SystemText :: Text -> Message model provider
   ToolResultMsg :: (HasTools model, HasTools provider) => ToolResult -> Message model provider
+
+instance Show (Message model provider) where
+  show (UserText _) = "UserText"
+  show (UserImage _ _) = "UserImage"
+  show (UserRequestJSON _ _) = "UserRequestJSON"
+  show (AssistantText _) = "AssistantText"
+  show (AssistantTool _) = "AssistantTool"
+  show (AssistantJSON _) = "AssistantJSON"
+  show (SystemText _) = "SystemText"
+  show (ToolResultMsg _) = "ToolResultMsg"

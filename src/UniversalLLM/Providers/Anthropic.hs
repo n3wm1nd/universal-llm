@@ -22,7 +22,7 @@ instance HasTools Anthropic
 instance SupportsTemperature Anthropic
 instance SupportsMaxTokens Anthropic
 instance SupportsSystemPrompt Anthropic
--- Note: Anthropic does NOT support Seed
+-- Note: Anthropic does NOT support Seed or JSON mode
 
 -- Apply configuration to Anthropic request
 instance ApplyConfig AnthropicRequest Anthropic model where
@@ -104,10 +104,10 @@ groupMessages (msg:msgs) =
     messageDirection (SystemText _) = User  -- System messages are autonomous client reminders, treated as user direction
     messageDirection (AssistantText _) = Assistant
     messageDirection (AssistantTool _) = Assistant
+    messageDirection (AssistantJSON _) = Assistant  -- Will never match (Anthropic lacks HasJSON)
 
     messageToBlocks :: Message model Anthropic -> [AnthropicContentBlock]
     messageToBlocks (UserText txt) = [AnthropicTextBlock txt]
-    messageToBlocks (UserImage txt _imageData) = [AnthropicTextBlock txt]  -- TODO: image block
     messageToBlocks (SystemText txt) = [AnthropicTextBlock txt]  -- System messages are client reminders
     messageToBlocks (AssistantText txt) = [AnthropicTextBlock txt]
     messageToBlocks (AssistantTool (ToolCall tcId tcName tcParams)) =
@@ -121,6 +121,8 @@ groupMessages (msg:msgs) =
             Left errMsg -> errMsg
             Right jsonVal -> Text.pack $ show jsonVal  -- TODO: better JSON to text conversion
       in [AnthropicToolResultBlock callId resultContent]
+    -- Catch-all for unsupported message types
+    messageToBlocks msg = error $ "Unsupported message type for Anthropic provider: " ++ show msg
 
 
 -- | Add magic system prompt for OAuth authentication

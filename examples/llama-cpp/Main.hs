@@ -33,6 +33,7 @@ import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
 data MistralModel = MistralModel deriving (Show, Eq)
 
 instance HasTools MistralModel
+instance HasJSON MistralModel
 
 instance ModelName OpenAI MistralModel where
   modelName _ = "mistral-7b-instruct"

@@ -25,6 +25,12 @@ data OpenAIRequest = OpenAIRequest
   , max_tokens :: Maybe Int
   , seed :: Maybe Int
   , tools :: Maybe [OpenAIToolDefinition]
+  , response_format :: Maybe OpenAIResponseFormat
+  } deriving (Generic, Show, Eq)
+
+data OpenAIResponseFormat = OpenAIResponseFormat
+  { responseType :: Text
+  , json_schema :: Maybe Value
   } deriving (Generic, Show, Eq)
 
 data OpenAIMessage = OpenAIMessage
@@ -88,6 +94,13 @@ instance HasCodec OpenAIRequest where
       <*> optionalFieldWith "max_tokens" (dimapCodec fromIntegral fromIntegral integerCodec) "Max tokens" .= max_tokens
       <*> optionalFieldWith "seed" (dimapCodec fromIntegral fromIntegral integerCodec) "Seed for deterministic output" .= seed
       <*> optionalField "tools" "Tool definitions" .= tools
+      <*> optionalField "response_format" "Response format specification" .= response_format
+
+instance HasCodec OpenAIResponseFormat where
+  codec = object "OpenAIResponseFormat" $
+    OpenAIResponseFormat
+      <$> requiredField "type" "Response type (text or json_schema)" .= responseType
+      <*> optionalField "json_schema" "JSON schema for structured output" .= json_schema
 
 instance HasCodec OpenAIMessage where
   codec = object "OpenAIMessage" $
@@ -202,3 +215,7 @@ convertFromToolCall (InvalidToolCall tcId tcName tcArgs _err) = OpenAIToolCall
 -- Instance for handling OpenAI tool calls
 instance (HasTools model, HasTools provider) => ProtocolHandleTools OpenAIToolCall model provider where
   handleToolCalls calls = map (AssistantTool . convertToolCall) calls
+
+-- Instance for handling JSON responses (for JSON-capable models)
+instance (HasJSON model, HasJSON provider) => ProtocolHandleJSON model provider where
+  handleJSONResponse = AssistantJSON
