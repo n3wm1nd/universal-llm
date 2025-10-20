@@ -250,25 +250,23 @@ main = do
   let tools = [LLMTool (getTimeTool @IO)]
       toolDefs = map llmToolToDefinition tools
 
-      model = GPT4o
-        { gpt4oTemperature = Just 0.7
-        , gpt4oMaxTokens = Just 100
-        , gpt4oSeed = Nothing
-        , gpt4oToolDefinitions = toolDefs
-        }
+      configs = [ Temperature 0.7
+                , MaxTokens 100
+                , Tools toolDefs
+                ]
 
       messages = [UserText "What time is it?"]
 
-  -- Send request (tools are in model)
-  let request = toRequest OpenAI model messages
+  -- Send request with configs
+  let request = toRequest OpenAI GPT4o configs messages
 
   -- ... get response from API ...
 
-  -- Execute tool calls
+  -- Execute tool calls (single tool call per message)
   case response of
-    AssistantTool calls -> do
-      results <- mapM (executeToolCall tools) calls
-      -- Continue conversation with results...
+    AssistantTool call -> do
+      result <- executeToolCall tools call
+      -- Continue conversation with ToolResultMsg result...
     AssistantText text ->
       putStrLn text
 ```
@@ -300,13 +298,15 @@ Regardless of pattern, the execution flow is:
 
 1. **Define tools** → Create `[LLMTool m]` with implementations
 2. **Extract definitions** → `map llmToolToDefinition tools` gives `[ToolDefinition]`
-3. **Set in model** → `setToolDefinitions toolDefs model`
-4. **Send request** → `toRequest provider model messages`
-5. **Receive tool calls** → LLM responds with `AssistantTool [ToolCall]`
+3. **Add to config** → `Tools toolDefs` as part of `[ModelConfig provider model]`
+4. **Send request** → `toRequest provider model configs messages`
+5. **Receive tool calls** → LLM responds with `AssistantTool ToolCall` (one tool call per message)
 6. **Execute tools** → `executeToolCall tools call` dispatches to correct tool
-7. **Return results** → Send `ToolResultMsg` back to LLM
+7. **Return results** → Send `ToolResultMsg result` back to LLM
 
 The separation of `[LLMTool m]` (executable, monad-specific) and `[ToolDefinition]` (pure metadata) allows the model to be monad-agnostic while tools can perform IO or other effects.
+
+**Note:** Multiple tool calls from the LLM result in multiple `AssistantTool` messages, one per tool call. You handle each separately and return multiple `ToolResultMsg` messages back.
 
 ---
 
