@@ -175,6 +175,6 @@ data Message model provider where
   UserText :: Text -> Message model provider
   UserImage :: HasVision model => Text -> Text -> Message model provider
   AssistantText :: Text -> Message model provider
-  AssistantTool :: (HasTools model, HasTools provider) => [ToolCall] -> Message model provider
+  AssistantTool :: (HasTools model, HasTools provider) => ToolCall -> Message model provider
   SystemText :: Text -> Message model provider
   ToolResultMsg :: (HasTools model, HasTools provider) => ToolResult -> Message model provider

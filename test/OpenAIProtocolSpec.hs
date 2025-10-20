@@ -233,9 +233,7 @@ spec = do
         Right msgs -> do
           length msgs `shouldBe` 1
           case head msgs of
-            AssistantTool calls -> do
-              length calls `shouldBe` 1
-              let call = head calls
+            AssistantTool call -> do
               getToolCallId call `shouldBe` "JsvEr09tquvDy6veg6KkfepTLmKspQ1u"
               getToolCallName call `shouldBe` "get_weather"
             _ -> expectationFailure "Expected AssistantTool message"
@@ -264,10 +262,12 @@ spec = do
       case result of
         Left err -> expectationFailure $ "Expected success: " ++ show err
         Right msgs -> do
-          length msgs `shouldBe` 1
-          case head msgs of
-            AssistantTool calls -> length calls `shouldBe` 2
-            _ -> expectationFailure "Expected AssistantTool"
+          length msgs `shouldBe` 2  -- Now two messages, one per tool call
+          case msgs of
+            [AssistantTool call1', AssistantTool call2'] -> do
+              getToolCallId call1' `shouldBe` "call_1"
+              getToolCallId call2' `shouldBe` "call_2"
+            _ -> expectationFailure "Expected two AssistantTool messages"
 
   describe "OpenAI Protocol - InvalidToolCall Execution" $ do
 

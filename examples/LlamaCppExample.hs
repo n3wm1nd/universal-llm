@@ -110,10 +110,10 @@ handleResponse _ (AssistantText text) = do
   putStrLn $ "🤖 " <> T.unpack text
   return [] -- Empty list stops the loop
 
-handleResponse tools (AssistantTool calls) = do
-  putStrLn $ "🔧 Calling " <> show (length calls) <> " tool(s)"
-  results <- mapM (executeCall tools) calls
-  return $ map ToolResultMsg results  -- Tool results continue loop
+handleResponse tools (AssistantTool call) = do
+  putStrLn $ "🔧 Calling tool"
+  result <- executeCall tools call
+  return [ToolResultMsg result]  -- Tool result continues loop
 
 handleResponse _ _ = return []
 

@@ -201,4 +201,4 @@ convertFromToolCall (InvalidToolCall tcId tcName tcArgs _err) = OpenAIToolCall
 
 -- Instance for handling OpenAI tool calls
 instance (HasTools model, HasTools provider) => ProtocolHandleTools OpenAIToolCall model provider where
-  handleToolCalls calls = [AssistantTool (map convertToolCall calls)]
+  handleToolCalls calls = map (AssistantTool . convertToolCall) calls

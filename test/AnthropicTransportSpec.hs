@@ -137,14 +137,10 @@ spec = do
 
           -- Test that fromResponse correctly converts tool_use to AssistantTool
           case Provider.fromResponse' @ClaudeSonnet45 response of
-            Right [AssistantTool toolCalls] -> do
-              length toolCalls `shouldBe` 1
-              case toolCalls of
-                [ToolCall tcId tcName _tcParams] -> do
-                  tcId `shouldBe` "toolu_01MiAg7qRTuJAYUjNBDBN9AS"
-                  tcName `shouldBe` "get_weather"
-                _ -> expectationFailure "Expected single tool call"
-            Right _ -> expectationFailure "Expected AssistantTool message"
+            Right [AssistantTool (ToolCall tcId tcName _tcParams)] -> do
+              tcId `shouldBe` "toolu_01MiAg7qRTuJAYUjNBDBN9AS"
+              tcName `shouldBe` "get_weather"
+            Right _ -> expectationFailure "Expected AssistantTool message with single ToolCall"
             Left err -> expectationFailure $ "fromResponse failed: " <> show err
 
         Left parseErr ->
@@ -262,7 +258,7 @@ spec = do
       case eitherDecodeJSONViaCodec toolUseResponse of
         Right response -> do
           case Provider.fromResponse' @ClaudeSonnet45 response of
-            Right [AssistantTool [toolCall]] -> do
+            Right [AssistantTool toolCall] -> do
               getToolCallId toolCall `shouldBe` "toolu_01MiAg7qRTuJAYUjNBDBN9AS"
               getToolCallName toolCall `shouldBe` "get_weather"
 
@@ -277,7 +273,7 @@ spec = do
 
               -- Step 4: Build history and create follow-up request
               let history = [ UserText "What is the weather like in San Francisco?"
-                            , AssistantTool [toolCall]
+                            , AssistantTool toolCall
                             , ToolResultMsg toolResult
                             ]
               let followUpRequest = Provider.toRequest' Provider.Anthropic testModel [MaxTokens 100] history

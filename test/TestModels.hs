@@ -12,7 +12,7 @@ import UniversalLLM.Providers.Anthropic
 data ClaudeSonnet45 = ClaudeSonnet45 deriving (Show, Eq)
 
 -- Model supports tools
-instance ModelHasTools ClaudeSonnet45
+instance HasTools ClaudeSonnet45
 
 -- Provider-specific model names and support
 instance ModelName Anthropic ClaudeSonnet45 where

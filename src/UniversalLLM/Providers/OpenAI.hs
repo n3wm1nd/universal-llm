@@ -73,7 +73,7 @@ convertMessage :: Message model OpenAI -> OpenAIMessage
 convertMessage (UserText text) = OpenAIMessage "user" (Just text) Nothing Nothing
 convertMessage (UserImage text _imageData) = OpenAIMessage "user" (Just text) Nothing Nothing -- simplified
 convertMessage (AssistantText text) = OpenAIMessage "assistant" (Just text) Nothing Nothing
-convertMessage (AssistantTool calls) = OpenAIMessage "assistant" Nothing (Just $ map convertFromToolCall calls) Nothing
+convertMessage (AssistantTool call) = OpenAIMessage "assistant" Nothing (Just [convertFromToolCall call]) Nothing
 convertMessage (SystemText text) = OpenAIMessage "system" (Just text) Nothing Nothing
 convertMessage (ToolResultMsg result) =
   OpenAIMessage "tool" (Just resultContent) Nothing (Just resultCallId)

@@ -49,7 +49,7 @@ toRequest' _provider mdl configs msgs =
   let (systemMsg, otherMsgs) = extractSystem msgs
       baseRequest = AnthropicRequest
         { model = modelName @Anthropic mdl
-        , messages = map convertMessage otherMsgs
+        , messages = groupMessages otherMsgs
         , max_tokens = 1000  -- default, will be overridden by config if present
         , temperature = Nothing
         , system = systemMsg
@@ -79,28 +79,49 @@ extractSystem :: [Message model Anthropic] -> (Maybe Text, [Message model Anthro
 extractSystem (SystemText txt : rest) = (Just txt, rest)
 extractSystem msgs = (Nothing, msgs)
 
-convertMessage :: Message model Anthropic -> AnthropicMessage
-convertMessage (UserText text) = AnthropicMessage "user" [AnthropicTextBlock text]
-convertMessage (UserImage text _imageData) = AnthropicMessage "user" [AnthropicTextBlock text] -- simplified, TODO: add image block
-convertMessage (AssistantText text) = AnthropicMessage "assistant" [AnthropicTextBlock text]
-convertMessage (AssistantTool toolCalls) = AnthropicMessage "assistant" (map convertToolCall toolCalls)
+-- Message direction for grouping
+data MessageDirection = User | Assistant
+  deriving (Eq, Show)
+
+toRoleText :: MessageDirection -> Text
+toRoleText User = "user"
+toRoleText Assistant = "assistant"
+
+-- Group consecutive messages by direction (User vs Assistant)
+-- Anthropic expects alternating roles with multiple content blocks per message
+groupMessages :: [Message model Anthropic] -> [AnthropicMessage]
+groupMessages [] = []
+groupMessages (msg:msgs) =
+  let msgDir = messageDirection msg
+      (sameDir, rest) = span (\m -> messageDirection m == msgDir) msgs
+      blocks = concatMap messageToBlocks (msg:sameDir)
+  in AnthropicMessage (toRoleText msgDir) blocks : groupMessages rest
   where
-    convertToolCall :: ToolCall -> AnthropicContentBlock
-    convertToolCall (ToolCall tcId tcName tcParams) =
-      AnthropicToolUseBlock tcId tcName tcParams
-    convertToolCall (InvalidToolCall tcId tcName _rawArgs _err) =
+    messageDirection :: Message model Anthropic -> MessageDirection
+    messageDirection (UserText _) = User
+    messageDirection (UserImage _ _) = User
+    messageDirection (ToolResultMsg _) = User
+    messageDirection (SystemText _) = User  -- System messages are autonomous client reminders, treated as user direction
+    messageDirection (AssistantText _) = Assistant
+    messageDirection (AssistantTool _) = Assistant
+
+    messageToBlocks :: Message model Anthropic -> [AnthropicContentBlock]
+    messageToBlocks (UserText txt) = [AnthropicTextBlock txt]
+    messageToBlocks (UserImage txt _imageData) = [AnthropicTextBlock txt]  -- TODO: image block
+    messageToBlocks (SystemText txt) = [AnthropicTextBlock txt]  -- System messages are client reminders
+    messageToBlocks (AssistantText txt) = [AnthropicTextBlock txt]
+    messageToBlocks (AssistantTool (ToolCall tcId tcName tcParams)) =
+      [AnthropicToolUseBlock tcId tcName tcParams]
+    messageToBlocks (AssistantTool (InvalidToolCall tcId tcName _rawArgs _err)) =
       error $ "Cannot convert InvalidToolCall to Anthropic request - malformed tool call: "
            <> Text.unpack tcName <> " (id: " <> Text.unpack tcId <> ")"
-convertMessage (ToolResultMsg result) = AnthropicMessage "user" [convertToolResult result]
-  where
-    convertToolResult :: ToolResult -> AnthropicContentBlock
-    convertToolResult (ToolResult toolCall output) =
+    messageToBlocks (ToolResultMsg (ToolResult toolCall output)) =
       let callId = getToolCallId toolCall
           resultContent = case output of
             Left errMsg -> errMsg
             Right jsonVal -> Text.pack $ show jsonVal  -- TODO: better JSON to text conversion
-      in AnthropicToolResultBlock callId resultContent
-convertMessage (SystemText _) = error "System messages should be extracted"
+      in [AnthropicToolResultBlock callId resultContent]
+
 
 -- | Add magic system prompt for OAuth authentication
 -- Prepends the Claude Code authentication prompt to user's system prompt
