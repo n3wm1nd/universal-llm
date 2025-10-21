@@ -137,7 +137,7 @@ instance HasCodec OpenAIMessage where
     OpenAIMessage
       <$> requiredField "role" "Role" .= role
       <*> optionalFieldOrNull "content" "Content" .= content
-      <*> optionalFieldOrNull "reasoning_content" "Reasoning Content" .= content
+      <*> optionalFieldOrNull "reasoning_content" "Reasoning Content" .= reasoning_content
       <*> optionalField "tool_calls" "Tool calls" .= tool_calls
       <*> optionalField "tool_call_id" "Tool call ID for tool results" .= tool_call_id
 
