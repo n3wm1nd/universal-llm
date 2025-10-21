@@ -16,7 +16,7 @@ spec = do
       withSystemTempDirectory "test-cache" $ \cachePath -> do
         let request = OpenAIRequest
               { model = "test-model"
-              , messages = [OpenAIMessage "user" (Just "test") Nothing Nothing]
+              , messages = [OpenAIMessage "user" (Just "test") Nothing Nothing Nothing]
               , temperature = Nothing
               , max_tokens = Nothing
               , seed = Nothing
@@ -24,7 +24,7 @@ spec = do
               , response_format = Nothing
               }
             response = OpenAISuccess $ OpenAISuccessResponse
-              [ OpenAIChoice $ OpenAIMessage "assistant" (Just "test response") Nothing Nothing ]
+              [ OpenAIChoice $ OpenAIMessage "assistant" (Just "test response") Nothing Nothing Nothing ]
 
         -- Record the response
         recordResponse cachePath request response
@@ -37,7 +37,7 @@ spec = do
       withSystemTempDirectory "test-cache" $ \cachePath -> do
         let request = OpenAIRequest
               { model = "nonexistent-model"
-              , messages = [OpenAIMessage "user" (Just "uncached") Nothing Nothing]
+              , messages = [OpenAIMessage "user" (Just "uncached") Nothing Nothing Nothing]
               , temperature = Nothing
               , max_tokens = Nothing
               , seed = Nothing

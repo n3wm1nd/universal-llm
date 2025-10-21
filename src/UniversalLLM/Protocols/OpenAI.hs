@@ -5,6 +5,12 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module UniversalLLM.Protocols.OpenAI where
 
@@ -16,6 +22,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString.Lazy as BSL
 import GHC.Generics (Generic)
+import Control.Applicative ((<|>))
 import UniversalLLM.Core.Types
 
 data OpenAIRequest = OpenAIRequest
@@ -28,6 +35,28 @@ data OpenAIRequest = OpenAIRequest
   , response_format :: Maybe OpenAIResponseFormat
   } deriving (Generic, Show, Eq)
 
+instance Semigroup OpenAIRequest where
+  r1 <> r2 = OpenAIRequest
+    { model = model r2  -- Right-biased for scalar fields
+    , messages = messages r1 <> messages r2
+    , temperature = temperature r2 <|> temperature r1  -- Right-biased with fallback
+    , max_tokens = max_tokens r2 <|> max_tokens r1
+    , seed = seed r2 <|> seed r1
+    , tools = tools r1 <> tools r2  -- Concatenate tool lists
+    , response_format = response_format r2 <|> response_format r1
+    }
+
+instance Monoid OpenAIRequest where
+  mempty = OpenAIRequest
+    { model = ""
+    , messages = []
+    , temperature = Nothing
+    , max_tokens = Nothing
+    , seed = Nothing
+    , tools = Nothing
+    , response_format = Nothing
+    }
+
 data OpenAIResponseFormat = OpenAIResponseFormat
   { responseType :: Text
   , json_schema :: Maybe Value
@@ -36,6 +65,7 @@ data OpenAIResponseFormat = OpenAIResponseFormat
 data OpenAIMessage = OpenAIMessage
   { role :: Text
   , content :: Maybe Text
+  , reasoning_content :: Maybe Text
   , tool_calls :: Maybe [OpenAIToolCall]
   , tool_call_id :: Maybe Text
   } deriving (Generic, Show, Eq)
@@ -107,6 +137,7 @@ instance HasCodec OpenAIMessage where
     OpenAIMessage
       <$> requiredField "role" "Role" .= role
       <*> optionalFieldOrNull "content" "Content" .= content
+      <*> optionalFieldOrNull "reasoning_content" "Reasoning Content" .= content
       <*> optionalField "tool_calls" "Tool calls" .= tool_calls
       <*> optionalField "tool_call_id" "Tool call ID for tool results" .= tool_call_id
 
@@ -216,6 +247,15 @@ convertFromToolCall (InvalidToolCall tcId tcName tcArgs _err) = OpenAIToolCall
 instance (HasTools model, HasTools provider) => ProtocolHandleTools OpenAIToolCall model provider where
   handleToolCalls calls = map (AssistantTool . convertToolCall) calls
 
+
+instance (HasJSON model, HasJSON provider) => ProtocolHandleJSON' 'True OpenAIMessage model provider  where
+  handleJSONResponse' :: Value -> Message model provider
+  handleJSONResponse' = AssistantJSON
 -- Instance for handling JSON responses (for JSON-capable models)
-instance (HasJSON model, HasJSON provider) => ProtocolHandleJSON model provider where
-  handleJSONResponse = AssistantJSON
+instance (ProtocolHandleJSON' flag OpenAIMessage model provider, HasJSONPred model provider flag) => ProtocolHandleJSON OpenAIMessage model provider where
+  handleJSONResponse :: Value -> Message model provider
+  handleJSONResponse = handleJSONResponse' @flag @OpenAIMessage
+
+-- Instance for handling reasoning (default: no-op)
+instance ProtocolHandleReasoning OpenAIMessage model provider where
+  handleReasoning _ = []

@@ -70,6 +70,7 @@ test-suite universal-llm-tests
   type: exitcode-stdio-1.0
   main-is: Main.hs
   other-modules:
+    ComposableHandlersSpec
     OpenAIProtocolSpec
     AnthropicTransportSpec
     TestModels

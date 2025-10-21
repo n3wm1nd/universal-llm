@@ -119,7 +119,7 @@ spec = do
 
     it "parses successful text response" $ do
       let response = OpenAISuccess $ OpenAISuccessResponse
-            [ OpenAIChoice $ OpenAIMessage "assistant" (Just "Hello!") Nothing Nothing ]
+            [ OpenAIChoice $ OpenAIMessage "assistant" (Just "Hello!") Nothing Nothing Nothing ]
           result = fromResponse @OpenAI @GPT4o response
 
       case result of
@@ -153,12 +153,12 @@ spec = do
 
     it "handles response with no content and no tool calls as error" $ do
       let response = OpenAISuccess $ OpenAISuccessResponse
-            [ OpenAIChoice $ OpenAIMessage "assistant" Nothing Nothing Nothing ]
+            [ OpenAIChoice $ OpenAIMessage "assistant" Nothing Nothing Nothing Nothing ]
           result = fromResponse @OpenAI @GPT4o response
 
       case result of
         Right _ -> expectationFailure "Expected error"
-        Left (ParseError msg) -> T.isInfixOf "No content or tool calls" msg `shouldBe` True
+        Left (ParseError msg) -> T.isInfixOf "No messages parsed" msg `shouldBe` True
         Left _ -> expectationFailure "Expected ParseError"
 
   describe "OpenAI Protocol - Tool Call Handling" $ do
@@ -225,7 +225,7 @@ spec = do
                 }
             }
           response = OpenAISuccess $ OpenAISuccessResponse
-            [ OpenAIChoice $ OpenAIMessage "assistant" Nothing (Just [oaiToolCall]) Nothing ]
+            [ OpenAIChoice $ OpenAIMessage "assistant" Nothing Nothing (Just [oaiToolCall]) Nothing ]
           result = fromResponse @OpenAI @GPT4o response
 
       case result of
@@ -256,7 +256,7 @@ spec = do
           call2 = OpenAIToolCall "call_2" "function"
             (OpenAIToolFunction "tool2" "{\"arg\":\"val2\"}")
           response = OpenAISuccess $ OpenAISuccessResponse
-            [ OpenAIChoice $ OpenAIMessage "assistant" Nothing (Just [call1, call2]) Nothing ]
+            [ OpenAIChoice $ OpenAIMessage "assistant" Nothing Nothing (Just [call1, call2]) Nothing ]
           result = fromResponse @OpenAI @GPT4o response
 
       case result of
@@ -332,7 +332,7 @@ spec = do
       -- Simulate server response with JSON content (like our test server returned)
       let jsonContent = "{\"colors\": [\"red\", \"green\", \"blue\"]}"
           response = OpenAISuccess $ OpenAISuccessResponse
-            [ OpenAIChoice $ OpenAIMessage "assistant" (Just jsonContent) Nothing Nothing ]
+            [ OpenAIChoice $ OpenAIMessage "assistant" (Just jsonContent) Nothing Nothing Nothing ]
           result = fromResponse @OpenAI @GPT4o response
 
       case result of

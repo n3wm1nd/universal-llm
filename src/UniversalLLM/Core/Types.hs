@@ -11,6 +11,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators #-}
 
 module UniversalLLM.Core.Types where
 
@@ -35,6 +36,7 @@ class SupportsSystemPrompt a
 class HasTools a
 class HasVision a
 class HasJSON a
+class HasReasoning a
 
 -- ModelConfig GADT - configuration values with provider and model constraints
 -- Only constructible if the provider supports the parameter and/or model
@@ -44,6 +46,7 @@ data ModelConfig provider model where
   Seed :: SupportsSeed provider => Int -> ModelConfig provider model
   SystemPrompt :: SupportsSystemPrompt provider => Text -> ModelConfig provider model
   Tools :: (HasTools model, HasTools provider) => [ToolDefinition] -> ModelConfig provider model
+  Reasoning :: (HasReasoning model, HasReasoning provider) => Bool -> ModelConfig provider model
 
 -- Provider-specific model names
 class ModelName provider model where
@@ -141,11 +144,43 @@ data LLMError
   | ProviderError Int Text     -- HTTP status + raw response for debugging
   deriving (Show, Eq)
 
+-- Composable request building via message folding
+-- A handler processes one message at a time, accumulating into the request
+newtype MessageHandler provider model = MessageHandler
+  { runHandler :: provider
+               -> model
+               -> [ModelConfig provider model]
+               -> Message model provider
+               -> ProviderRequest provider
+               -> ProviderRequest provider
+  }
+
+-- Handlers compose via Semigroup/Monoid
+instance Semigroup (MessageHandler provider model) where
+  MessageHandler h1 <> MessageHandler h2 = MessageHandler $ \provider model configs msg req ->
+    let req' = h1 provider model configs msg req
+    in h2 provider model configs msg req'
+
+instance Monoid (MessageHandler provider model) where
+  mempty = MessageHandler $ \_ _ _ _ req -> req  -- Identity handler: pass through
+
+-- A parser extracts messages from a response
+type ResponseParser provider model =
+  ProviderResponse provider
+  -> [Message model provider]
+
 -- Provider typeclass with associated types
 class Provider provider model where
   type ProviderRequest provider
   type ProviderResponse provider
 
+  -- The complete message handler (compose all capability handlers)
+  messageHandler :: MessageHandler provider model
+
+  -- The complete response parser (results concatenate via list Monoid)
+  responseParser :: ResponseParser provider model
+
+  -- Build request by folding messages through the handler
   toRequest :: provider
             -> model
             -> [ModelConfig provider model]
@@ -171,11 +206,24 @@ class ProtocolHandleTools protocolToolCall model provider where
   handleToolCalls _ = []  -- Default: ignore (shouldn't happen for non-tool models)
 
 -- Generic JSON response handling for any protocol/provider combination
-class ProtocolHandleJSON model provider where
+class ProtocolHandleJSON protocol model provider where
   handleJSONResponse :: Value -> Message model provider
   -- Default: This should never be called for non-JSON models in practice,
   -- but we provide a default to avoid requiring the constraint everywhere
   handleJSONResponse _ = error "JSON response for non-JSON-capable model"
+
+class ProtocolHandleReasoning protocol model provider where
+  handleReasoning :: protocol -> [Message model provider]
+  handleReasoning _ = []  -- Default: no reasoning content
+
+class ProtocolHandleJSON' (flag :: Bool) protocol model provider where
+  handleJSONResponse' :: Value -> Message model provider
+instance ProtocolHandleJSON' 'False protocol model provider where
+  handleJSONResponse' _v = error "trying to handle JSON response when not a json provider/model"
+
+class HasJSONPred model provider (flag :: Bool) | model provider -> flag where {}
+instance (flag ~ 'False) => HasJSONPred model provider flag
+
 
 -- GADT Messages with capability constraints
 data Message model provider where
@@ -183,6 +231,7 @@ data Message model provider where
   UserImage :: HasVision model => Text -> Text -> Message model provider
   UserRequestJSON :: (HasJSON model, HasJSON provider) => Text -> Value -> Message model provider  -- Text query + JSON schema
   AssistantText :: Text -> Message model provider
+  AssistantReasoning :: Text -> Message model provider
   AssistantTool :: (HasTools model, HasTools provider) => ToolCall -> Message model provider
   AssistantJSON :: (HasJSON model, HasJSON provider) => Value -> Message model provider
   SystemText :: Text -> Message model provider
@@ -193,6 +242,7 @@ instance Show (Message model provider) where
   show (UserImage _ _) = "UserImage"
   show (UserRequestJSON _ _) = "UserRequestJSON"
   show (AssistantText _) = "AssistantText"
+  show (AssistantReasoning _) = "AssistantReasoning"
   show (AssistantTool _) = "AssistantTool"
   show (AssistantJSON _) = "AssistantJSON"
   show (SystemText _) = "SystemText"

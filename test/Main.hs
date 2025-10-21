@@ -8,6 +8,7 @@ import qualified AnthropicTransportSpec
 import qualified CachedIntegrationSpec
 import qualified OpenAIProviderSpec
 import qualified AnthropicProviderSpec
+import qualified ComposableHandlersSpec
 import qualified TestCache
 import qualified TestHTTP
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
@@ -61,6 +62,7 @@ main = do
         _ -> \req -> TestCache.playbackMode cachePath (AnthropicProvider.withMagicSystemPrompt req)
 
   hspec $ do
+    describe "Composable Handlers" ComposableHandlersSpec.spec
     describe "OpenAI Protocol" OpenAIProtocolSpec.spec
     describe "Anthropic Transport" AnthropicTransportSpec.spec
     describe "Test Cache" CachedIntegrationSpec.spec
