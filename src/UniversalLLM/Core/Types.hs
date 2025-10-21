@@ -169,8 +169,9 @@ instance Semigroup (MessageHandler provider model) where
 instance Monoid (MessageHandler provider model) where
   mempty = MessageHandler $ \_ _ _ _ req -> req  -- Identity handler: pass through
 
--- A parser extracts messages from a response
-type ResponseParser provider model =  ProviderResponse provider -> [Message provider model] -- TODO: probably should be a newtype and have a monoid instance
+-- A parser extracts messages from a response and can transform previously parsed messages
+-- Takes: accumulated messages so far, the response -> produces final messages
+type ResponseParser provider model = [Message provider model] -> ProviderResponse provider -> [Message provider model]
 
 -- Composable bidirectional provider (couples toRequest and fromResponse)
 data ComposableProvider provider model = ComposableProvider
@@ -182,13 +183,13 @@ data ComposableProvider provider model = ComposableProvider
 instance Semigroup (ComposableProvider provider model) where
   cp1 <> cp2 = ComposableProvider
     { cpToRequest = cpToRequest cp1 <> cpToRequest cp2
-    , cpFromResponse = \resp -> cpFromResponse cp1 resp <> cpFromResponse cp2 resp
+    , cpFromResponse = \acc resp -> cpFromResponse cp2 (cpFromResponse cp1 acc resp) resp
     }
 
 instance Monoid (ComposableProvider provider model) where
   mempty = ComposableProvider
     { cpToRequest = mempty
-    , cpFromResponse = const []
+    , cpFromResponse = \acc _resp -> acc
     }
 
 -- GADT Messages with capability constraints

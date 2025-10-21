@@ -3,12 +3,10 @@
 module Main where
 
 import Test.Hspec
-import qualified OpenAIProtocolSpec
-import qualified AnthropicTransportSpec
 import qualified CachedIntegrationSpec
-import qualified OpenAIProviderSpec
-import qualified AnthropicProviderSpec
 import qualified ComposableHandlersSpec
+import qualified OpenAIComposableSpec
+import qualified AnthropicComposableSpec
 import qualified TestCache
 import qualified TestHTTP
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
@@ -63,10 +61,10 @@ main = do
 
   hspec $ do
     describe "Composable Handlers" ComposableHandlersSpec.spec
-    describe "OpenAI Protocol" OpenAIProtocolSpec.spec
-    describe "Anthropic Transport" AnthropicTransportSpec.spec
-    describe "Test Cache" CachedIntegrationSpec.spec
 
-    -- New provider specs with ResponseProvider
-    describe "OpenAI Provider (cached)" $ OpenAIProviderSpec.spec openaiProvider
-    describe "Anthropic Provider (cached)" $ AnthropicProviderSpec.spec anthropicProvider
+    -- Composable provider integration tests
+    describe "OpenAI Composable Provider (cached)" $ OpenAIComposableSpec.spec openaiProvider
+    describe "Anthropic Composable Provider (cached)" $ AnthropicComposableSpec.spec anthropicProvider
+
+    -- Cache infrastructure tests
+    describe "Test Cache" CachedIntegrationSpec.spec

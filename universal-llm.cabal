@@ -71,14 +71,12 @@ test-suite universal-llm-tests
   main-is: Main.hs
   other-modules:
     ComposableHandlersSpec
-    OpenAIProtocolSpec
-    AnthropicTransportSpec
+    OpenAIComposableSpec
+    AnthropicComposableSpec
     TestModels
     TestCache
     TestHTTP
     CachedIntegrationSpec
-    OpenAIProviderSpec
-    AnthropicProviderSpec
   hs-source-dirs: test
 
   build-depends:

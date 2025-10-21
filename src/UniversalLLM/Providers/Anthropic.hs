@@ -39,11 +39,11 @@ baseComposableProvider = ComposableProvider
   , cpFromResponse = parseTextResponse
   }
   where
-    parseTextResponse (AnthropicError err) = []
-    parseTextResponse (AnthropicSuccess resp) =
+    parseTextResponse acc (AnthropicError err) = acc
+    parseTextResponse acc (AnthropicSuccess resp) =
       case [txt | AnthropicTextBlock txt <- responseContent resp] of
-        (txt:_) -> [AssistantText txt]
-        [] -> []
+        (txt:_) -> acc <> [AssistantText txt]
+        [] -> acc
 
 toolsComposableProvider :: forall model. (ModelName Anthropic model, HasTools model, HasTools Anthropic) => ComposableProvider Anthropic model
 toolsComposableProvider = ComposableProvider
@@ -51,9 +51,9 @@ toolsComposableProvider = ComposableProvider
   , cpFromResponse = parseToolResponse
   }
   where
-    parseToolResponse (AnthropicError _) = []
-    parseToolResponse (AnthropicSuccess resp) =
-      [AssistantTool (ToolCall tid tname tinput) | AnthropicToolUseBlock tid tname tinput <- responseContent resp]
+    parseToolResponse acc (AnthropicError _) = acc
+    parseToolResponse acc (AnthropicSuccess resp) =
+      acc <> [AssistantTool (ToolCall tid tname tinput) | AnthropicToolUseBlock tid tname tinput <- responseContent resp]
 
 -- Helper function to build Anthropic request from messages (replacement for old toRequest)
 -- This is what users will call instead of using the composable provider directly
