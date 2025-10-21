@@ -150,8 +150,17 @@ baseComposableProvider = ComposableProvider
 reasoningComposableProvider :: forall model. (HasReasoning model, HasReasoning OpenAI) => ComposableProvider OpenAI model
 reasoningComposableProvider = ComposableProvider
   { cpToRequest = UniversalLLM.Providers.OpenAI.handleReasoning
-  , cpFromResponse = \acc _resp -> acc -- FIXME: this needs to implement putting the thinking/reasoning response into AssistantReasoning message
+  , cpFromResponse = parseReasoningResponse
   }
+  where
+    parseReasoningResponse acc (OpenAISuccess (OpenAISuccessResponse choices)) =
+      case choices of
+        [] -> acc
+        (OpenAIChoice msg:_) ->
+          case reasoning_content msg of
+            Just reasoningTxt -> acc <> [AssistantReasoning reasoningTxt]
+            Nothing -> acc
+    parseReasoningResponse acc _ = acc
 
 -- Tools composable provider
 toolsComposableProvider :: forall model. (HasTools model, HasTools OpenAI) => ComposableProvider OpenAI model
