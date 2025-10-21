@@ -203,9 +203,4 @@ toAnthropicToolDef toolDef = AnthropicToolDefinition
 -- Tool call conversion - handled via ProtocolHandleTools typeclass
 -- This allows models without tool support to still parse text responses
 
--- Instance for tool-capable models: converts tool_use blocks to AssistantTool
-instance (HasTools model, HasTools provider) => ProtocolHandleTools AnthropicContentBlock model provider where
-  handleToolCalls blocks =
-    [ AssistantTool (ToolCall tid tname tinput)
-    | AnthropicToolUseBlock tid tname tinput <- blocks
-    ]
+-- NOTE: ProtocolHandleTools was removed - tool handling is now done inline in the provider

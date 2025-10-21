@@ -242,20 +242,3 @@ convertFromToolCall (InvalidToolCall tcId tcName tcArgs _err) = OpenAIToolCall
       , toolFunctionArguments = tcArgs  -- Return original invalid arguments unchanged
       }
   }
-
--- Instance for handling OpenAI tool calls
-instance (HasTools model, HasTools provider) => ProtocolHandleTools OpenAIToolCall model provider where
-  handleToolCalls calls = map (AssistantTool . convertToolCall) calls
-
-
-instance (HasJSON model, HasJSON provider) => ProtocolHandleJSON' 'True OpenAIMessage model provider  where
-  handleJSONResponse' :: Value -> Message model provider
-  handleJSONResponse' = AssistantJSON
--- Instance for handling JSON responses (for JSON-capable models)
-instance (ProtocolHandleJSON' flag OpenAIMessage model provider, HasJSONPred model provider flag) => ProtocolHandleJSON OpenAIMessage model provider where
-  handleJSONResponse :: Value -> Message model provider
-  handleJSONResponse = handleJSONResponse' @flag @OpenAIMessage
-
--- Instance for handling reasoning (default: no-op)
-instance ProtocolHandleReasoning OpenAIMessage model provider where
-  handleReasoning _ = []

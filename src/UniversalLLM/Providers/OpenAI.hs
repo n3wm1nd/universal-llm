@@ -28,6 +28,10 @@ instance SupportsMaxTokens OpenAI
 instance SupportsSeed OpenAI
 instance SupportsSystemPrompt OpenAI
 
+instance Provider OpenAI model where
+  type ProviderRequest OpenAI = OpenAIRequest
+  type ProviderResponse OpenAI = OpenAIResponse 
+
 -- Helper: Get last message from request
 lastMessage :: OpenAIRequest -> Maybe OpenAIMessage
 lastMessage req = case messages req of
@@ -130,76 +134,59 @@ handleReasoning = MessageHandler $ \_provider _model _configs msg req -> case ms
 baseComposableProvider :: forall model. ModelName OpenAI model => ComposableProvider OpenAI model
 baseComposableProvider = ComposableProvider
   { cpToRequest = handleBase <> handleSystemPrompt <> handleTextMessages
-  , cpFromResponse = const []  -- Base provider doesn't parse responses, composed providers do
+  , cpFromResponse = parseTextResponse
   }
+  where
+    parseTextResponse (OpenAISuccess (OpenAISuccessResponse choices)) =
+      case choices of
+        [] -> []
+        (OpenAIChoice msg:_) ->
+          case content msg of
+            Just txt -> [AssistantText txt]
+            Nothing -> []
+    parseTextResponse _ = []
 
 -- Reasoning composable provider
 reasoningComposableProvider :: forall model. (HasReasoning model, HasReasoning OpenAI) => ComposableProvider OpenAI model
 reasoningComposableProvider = ComposableProvider
   { cpToRequest = UniversalLLM.Providers.OpenAI.handleReasoning
-  , cpFromResponse = const []
+  , cpFromResponse = const [] -- FIXME: this needs to implement putting the thinking/reasoning response into AssistantReasoning message
   }
 
--- Provider typeclass implementation
-instance (ModelName OpenAI model, ProtocolHandleTools OpenAIToolCall model OpenAI, ProtocolHandleJSON OpenAIMessage model OpenAI, ProtocolHandleReasoning OpenAIMessage model OpenAI)
-         => Provider OpenAI model where
-  type ProviderRequest OpenAI = OpenAIRequest
-  type ProviderResponse OpenAI = OpenAIResponse
-
-  messageHandler = handleBase <> handleSystemPrompt <> handleTextMessages
-    -- TODO: conditionally add based on capabilities:
-    -- <> handleTools <> handleJSON <> handleReasoning
-
-  responseParser = parseResponse
-
-  toRequest provider model configs msgs =
-    foldl (\req msg -> runHandler messageHandler provider model configs msg req) mempty msgs
-
-  fromResponse (OpenAIError (OpenAIErrorResponse errDetail)) =
-    Left $ ProviderError (code errDetail) $ errorMessage errDetail <> " (" <> errorType errDetail <> ")"
-  fromResponse resp =
-    let msgs = responseParser resp
-    in if null msgs
-       then Left $ ParseError "No messages parsed from response"
-       else Right msgs
-
--- Helper for converting individual messages (used by tests and internally)
-convertMessage :: Message model OpenAI -> OpenAIMessage
-convertMessage (UserText text) = OpenAIMessage "user" (Just text) Nothing Nothing Nothing
-convertMessage (AssistantText text) = OpenAIMessage "assistant" (Just text) Nothing Nothing Nothing
-convertMessage (AssistantTool call) = OpenAIMessage "assistant" Nothing Nothing (Just [convertFromToolCall call]) Nothing
-convertMessage (AssistantJSON jsonVal) = OpenAIMessage "assistant" (Just jsonText) Nothing Nothing Nothing
-  where jsonText = TE.decodeUtf8 . BSL.toStrict . Aeson.encode $ jsonVal
-convertMessage (AssistantReasoning txt) = OpenAIMessage "assistant" Nothing (Just txt) Nothing Nothing
-convertMessage (SystemText text) = OpenAIMessage "system" (Just text) Nothing Nothing Nothing
-convertMessage (ToolResultMsg result) =
-  OpenAIMessage "tool" (Just resultContent) Nothing Nothing (Just resultCallId)
+-- Tools composable provider
+toolsComposableProvider :: forall model. (HasTools model, HasTools OpenAI) => ComposableProvider OpenAI model
+toolsComposableProvider = ComposableProvider
+  { cpToRequest = handleTools
+  , cpFromResponse = parseToolResponse
+  }
   where
-    resultCallId = getToolCallId (toolResultCall result)
-    resultContent = either id (TE.decodeUtf8 . BSL.toStrict . Aeson.encode) $ toolResultOutput result
-convertMessage msg = error $ "Unsupported message type for OpenAI provider: " ++ show msg
+    parseToolResponse (OpenAISuccess (OpenAISuccessResponse choices)) =
+      case choices of
+        [] -> []
+        (OpenAIChoice msg:_) ->
+          case tool_calls msg of
+            Just calls -> map (AssistantTool . convertToolCall) calls
+            Nothing -> []
+    parseToolResponse _ = []
 
--- Response parser
-parseResponse :: forall model. (ProtocolHandleTools OpenAIToolCall model OpenAI, ProtocolHandleJSON OpenAIMessage model OpenAI) => ResponseParser OpenAI model
-parseResponse (OpenAIError _) = []  -- Errors handled elsewhere
-parseResponse (OpenAISuccess (OpenAISuccessResponse choices)) =
-  case choices of
-    [] -> []
-    (OpenAIChoice msg:_) ->
-      parseTextContent (content msg)
-      <> parseReasoning (reasoning_content msg)
-      <> parseToolCalls (tool_calls msg)
+-- JSON composable provider
+jsonComposableProvider :: forall model. (HasJSON model, HasJSON OpenAI) => ComposableProvider OpenAI model
+jsonComposableProvider = ComposableProvider
+  { cpToRequest = handleJSON
+  , cpFromResponse = parseJSONResponse -- this is suboptimal, but we have no information if the response was json "by accident" or because we requested it without carrying state over
+  }
   where
-    parseTextContent (Just txt) = [parseContentAsTextOrJSON txt]
-    parseTextContent Nothing = []
+    parseJSONResponse (OpenAISuccess (OpenAISuccessResponse choices)) =
+      case choices of
+        [] -> []
+        (OpenAIChoice msg:_) ->
+          case content msg of
+            Just txt -> case Aeson.eitherDecodeStrict (TE.encodeUtf8 txt) of
+              Right jsonVal -> [AssistantJSON jsonVal]
+              Left _ -> []
+            Nothing -> []
+    parseJSONResponse _ = []
 
-    parseReasoning (Just txt) = [AssistantReasoning txt]
-    parseReasoning Nothing = []
-
-    parseToolCalls (Just calls) = handleToolCalls calls
-    parseToolCalls Nothing = []
-
-    parseContentAsTextOrJSON txt =
-      case Aeson.eitherDecodeStrict (TE.encodeUtf8 txt) of
-        Right jsonVal -> handleJSONResponse @OpenAIMessage @model jsonVal
-        Left _ -> AssistantText txt
+-- Full composable provider for models with tools and JSON (like GPT4o)
+fullComposableProvider :: forall model. (ModelName OpenAI model, HasTools model, HasJSON model) => ComposableProvider OpenAI model
+fullComposableProvider = baseComposableProvider <> toolsComposableProvider <> jsonComposableProvider

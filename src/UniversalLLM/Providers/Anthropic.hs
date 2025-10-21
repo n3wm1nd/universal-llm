@@ -24,56 +24,78 @@ instance SupportsMaxTokens Anthropic
 instance SupportsSystemPrompt Anthropic
 -- Note: Anthropic does NOT support Seed or JSON mode
 
--- Apply configuration to Anthropic request
-instance ApplyConfig AnthropicRequest Anthropic model where
-  applyConfig configs req = foldr applyOne req configs
-    where
-      applyOne (Temperature t) r = r { temperature = Just t }
-      applyOne (MaxTokens mt) r = r { max_tokens = mt }
-      applyOne (SystemPrompt sp) r = r { system = Just [AnthropicSystemBlock sp "text"] }
-      applyOne (Tools toolDefs) r = r { tools = Just (map toAnthropicToolDef toolDefs) }
-      applyOne _ r = r  -- Catch-all for future config options (e.g., Seed not supported by Anthropic)
-
--- Provider typeclass implementation
-instance (ModelName Anthropic model, ProtocolHandleTools AnthropicContentBlock model Anthropic)
-         => Provider Anthropic model where
+-- Provider typeclass implementation (just type associations)
+instance ModelName Anthropic model => Provider Anthropic model where
   type ProviderRequest Anthropic = AnthropicRequest
   type ProviderResponse Anthropic = AnthropicResponse
 
-  toRequest = toRequest'
-  fromResponse = fromResponse'
--- Pure functions: no IO, just transformations
-toRequest' :: forall model. ModelName Anthropic model
-          => Anthropic -> model -> [ModelConfig Anthropic model] -> [Message model Anthropic] -> AnthropicRequest
-toRequest' _provider mdl configs msgs =
+-- Composable providers for Anthropic
+-- Note: Anthropic requires grouping all messages at once (alternating user/assistant)
+-- so we use a simpler approach: build the full request from all messages at the end
+
+baseComposableProvider :: forall model. (ModelName Anthropic model, HasTools model) => ComposableProvider Anthropic model
+baseComposableProvider = ComposableProvider
+  { cpToRequest = mempty  -- No incremental building - Anthropic needs all messages
+  , cpFromResponse = parseTextResponse
+  }
+  where
+    parseTextResponse (AnthropicError err) = []
+    parseTextResponse (AnthropicSuccess resp) =
+      case [txt | AnthropicTextBlock txt <- responseContent resp] of
+        (txt:_) -> [AssistantText txt]
+        [] -> []
+
+toolsComposableProvider :: forall model. (ModelName Anthropic model, HasTools model, HasTools Anthropic) => ComposableProvider Anthropic model
+toolsComposableProvider = ComposableProvider
+  { cpToRequest = mempty
+  , cpFromResponse = parseToolResponse
+  }
+  where
+    parseToolResponse (AnthropicError _) = []
+    parseToolResponse (AnthropicSuccess resp) =
+      [AssistantTool (ToolCall tid tname tinput) | AnthropicToolUseBlock tid tname tinput <- responseContent resp]
+
+-- Helper function to build Anthropic request from messages (replacement for old toRequest)
+-- This is what users will call instead of using the composable provider directly
+buildAnthropicRequest :: ModelName Anthropic model
+                      => Anthropic
+                      -> model
+                      -> [ModelConfig Anthropic model]
+                      -> [Message model Anthropic]
+                      -> AnthropicRequest
+buildAnthropicRequest _provider mdl configs msgs =
   let (systemMsg, otherMsgs) = extractSystem msgs
+      systemFromConfig = case [sp | SystemPrompt sp <- configs] of
+        (sp:_) -> Just [AnthropicSystemBlock sp "text"]
+        [] -> Nothing
+      toolsFromConfig = case [defs | Tools defs <- configs] of
+        (defs:_) -> Just (map toAnthropicToolDef defs)
+        [] -> Nothing
       baseRequest = AnthropicRequest
         { model = modelName @Anthropic mdl
         , messages = groupMessages otherMsgs
-        , max_tokens = 1000  -- default, will be overridden by config if present
-        , temperature = Nothing
-        , system = systemMsg
-        , tools = Nothing
+        , max_tokens = case [mt | MaxTokens mt <- configs] of { (mt:_) -> mt; [] -> 1000 }
+        , temperature = case [t | Temperature t <- configs] of { (t:_) -> Just t; [] -> Nothing }
+        , system = systemMsg <> systemFromConfig
+        , tools = toolsFromConfig
         }
-  in applyConfig configs baseRequest
-
-fromResponse' :: forall model. ProtocolHandleTools AnthropicContentBlock model Anthropic => AnthropicResponse -> Either LLMError [Message model Anthropic]
-fromResponse' (AnthropicError err) =
+  in baseRequest
+-- Helper function to parse Anthropic response (replacement for old fromResponse)
+parseAnthropicResponse :: (HasTools model, HasTools Anthropic)
+                       => AnthropicResponse
+                       -> Either LLMError [Message model Anthropic]
+parseAnthropicResponse (AnthropicError err) =
   Left $ ProviderError 0 $ errorMessage err <> " (" <> errorType err <> ")"
-fromResponse' (AnthropicSuccess resp) =
+parseAnthropicResponse (AnthropicSuccess resp) =
   case responseContent resp of
-    [] -> Left $ ProviderError 0 "Empty response content"
-    [AnthropicTextBlock txt] -> Right [AssistantText txt]
+    [] -> Left $ ParseError "Empty response content"
     allBlocks ->
-      -- Check for text blocks first
-      case [txt | AnthropicTextBlock txt <- allBlocks] of
-        (txt:_) -> Right [AssistantText txt]
-        [] ->
-          -- No text blocks, try tool calls (will be empty list for non-tool models)
-          let toolMessages = handleToolCalls @AnthropicContentBlock @model @Anthropic allBlocks
-          in if null toolMessages
-             then Left $ ProviderError 0 "No text or tool content in response"
-             else Right toolMessages
+      let textMsgs = [AssistantText txt | AnthropicTextBlock txt <- allBlocks]
+          toolMsgs = [AssistantTool (ToolCall tid tname tinput) | AnthropicToolUseBlock tid tname tinput <- allBlocks]
+          allMsgs = textMsgs <> toolMsgs
+      in if null allMsgs
+         then Left $ ParseError "No text or tool content in response"
+         else Right allMsgs
 
 -- Note: SystemText messages are reminders/context, not the system prompt
 -- The system prompt comes from the SystemPrompt config, not from messages
@@ -84,10 +106,7 @@ extractSystem (SystemText txt : rest) =
   (Nothing, UserText txt : rest)
 extractSystem msgs = (Nothing, msgs)
 
--- Message direction for grouping
-data MessageDirection = User | Assistant
-  deriving (Eq, Show)
-
+-- Convert MessageDirection to Anthropic role text
 toRoleText :: MessageDirection -> Text
 toRoleText User = "user"
 toRoleText Assistant = "assistant"
@@ -102,14 +121,6 @@ groupMessages (msg:msgs) =
       blocks = concatMap messageToBlocks (msg:sameDir)
   in AnthropicMessage (toRoleText msgDir) blocks : groupMessages rest
   where
-    messageDirection :: Message model Anthropic -> MessageDirection
-    messageDirection (UserText _) = User
-    messageDirection (UserImage _ _) = User
-    messageDirection (ToolResultMsg _) = User
-    messageDirection (SystemText _) = User  -- System messages are autonomous client reminders, treated as user direction
-    messageDirection (AssistantText _) = Assistant
-    messageDirection (AssistantTool _) = Assistant
-    messageDirection (AssistantJSON _) = Assistant  -- Will never match (Anthropic lacks HasJSON)
 
     messageToBlocks :: Message model Anthropic -> [AnthropicContentBlock]
     messageToBlocks (UserText txt) = [AnthropicTextBlock txt]

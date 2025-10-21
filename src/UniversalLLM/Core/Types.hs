@@ -144,6 +144,11 @@ data LLMError
   | ProviderError Int Text     -- HTTP status + raw response for debugging
   deriving (Show, Eq)
 
+class Provider provider model where
+  type ProviderRequest provider
+  type ProviderResponse provider
+
+
 -- Composable request building via message folding
 -- A handler processes one message at a time, accumulating into the request
 newtype MessageHandler provider model = MessageHandler
@@ -165,9 +170,7 @@ instance Monoid (MessageHandler provider model) where
   mempty = MessageHandler $ \_ _ _ _ req -> req  -- Identity handler: pass through
 
 -- A parser extracts messages from a response
-type ResponseParser provider model =
-  ProviderResponse provider
-  -> [Message model provider]
+type ResponseParser provider model =  ProviderResponse provider -> [Message provider model] -- TODO: probably should be a newtype and have a monoid instance
 
 -- Composable bidirectional provider (couples toRequest and fromResponse)
 data ComposableProvider provider model = ComposableProvider
@@ -187,62 +190,6 @@ instance Monoid (ComposableProvider provider model) where
     { cpToRequest = mempty
     , cpFromResponse = const []
     }
-
--- Provider typeclass with associated types
-class Provider provider model where
-  type ProviderRequest provider
-  type ProviderResponse provider
-
-  -- The complete message handler (compose all capability handlers)
-  messageHandler :: MessageHandler provider model
-
-  -- The complete response parser (results concatenate via list Monoid)
-  responseParser :: ResponseParser provider model
-
-  -- Build request by folding messages through the handler
-  toRequest :: provider
-            -> model
-            -> [ModelConfig provider model]
-            -> [Message model provider]
-            -> ProviderRequest provider
-
-  fromResponse :: ProviderResponse provider
-               -> Either LLMError [Message model provider]
-
-
--- Protocol-level embedding classes
--- These define how to embed capabilities into protocol wire formats
--- Can be reused by any provider using the same protocol
-
--- Protocol configuration application
--- Protocols define how to apply ModelConfig values to their request format
-class ApplyConfig protocol provider model where
-  applyConfig :: [ModelConfig provider model] -> protocol -> protocol
-
--- Generic tool call handling for any protocol/provider combination
-class ProtocolHandleTools protocolToolCall model provider where
-  handleToolCalls :: [protocolToolCall] -> [Message model provider]
-  handleToolCalls _ = []  -- Default: ignore (shouldn't happen for non-tool models)
-
--- Generic JSON response handling for any protocol/provider combination
-class ProtocolHandleJSON protocol model provider where
-  handleJSONResponse :: Value -> Message model provider
-  -- Default: This should never be called for non-JSON models in practice,
-  -- but we provide a default to avoid requiring the constraint everywhere
-  handleJSONResponse _ = error "JSON response for non-JSON-capable model"
-
-class ProtocolHandleReasoning protocol model provider where
-  handleReasoning :: protocol -> [Message model provider]
-  handleReasoning _ = []  -- Default: no reasoning content
-
-class ProtocolHandleJSON' (flag :: Bool) protocol model provider where
-  handleJSONResponse' :: Value -> Message model provider
-instance ProtocolHandleJSON' 'False protocol model provider where
-  handleJSONResponse' _v = error "trying to handle JSON response when not a json provider/model"
-
-class HasJSONPred model provider (flag :: Bool) | model provider -> flag where {}
-instance (flag ~ 'False) => HasJSONPred model provider flag
-
 
 -- GADT Messages with capability constraints
 data Message model provider where
@@ -266,3 +213,18 @@ instance Show (Message model provider) where
   show (AssistantJSON _) = "AssistantJSON"
   show (SystemText _) = "SystemText"
   show (ToolResultMsg _) = "ToolResultMsg"
+
+-- Message direction (User vs Assistant) - useful for providers that need alternating roles
+data MessageDirection = User | Assistant
+  deriving (Eq, Show)
+
+messageDirection :: Message model provider -> MessageDirection
+messageDirection (UserText _) = User
+messageDirection (UserImage _ _) = User
+messageDirection (UserRequestJSON _ _) = User
+messageDirection (ToolResultMsg _) = User  -- Tool results are user direction
+messageDirection (SystemText _) = User  -- System messages are treated as user direction
+messageDirection (AssistantText _) = Assistant
+messageDirection (AssistantReasoning _) = Assistant
+messageDirection (AssistantTool _) = Assistant
+messageDirection (AssistantJSON _) = Assistant
