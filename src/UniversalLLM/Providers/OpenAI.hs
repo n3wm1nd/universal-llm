@@ -124,6 +124,22 @@ handleReasoning = MessageHandler $ \_provider _model _configs msg req -> case ms
     req { messages = messages req <> [OpenAIMessage "assistant" Nothing (Just txt) Nothing Nothing] }
   _ -> req
 
+-- Composable providers (bidirectional handlers)
+
+-- Base composable provider: model name, basic config, text messages
+baseComposableProvider :: forall model. ModelName OpenAI model => ComposableProvider OpenAI model
+baseComposableProvider = ComposableProvider
+  { cpToRequest = handleBase <> handleSystemPrompt <> handleTextMessages
+  , cpFromResponse = const []  -- Base provider doesn't parse responses, composed providers do
+  }
+
+-- Reasoning composable provider
+reasoningComposableProvider :: forall model. (HasReasoning model, HasReasoning OpenAI) => ComposableProvider OpenAI model
+reasoningComposableProvider = ComposableProvider
+  { cpToRequest = UniversalLLM.Providers.OpenAI.handleReasoning
+  , cpFromResponse = const []
+  }
+
 -- Provider typeclass implementation
 instance (ModelName OpenAI model, ProtocolHandleTools OpenAIToolCall model OpenAI, ProtocolHandleJSON OpenAIMessage model OpenAI, ProtocolHandleReasoning OpenAIMessage model OpenAI)
          => Provider OpenAI model where

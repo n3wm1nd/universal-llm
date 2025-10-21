@@ -162,6 +162,38 @@ spec = do
 
       length (messages req2) `shouldBe` 2
 
+  describe "Composable Providers (bidirectional)" $ do
+
+    it "baseComposableProvider handles text messages" $ do
+      let provider = OpenAI
+          model = BasicModel
+          configs = []
+          msg = UserText "Hello"
+          cp = baseComposableProvider @BasicModel
+          req = runHandler (cpToRequest cp) provider model configs msg mempty
+
+      length (messages req) `shouldBe` 1
+      case head (messages req) of
+        OpenAIMessage "user" (Just content) _ _ _ ->
+          content `shouldBe` "Hello"
+        _ -> expectationFailure "Expected user message"
+
+    it "composable providers compose via <>" $ do
+      let provider = OpenAI
+          model = ReasoningModel
+          configs = []
+          msg = AssistantReasoning "thinking"
+
+          -- Compose base + reasoning
+          cp = baseComposableProvider <> reasoningComposableProvider
+          req = runHandler (cpToRequest cp) provider model configs msg mempty
+
+      length (messages req) `shouldBe` 1
+      case head (messages req) of
+        OpenAIMessage "assistant" Nothing (Just reasoning) Nothing Nothing ->
+          reasoning `shouldBe` "thinking"
+        _ -> expectationFailure "Expected reasoning message"
+
     -- This test demonstrates that type safety prevents using reasoning with non-reasoning models
     -- UNCOMMENT to verify it fails to compile with: No instance for 'HasReasoning BasicModel'
     {-

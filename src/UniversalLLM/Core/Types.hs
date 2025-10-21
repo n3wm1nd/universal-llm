@@ -169,6 +169,25 @@ type ResponseParser provider model =
   ProviderResponse provider
   -> [Message model provider]
 
+-- Composable bidirectional provider (couples toRequest and fromResponse)
+data ComposableProvider provider model = ComposableProvider
+  { cpToRequest :: MessageHandler provider model
+  , cpFromResponse :: ResponseParser provider model
+  }
+
+-- ComposableProviders compose via Semigroup/Monoid
+instance Semigroup (ComposableProvider provider model) where
+  cp1 <> cp2 = ComposableProvider
+    { cpToRequest = cpToRequest cp1 <> cpToRequest cp2
+    , cpFromResponse = \resp -> cpFromResponse cp1 resp <> cpFromResponse cp2 resp
+    }
+
+instance Monoid (ComposableProvider provider model) where
+  mempty = ComposableProvider
+    { cpToRequest = mempty
+    , cpFromResponse = const []
+    }
+
 -- Provider typeclass with associated types
 class Provider provider model where
   type ProviderRequest provider
