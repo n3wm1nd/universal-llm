@@ -180,30 +180,59 @@ toolsComposableProvider = ComposableProvider
 
 -- JSON composable provider
 -- Transforms AssistantText messages that contain valid JSON into AssistantJSON
--- Only transforms if JSON was explicitly requested (checks history for UserRequestJSON)
+-- Only transforms if JSON was explicitly requested (checks response format in request)
 jsonComposableProvider :: forall model. (HasJSON model, HasJSON OpenAI) => ComposableProvider OpenAI model
 jsonComposableProvider = ComposableProvider
   { cpToRequest = handleJSON
   , cpFromResponse = parseJSONResponse
   }
   where
-    parseJSONResponse _provider _model _configs history acc _resp =
-      -- Only transform to JSON if user explicitly requested JSON mode
-      if hasJSONRequest history
+    parseJSONResponse _provider _model _configs history acc resp =
+      -- Only transform to JSON if:
+      -- 1. The last user message explicitly requested JSON mode (UserRequestJSON), AND
+      -- 2. Response indicates success (not an error), AND
+      -- 3. The text actually parses as valid JSON
+      if lastMessageRequestedJSON history && isSuccessResponse resp
         then map transformTextToJSON acc
         else acc
 
-    hasJSONRequest :: [Message model OpenAI] -> Bool
-    hasJSONRequest msgs = any isJSONRequest msgs
+    lastMessageRequestedJSON :: [Message model OpenAI] -> Bool
+    lastMessageRequestedJSON msgs =
+      case lastUserMessage msgs of
+        Just (UserRequestJSON _ _) -> True
+        _ -> False
       where
-        isJSONRequest (UserRequestJSON _ _) = True
-        isJSONRequest _ = False
+        -- Get the last user message (ignoring assistant messages)
+        lastUserMessage [] = Nothing
+        lastUserMessage [msg] = if isUserMessage msg then Just msg else Nothing
+        lastUserMessage (msg:rest) =
+          case lastUserMessage rest of
+            Nothing -> if isUserMessage msg then Just msg else Nothing
+            found -> found
+
+        isUserMessage (UserText _) = True
+        isUserMessage (UserImage _ _) = True
+        isUserMessage (UserRequestJSON _ _) = True
+        isUserMessage _ = False
+
+    isSuccessResponse :: OpenAIResponse -> Bool
+    isSuccessResponse (OpenAISuccess _) = True
+    isSuccessResponse (OpenAIError _) = False
 
     transformTextToJSON :: Message OpenAI model -> Message OpenAI model
     transformTextToJSON (AssistantText txt) =
+      -- Only transform if it's valid JSON and not empty
       case Aeson.eitherDecodeStrict (TE.encodeUtf8 txt) of
-        Right jsonVal -> AssistantJSON jsonVal
-        Left _ -> AssistantText txt
+        Right jsonVal ->
+          -- Verify it's actually structured data, not just a JSON string literal
+          case jsonVal of
+            Aeson.Object _ -> AssistantJSON jsonVal
+            Aeson.Array _ -> AssistantJSON jsonVal
+            Aeson.Null -> AssistantJSON jsonVal
+            Aeson.Number _ -> AssistantJSON jsonVal
+            Aeson.Bool _ -> AssistantJSON jsonVal
+            Aeson.String _ -> AssistantJSON jsonVal  -- Even plain strings are valid JSON responses
+        Left _ -> AssistantText txt  -- Keep as text if parsing fails
     transformTextToJSON other = other
 
 -- Full composable provider for models with tools and JSON (like GPT4o)
