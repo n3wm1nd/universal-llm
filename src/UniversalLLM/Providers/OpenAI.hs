@@ -86,7 +86,7 @@ handleTextMessages = MessageHandler $ \_provider _model _configs msg req -> case
   _ -> req  -- Not a text message
 
 -- Tools handler
-handleTools :: HasTools model OpenAI => MessageHandler OpenAI model
+handleTools :: MessageHandler OpenAI model
 handleTools = MessageHandler $ \_provider _model configs msg req -> case msg of
   AssistantTool call ->
     case lastMessage req of
@@ -109,7 +109,7 @@ handleTools = MessageHandler $ \_provider _model configs msg req -> case msg of
        else req { tools = Just (map toOpenAIToolDef (concat toolDefs)) }
 
 -- JSON handler
-handleJSON :: HasJSON model OpenAI => MessageHandler OpenAI model
+handleJSON :: MessageHandler OpenAI model
 handleJSON = MessageHandler $ \_provider _model _configs msg req -> case msg of
   UserRequestJSON txt schema ->
     req { messages = messages req <> [OpenAIMessage "user" (Just txt) Nothing Nothing Nothing]
@@ -121,7 +121,7 @@ handleJSON = MessageHandler $ \_provider _model _configs msg req -> case msg of
   _ -> req
 
 -- Reasoning handler
-handleReasoning :: HasReasoning model OpenAI => MessageHandler OpenAI model
+handleReasoning :: MessageHandler OpenAI model
 handleReasoning = MessageHandler $ \_provider _model _configs msg req -> case msg of
   AssistantReasoning txt ->
     req { messages = messages req <> [OpenAIMessage "assistant" Nothing (Just txt) Nothing Nothing] }
@@ -236,4 +236,4 @@ jsonComposableProvider = ComposableProvider
 
 -- Full composable provider for models with tools and JSON (like GPT4o)
 fullComposableProvider :: forall model. (ModelName OpenAI model, HasTools model OpenAI, HasJSON model OpenAI) => ComposableProvider OpenAI model
-fullComposableProvider = baseComposableProvider <> toolsComposableProvider <> jsonComposableProvider
+fullComposableProvider = baseComposableProvider <> UniversalLLM.Providers.OpenAI.toolsComposableProvider <> UniversalLLM.Providers.OpenAI.jsonComposableProvider

@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -32,11 +33,14 @@ import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
 -- Simple model (just model identity)
 data MistralModel = MistralModel deriving (Show, Eq)
 
-instance HasTools MistralModel
-instance HasJSON MistralModel
-
 instance ModelName OpenAI MistralModel where
   modelName _ = "mistral-7b-instruct"
+
+instance HasTools MistralModel OpenAI where
+  toolsComposableProvider = UniversalLLM.Providers.OpenAI.toolsComposableProvider
+
+instance HasJSON MistralModel OpenAI where
+  jsonComposableProvider = UniversalLLM.Providers.OpenAI.jsonComposableProvider
 
 -- ============================================================================
 -- Tool Definition
@@ -80,6 +84,36 @@ getTimeTool = GetTime $ \_params -> do
 
 
 -- ============================================================================
+-- Request/Response Helpers
+-- ============================================================================
+
+-- Build OpenAI request using composable providers
+buildRequest :: forall model. (ModelName OpenAI model, HasTools model OpenAI, HasJSON model OpenAI)
+             => model
+             -> [ModelConfig OpenAI model]
+             -> [Message model OpenAI]
+             -> OpenAIRequest
+buildRequest mdl configs msgs =
+  let provider = fullComposableProvider @model
+      handler = cpToRequest provider
+  in foldl (\req msg -> runHandler handler OpenAI mdl configs msg req) mempty msgs
+
+-- Parse OpenAI response using composable providers
+parseResponse :: forall model. (ModelName OpenAI model, HasTools model OpenAI, HasJSON model OpenAI)
+              => model
+              -> [ModelConfig OpenAI model]
+              -> [Message model OpenAI]  -- history
+              -> OpenAIResponse
+              -> Either LLMError [Message model OpenAI]
+parseResponse model configs history resp =
+  let provider = fullComposableProvider @model
+      parser = cpFromResponse provider
+      msgs = parser OpenAI model configs history [] resp
+  in if null msgs
+     then Left $ ParseError "No messages parsed from response"
+     else Right msgs
+
+-- ============================================================================
 -- Agent Loop
 -- ============================================================================
 
@@ -95,9 +129,9 @@ agentLoop callLLM configs messages = do
       configs' = configs ++ [Tools toolDefs]
 
   -- Call LLM (model + config)
-  let request = toRequest OpenAI MistralModel configs' messages
+  let request = buildRequest @MistralModel MistralModel configs' messages
   response <- callLLM request
-  responses <- except $ fromResponse response
+  responses <- except $ parseResponse @MistralModel MistralModel configs' messages response
 
   newMsgs <- liftIO $ concat <$> mapM (handleResponse tools) responses
   -- Continue loop only if there are tool results to send back

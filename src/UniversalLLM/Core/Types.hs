@@ -35,10 +35,18 @@ class SupportsSystemPrompt a
 -- HasX for capabilities (features that require both model AND provider support)
 -- These take two parameters: model and provider
 -- Instances must be declared explicitly for each model/provider combination
-class HasTools model provider
-class HasVision model provider
-class HasJSON model provider
-class HasReasoning model provider
+-- Each instance must provide the composable provider implementation as proof it works
+class Provider provider model => HasTools model provider where
+  toolsComposableProvider :: ComposableProvider provider model
+
+class Provider provider model => HasVision model provider where
+  visionComposableProvider :: ComposableProvider provider model
+
+class Provider provider model => HasJSON model provider where
+  jsonComposableProvider :: ComposableProvider provider model
+
+class Provider provider model => HasReasoning model provider where
+  reasoningComposableProvider :: ComposableProvider provider model
 
 -- ModelConfig GADT - configuration values with provider and model constraints
 -- Only constructible if the provider supports the parameter and/or model

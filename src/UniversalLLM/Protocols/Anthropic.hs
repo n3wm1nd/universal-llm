@@ -14,6 +14,7 @@ import Autodocodec
 import Data.Text (Text)
 import Data.Aeson (Value)
 import GHC.Generics (Generic)
+import Control.Applicative ((<|>))
 import UniversalLLM.Core.Types
 
 -- Request structure
@@ -25,6 +26,26 @@ data AnthropicRequest = AnthropicRequest
   , system :: Maybe [AnthropicSystemBlock]
   , tools :: Maybe [AnthropicToolDefinition]
   } deriving (Generic, Show, Eq)
+
+instance Semigroup AnthropicRequest where
+  r1 <> r2 = AnthropicRequest
+    { model = model r2  -- Right-biased for scalar fields
+    , messages = messages r1 <> messages r2
+    , max_tokens = max_tokens r2  -- Right-biased
+    , temperature = temperature r2 <|> temperature r1  -- Right-biased with fallback
+    , system = system r2 <|> system r1
+    , tools = tools r2 <|> tools r1
+    }
+
+instance Monoid AnthropicRequest where
+  mempty = AnthropicRequest
+    { model = ""
+    , messages = []
+    , max_tokens = 1000  -- Anthropic default
+    , temperature = Nothing
+    , system = Nothing
+    , tools = Nothing
+    }
 
 data AnthropicMessage = AnthropicMessage
   { role :: Text

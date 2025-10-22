@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -11,7 +12,7 @@
 module Main (main) where
 
 import UniversalLLM
-import UniversalLLM.Providers.Anthropic (Anthropic(..), withMagicSystemPrompt, oauthHeaders)
+import UniversalLLM.Providers.Anthropic (Anthropic(..), withMagicSystemPrompt, oauthHeaders, baseComposableProvider)
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
 import Common.HTTP (LLMCall, mkLLMCall)
 import System.Environment (lookupEnv)
@@ -32,10 +33,11 @@ import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
 -- Claude Sonnet 4.5 model
 data ClaudeSonnet45 = ClaudeSonnet45 deriving (Show, Eq)
 
-instance HasTools ClaudeSonnet45
-
 instance ModelName Anthropic ClaudeSonnet45 where
   modelName _ = "claude-sonnet-4-5-20250929"
+
+instance HasTools ClaudeSonnet45 Anthropic where
+  toolsComposableProvider = toolsComposableProvider
 
 -- ============================================================================
 -- Tool Definition
@@ -89,6 +91,37 @@ mkAnthropicCall oauthToken =
   in \request -> baseLLMCall (withMagicSystemPrompt request)
 
 -- ============================================================================
+-- Request/Response Helpers
+-- ============================================================================
+
+-- Build Anthropic request using composable providers
+buildRequest :: forall model. (ModelName Anthropic model, HasTools model Anthropic)
+             => model
+             -> [ModelConfig Anthropic model]
+             -> [Message model Anthropic]
+             -> AnthropicRequest
+buildRequest mdl configs msgs =
+  let provider = baseComposableProvider @model <> toolsComposableProvider @model
+      handler = cpToRequest provider
+  -- Note: AnthropicRequest has a Monoid instance for the fold
+  in foldl (\req msg -> runHandler handler Anthropic mdl configs msg req) mempty msgs
+
+-- Parse Anthropic response using composable providers
+parseResponse :: forall model. (ModelName Anthropic model, HasTools model Anthropic)
+              => model
+              -> [ModelConfig Anthropic model]
+              -> [Message model Anthropic]  -- history
+              -> AnthropicResponse
+              -> Either LLMError [Message model Anthropic]
+parseResponse model configs history resp =
+  let provider = baseComposableProvider @model <> toolsComposableProvider @model
+      parser = cpFromResponse provider
+      msgs = parser Anthropic model configs history [] resp
+  in if null msgs
+     then Left $ ParseError "No messages parsed from response"
+     else Right msgs
+
+-- ============================================================================
 -- Agent Loop
 -- ============================================================================
 
@@ -104,9 +137,9 @@ agentLoop callClaude configs messages = do
       configs' = configs ++ [Tools toolDefs]
 
   -- Call LLM (model + config)
-  let request = toRequest Anthropic ClaudeSonnet45 configs' messages
+  let request = buildRequest @ClaudeSonnet45 ClaudeSonnet45 configs' messages
   response <- callClaude request
-  responses <- except $ fromResponse response
+  responses <- except $ parseResponse @ClaudeSonnet45 ClaudeSonnet45 configs' messages response
 
   newMsgs <- liftIO $ concat <$> mapM (handleResponse tools) responses
   -- Continue loop only if there are tool results to send back

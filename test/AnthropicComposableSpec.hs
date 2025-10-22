@@ -16,6 +16,30 @@ import UniversalLLM.Core.Types
 import UniversalLLM.Protocols.Anthropic
 import qualified UniversalLLM.Providers.Anthropic as Provider
 
+-- Helper to build request using composable providers
+buildRequest :: forall model. (ModelName Provider.Anthropic model, HasTools model Provider.Anthropic)
+             => model
+             -> [ModelConfig Provider.Anthropic model]
+             -> [Message model Provider.Anthropic]
+             -> AnthropicRequest
+buildRequest mdl configs msgs =
+  let handler = cpToRequest (Provider.baseComposableProvider @model <> Provider.toolsComposableProvider @model)
+  in foldl (\req msg -> runHandler handler Provider.Anthropic mdl configs msg req) mempty msgs
+
+-- Helper to parse response using composable providers
+parseResponse :: forall model. (ModelName Provider.Anthropic model, HasTools model Provider.Anthropic)
+              => model
+              -> [ModelConfig Provider.Anthropic model]
+              -> [Message model Provider.Anthropic]  -- history
+              -> AnthropicResponse
+              -> Either LLMError [Message model Provider.Anthropic]
+parseResponse model configs history resp =
+  let parser = cpFromResponse (Provider.baseComposableProvider @model <> Provider.toolsComposableProvider @model)
+      msgs = parser Provider.Anthropic model configs history [] resp
+  in if null msgs
+     then Left $ ParseError "No messages parsed from response"
+     else Right msgs
+
 spec :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 spec getResponse = do
   describe "Anthropic Composable Provider - Basic Text" $ do
@@ -27,22 +51,22 @@ spec getResponse = do
           -- First exchange
           msgs1 = [UserText "What is 2+2?"]
           req1 = Provider.withMagicSystemPrompt $
-                   Provider.buildAnthropicRequest Provider.Anthropic model configs msgs1
+                   buildRequest model configs msgs1
 
       resp1 <- getResponse req1
 
-      case Provider.parseAnthropicResponse @ClaudeSonnet45 resp1 of
+      case parseResponse @ClaudeSonnet45 model configs msgs1 resp1 of
         Right [AssistantText txt] -> do
           T.isInfixOf "4" txt `shouldBe` True
 
           -- Second exchange - append to history
           let msgs2 = msgs1 <> [AssistantText txt, UserText "What about 3+3?"]
               req2 = Provider.withMagicSystemPrompt $
-                       Provider.buildAnthropicRequest Provider.Anthropic model configs msgs2
+                       buildRequest model configs msgs2
 
           resp2 <- getResponse req2
 
-          case Provider.parseAnthropicResponse @ClaudeSonnet45 resp2 of
+          case parseResponse @ClaudeSonnet45 model configs msgs2 resp2 of
             Right [AssistantText txt2] -> do
               T.isInfixOf "6" txt2 `shouldBe` True
 
@@ -50,7 +74,7 @@ spec getResponse = do
               length (messages req2) `shouldBe` 3  -- user, assistant, user
 
         Right other -> expectationFailure $ "Expected [AssistantText], got: " ++ show other
-        Left err -> expectationFailure $ "parseAnthropicResponse failed: " ++ show err
+        Left err -> expectationFailure $ "parseResponse failed: " ++ show err
 
     it "applies system prompt from config" $ do
       let model = ClaudeSonnet45
@@ -58,7 +82,7 @@ spec getResponse = do
           configs = [MaxTokens 50, SystemPrompt sysPrompt]
           msgs = [UserText "Hello"]
           req = Provider.withMagicSystemPrompt $
-                  Provider.buildAnthropicRequest Provider.Anthropic model configs msgs
+                  buildRequest model configs msgs
 
       case system req of
         Just blocks -> do
@@ -93,7 +117,7 @@ spec getResponse = do
           -- Step 1: Initial request with tools
           msgs1 = [UserText "What is the weather like in San Francisco?"]
           req1 = Provider.withMagicSystemPrompt $
-                   Provider.buildAnthropicRequest Provider.Anthropic model configs msgs1
+                   buildRequest model configs msgs1
 
       -- Verify tools are in request
       case tools req1 of
@@ -104,7 +128,7 @@ spec getResponse = do
 
       resp1 <- getResponse req1
 
-      case Provider.parseAnthropicResponse @ClaudeSonnet45 resp1 of
+      case parseResponse @ClaudeSonnet45 model configs msgs1 resp1 of
         Right [AssistantTool toolCall] -> do
           getToolCallName toolCall `shouldBe` "get_weather"
 
@@ -116,7 +140,7 @@ spec getResponse = do
                                ])
               msgs2 = msgs1 <> [AssistantTool toolCall, ToolResultMsg toolResult]
               req2 = Provider.withMagicSystemPrompt $
-                       Provider.buildAnthropicRequest Provider.Anthropic model configs msgs2
+                       buildRequest model configs msgs2
 
           -- Verify history has all messages (grouped by direction)
           -- user -> assistant (tool_use) -> user (tool_result)
@@ -124,15 +148,15 @@ spec getResponse = do
 
           resp2 <- getResponse req2
 
-          case Provider.parseAnthropicResponse @ClaudeSonnet45 resp2 of
+          case parseResponse @ClaudeSonnet45 model configs msgs2 resp2 of
             Right [AssistantText finalTxt] -> do
               -- Should incorporate the tool result
               (T.isInfixOf "72" finalTxt || T.isInfixOf "sunny" finalTxt) `shouldBe` True
             Right other -> expectationFailure $ "Expected [AssistantText], got: " ++ show other
-            Left err -> expectationFailure $ "parseAnthropicResponse failed: " ++ show err
+            Left err -> expectationFailure $ "parseResponse failed: " ++ show err
 
         Right other -> expectationFailure $ "Expected [AssistantTool], got: " ++ show other
-        Left err -> expectationFailure $ "parseAnthropicResponse failed: " ++ show err
+        Left err -> expectationFailure $ "parseResponse failed: " ++ show err
 
     it "handles tool use with mixed text and tool blocks" $ do
       let model = ClaudeSonnet45
@@ -141,17 +165,17 @@ spec getResponse = do
           configs = [MaxTokens 200, Tools [toolDef]]
           msgs = [UserText "What is 15 * 23?"]
           req = Provider.withMagicSystemPrompt $
-                  Provider.buildAnthropicRequest Provider.Anthropic model configs msgs
+                  buildRequest model configs msgs
 
       resp <- getResponse req
 
-      case Provider.parseAnthropicResponse @ClaudeSonnet45 resp of
+      case parseResponse @ClaudeSonnet45 model configs msgs resp of
         -- Could get just tool call, or text + tool call, or just text
         Right parsedMsgs -> do
           length parsedMsgs `shouldSatisfy` (> 0)
           -- At least one message should be present
           return ()
-        Left err -> expectationFailure $ "parseAnthropicResponse failed: " ++ show err
+        Left err -> expectationFailure $ "parseResponse failed: " ++ show err
 
   describe "Anthropic Composable Provider - Message Grouping" $ do
 
@@ -165,7 +189,7 @@ spec getResponse = do
                  , UserText "Third question"
                  ]
           req = Provider.withMagicSystemPrompt $
-                  Provider.buildAnthropicRequest Provider.Anthropic model configs msgs
+                  buildRequest model configs msgs
 
       -- Anthropic should group all consecutive user messages into one
       length (messages req) `shouldBe` 1
@@ -191,7 +215,7 @@ spec getResponse = do
                  , ToolResultMsg (ToolResult toolCall (Right $ object []))
                  ]
           req = Provider.withMagicSystemPrompt $
-                  Provider.buildAnthropicRequest Provider.Anthropic model configs msgs
+                  buildRequest model configs msgs
 
       -- Should have: user, assistant, user, assistant (with tool_use), user (with tool_result)
       -- = 5 messages (tool call and tool result alternate directions)
@@ -213,7 +237,7 @@ spec getResponse = do
           toolDef = ToolDefinition "test_tool" "Test" (object [])
           configs = [Tools [toolDef], MaxTokens 50]
           msgs = [UserText "test"]
-          req = Provider.buildAnthropicRequest Provider.Anthropic model configs msgs
+          req = buildRequest model configs msgs
 
       case tools req of
         Just [_] -> return ()
@@ -235,7 +259,7 @@ spec getResponse = do
           -- No instance for (HasTools NoToolsModel)
           configs = [Tools [toolDef], MaxTokens 50]
           msgs = [UserText "test"]
-          req = Provider.buildAnthropicRequest Provider.Anthropic model configs msgs
+          req = buildRequest model configs msgs
       return ()
     -}
 
@@ -250,6 +274,6 @@ spec getResponse = do
           -- This line will fail to compile:
           -- No instance for (HasTools NoToolsModel)
           msgs = [AssistantTool toolCall]
-          req = Provider.buildAnthropicRequest Provider.Anthropic model configs msgs
+          req = buildRequest model configs msgs
       return ()
     -}

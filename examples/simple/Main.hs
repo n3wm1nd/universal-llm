@@ -28,9 +28,9 @@ main = do
       claudeMessages :: [Message Claude35Sonnet Anthropic]
       claudeMessages = [UserText "Hello, how are you?"]
 
-      -- Vision example (only GPT4o supports vision)
-      visionMessages :: [Message GPT4o OpenAI]
-      visionMessages = [UserImage "What's in this image?" "base64data..."]
+      -- Vision example (not yet implemented)
+      -- visionMessages :: [Message GPT4o OpenAI]
+      -- visionMessages = [UserImage "What's in this image?" "base64data..."]
 
   putStrLn "This demonstrates the clean functional design:"
   putStrLn "- Models are phantom types (just identity)"
