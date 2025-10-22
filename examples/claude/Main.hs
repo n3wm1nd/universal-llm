@@ -12,7 +12,8 @@
 module Main (main) where
 
 import UniversalLLM
-import UniversalLLM.Providers.Anthropic (Anthropic(..), withMagicSystemPrompt, oauthHeaders, baseComposableProvider)
+import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
+import UniversalLLM.Providers.Anthropic (Anthropic(..), withMagicSystemPrompt, oauthHeaders)
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
 import Common.HTTP (LLMCall, mkLLMCall)
 import System.Environment (lookupEnv)
@@ -37,7 +38,7 @@ instance ModelName Anthropic ClaudeSonnet45 where
   modelName _ = "claude-sonnet-4-5-20250929"
 
 instance HasTools ClaudeSonnet45 Anthropic where
-  toolsComposableProvider = toolsComposableProvider
+  toolsComposableProvider = AnthropicProvider.toolsComposableProvider
 
 -- ============================================================================
 -- Tool Definition
@@ -95,15 +96,15 @@ mkAnthropicCall oauthToken =
 -- ============================================================================
 
 -- Build Anthropic request using composable providers
+-- Messages are grouped incrementally as they're added, no post-processing needed
 buildRequest :: forall model. (ModelName Anthropic model, HasTools model Anthropic)
              => model
              -> [ModelConfig Anthropic model]
              -> [Message model Anthropic]
              -> AnthropicRequest
 buildRequest mdl configs msgs =
-  let provider = baseComposableProvider @model <> toolsComposableProvider @model
+  let provider = AnthropicProvider.baseComposableProvider @model <> AnthropicProvider.toolsComposableProvider @model
       handler = cpToRequest provider
-  -- Note: AnthropicRequest has a Monoid instance for the fold
   in foldl (\req msg -> runHandler handler Anthropic mdl configs msg req) mempty msgs
 
 -- Parse Anthropic response using composable providers
@@ -114,7 +115,7 @@ parseResponse :: forall model. (ModelName Anthropic model, HasTools model Anthro
               -> AnthropicResponse
               -> Either LLMError [Message model Anthropic]
 parseResponse model configs history resp =
-  let provider = baseComposableProvider @model <> toolsComposableProvider @model
+  let provider = AnthropicProvider.baseComposableProvider @model <> AnthropicProvider.toolsComposableProvider @model
       parser = cpFromResponse provider
       msgs = parser Anthropic model configs history [] resp
   in if null msgs
@@ -126,25 +127,17 @@ parseResponse model configs history resp =
 -- ============================================================================
 
 -- Main agent loop - continues until text response (non-tool)
-agentLoop :: LLMCall AnthropicRequest AnthropicResponse -> [ModelConfig Anthropic ClaudeSonnet45] -> [Message ClaudeSonnet45 Anthropic] -> ExceptT LLMError IO ()
-agentLoop callClaude configs messages = do
-  -- Available tools (for execution)
-  let tools :: [LLMTool IO]
-      tools = [LLMTool (getTimeTool @IO)]
-
-      -- Build config with tools added
-      toolDefs = map llmToolToDefinition tools
-      configs' = configs ++ [Tools toolDefs]
-
-  -- Call LLM (model + config)
-  let request = buildRequest @ClaudeSonnet45 ClaudeSonnet45 configs' messages
+agentLoop :: [LLMTool IO] -> LLMCall AnthropicRequest AnthropicResponse -> [ModelConfig Anthropic ClaudeSonnet45] -> [Message ClaudeSonnet45 Anthropic] -> ExceptT LLMError IO ()
+agentLoop tools callClaude configs messages = do
+  -- Build and send request
+  let request = withMagicSystemPrompt $ buildRequest @ClaudeSonnet45 ClaudeSonnet45 configs messages
   response <- callClaude request
-  responses <- except $ parseResponse @ClaudeSonnet45 ClaudeSonnet45 configs' messages response
+  responses <- except $ parseResponse @ClaudeSonnet45 ClaudeSonnet45 configs messages response
 
   newMsgs <- liftIO $ concat <$> mapM (handleResponse tools) responses
   -- Continue loop only if there are tool results to send back
   unless (null newMsgs) $
-    agentLoop callClaude configs' (messages ++ responses ++ newMsgs)
+    agentLoop tools callClaude configs (messages ++ responses ++ newMsgs)
 
 -- Handle different response types
 -- Returns empty list for text (stops loop), tool results for tool calls (continues loop)
@@ -186,13 +179,19 @@ main = do
   -- Build LLM call function for Anthropic (automatically applies magic system prompt)
   let callClaude = mkAnthropicCall oauthToken
 
+  -- Available tools (for execution)
+  let tools :: [LLMTool IO]
+      tools = [LLMTool (getTimeTool @IO)]
+
   -- Build config for ClaudeSonnet45 with Anthropic provider
-  let configs = [ Temperature 0.7
+  let toolDefs = map llmToolToDefinition tools
+      configs = [ Temperature 0.7
                 , MaxTokens 200
+                , Tools toolDefs
                 ]
   let initialMsg = [UserText "Use the get_time tool to tell me what time it is."]
 
-  result <- runExceptT $ agentLoop callClaude configs initialMsg
+  result <- runExceptT $ agentLoop tools callClaude configs initialMsg
   case result of
     Left err -> putStrLn $ "❌ Error: " <> show err
     Right () -> return ()

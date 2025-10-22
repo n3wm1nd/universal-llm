@@ -14,9 +14,11 @@ import TestCache (ResponseProvider)
 import TestModels
 import UniversalLLM.Core.Types
 import UniversalLLM.Protocols.Anthropic
+import qualified UniversalLLM.Protocols.Anthropic as Proto
 import qualified UniversalLLM.Providers.Anthropic as Provider
 
 -- Helper to build request using composable providers
+-- Messages are grouped incrementally as they're added, no post-processing needed
 buildRequest :: forall model. (ModelName Provider.Anthropic model, HasTools model Provider.Anthropic)
              => model
              -> [ModelConfig Provider.Anthropic model]
@@ -42,6 +44,21 @@ parseResponse model configs history resp =
 
 spec :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 spec getResponse = do
+  describe "Anthropic Request Building (no API calls)" $ do
+    it "can build and evaluate a request without looping" $ do
+      let model = ClaudeSonnet45
+          configs = [Temperature 0.7, MaxTokens 200]
+          msgs = [UserText "Test message"]
+          req = buildRequest model configs msgs
+
+      -- Force evaluation - should not loop
+      req `seq` return ()
+
+      -- Check basic properties
+      Proto.model req `shouldBe` "claude-sonnet-4-5-20250929"
+      Proto.max_tokens req `shouldBe` 200
+      length (Proto.messages req) `shouldBe` 1
+
   describe "Anthropic Composable Provider - Basic Text" $ do
 
     it "sends message, receives response, and maintains conversation history" $ do
