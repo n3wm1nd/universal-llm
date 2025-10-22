@@ -25,7 +25,7 @@ instance HasTools ClaudeSonnet45 Anthropic where
   toolsComposableProvider = Anthropic.toolsComposableProvider
 
 instance ProviderImplementation Anthropic ClaudeSonnet45 where
-  getComposableProvider = Anthropic.baseComposableProvider <> Anthropic.toolsComposableProvider
+  getComposableProvider = Anthropic.baseComposableProvider <> Anthropic.toolsComposableProvider <> Anthropic.ensureUserFirstProvider
 
 -- ============================================================================
 -- OpenAI-Compatible Models (for testing with llama.cpp/GLM4.5)

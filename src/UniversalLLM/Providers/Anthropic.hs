@@ -75,9 +75,13 @@ handleTools :: MessageHandler Anthropic model
 handleTools = MessageHandler $ \_provider _model configs msg req -> case msg of
   AssistantTool (ToolCall tcId tcName tcParams) ->
     req { messages = appendToolBlock (messages req) "assistant" (AnthropicToolUseBlock tcId tcName tcParams) }
-  AssistantTool (InvalidToolCall tcId tcName _rawArgs _err) ->
-    error $ "Cannot convert InvalidToolCall to Anthropic request - malformed tool call: "
-         <> Text.unpack tcName <> " (id: " <> Text.unpack tcId <> ")"
+  AssistantTool (InvalidToolCall tcId tcName rawArgs err) ->
+    -- InvalidToolCall cannot be directly converted to Anthropic's tool_use format
+    -- Instead, convert it to a text message describing the error
+    -- This allows the conversation to continue rather than crashing
+    let errorText = "Tool call error for " <> tcName <> " (id: " <> tcId <> "): " <> err
+                    <> "\nRaw arguments: " <> rawArgs
+    in req { messages = appendToolBlock (messages req) "assistant" (AnthropicTextBlock errorText) }
   ToolResultMsg (ToolResult toolCall output) ->
     let callId = getToolCallId toolCall
         resultContent = case output of
@@ -126,10 +130,25 @@ toolsComposableProvider = ComposableProvider
     parseToolResponse _provider _model _configs _history acc (AnthropicSuccess resp) =
       acc <> [AssistantTool (ToolCall tid tname tinput) | AnthropicToolUseBlock tid tname tinput <- responseContent resp]
 
+-- Ensures Anthropic's API constraint: conversations must start with a user message
+-- If the first message is from assistant, prepends an empty user message
+-- This should be composed at the END of the provider chain
+ensureUserFirstProvider :: ComposableProvider Anthropic model
+ensureUserFirstProvider = ComposableProvider
+  { cpToRequest = MessageHandler $ \_provider _model _configs _msg req ->
+      -- Anthropic API requires first message to be from user
+      case messages req of
+        [] -> req
+        (firstMsg:_) -> if role firstMsg == "user"
+          then req
+          else req { messages = AnthropicMessage "user" [AnthropicTextBlock ""] : messages req }
+  , cpFromResponse = \_provider _model _configs _history acc _resp -> acc  -- No-op for response parsing
+  }
+
 -- Default ProviderImplementation for basic text-only models
 -- Models with capabilities (tools, vision, etc.) should provide their own instances
 instance {-# OVERLAPPABLE #-} ModelName Anthropic model => ProviderImplementation Anthropic model where
-  getComposableProvider = baseComposableProvider
+  getComposableProvider = baseComposableProvider <> ensureUserFirstProvider
 
 
 -- | Add magic system prompt for OAuth authentication

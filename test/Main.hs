@@ -7,6 +7,7 @@ import qualified CachedIntegrationSpec
 import qualified ComposableHandlersSpec
 import qualified OpenAIComposableSpec
 import qualified AnthropicComposableSpec
+import qualified PropertySpec
 import qualified TestCache
 import qualified TestHTTP
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
@@ -61,6 +62,9 @@ main = do
 
   hspec $ do
     describe "Composable Handlers" ComposableHandlersSpec.spec
+
+    -- Property-based tests (QuickCheck)
+    describe "Property Tests" PropertySpec.spec
 
     -- Composable provider integration tests
     describe "OpenAI Composable Provider (cached)" $ OpenAIComposableSpec.spec openaiProvider
