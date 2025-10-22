@@ -32,13 +32,16 @@ buildRequest mdl configs msgs =
 -- Helper to parse response using fullComposableProvider
 -- Note: ResponseParser returns [Message provider model], which is [Message OpenAI model]
 parseOpenAIResponse :: forall model. (ModelName OpenAI model, HasTools model, HasJSON model)
-                    => OpenAIResponse
+                    => model
+                    -> [ModelConfig OpenAI model]
+                    -> [Message model OpenAI]  -- history
+                    -> OpenAIResponse
                     -> Either LLMError [Message OpenAI model]
-parseOpenAIResponse (OpenAIError (OpenAIErrorResponse errDetail)) =
+parseOpenAIResponse model configs history (OpenAIError (OpenAIErrorResponse errDetail)) =
   Left $ ProviderError (code errDetail) $ errorMessage errDetail <> " (" <> errorType errDetail <> ")"
-parseOpenAIResponse resp =
+parseOpenAIResponse model configs history resp =
   let parser = cpFromResponse (fullComposableProvider @model)
-      msgs = parser [] resp  -- Start with empty accumulator
+      msgs = parser OpenAI model configs history [] resp  -- Pass all context
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs
@@ -57,7 +60,7 @@ spec getResponse = do
 
       resp1 <- getResponse req1
 
-      case parseOpenAIResponse @GLM45 resp1 of
+      case parseOpenAIResponse @GLM45 model configs msgs1 resp1 of
         Right [AssistantText txt] -> do
           T.isInfixOf "4" txt `shouldBe` True
 
@@ -67,7 +70,7 @@ spec getResponse = do
 
           resp2 <- getResponse req2
 
-          case parseOpenAIResponse @GLM45 resp2 of
+          case parseOpenAIResponse @GLM45 model configs msgs2 resp2 of
             Right [AssistantText txt2] -> do
               T.isInfixOf "6" txt2 `shouldBe` True
 
@@ -125,7 +128,7 @@ spec getResponse = do
 
       resp1 <- getResponse req1
 
-      case parseOpenAIResponse @GLM45 resp1 of
+      case parseOpenAIResponse @GLM45 model configs msgs1 resp1 of
         Right [AssistantTool toolCall] -> do
           getToolCallName toolCall `shouldBe` "get_weather"
 
@@ -140,7 +143,7 @@ spec getResponse = do
 
           resp2 <- getResponse req2
 
-          case parseOpenAIResponse @GLM45 resp2 of
+          case parseOpenAIResponse @GLM45 model configs msgs2 resp2 of
             Right [AssistantText finalTxt] -> do
               -- Should incorporate the tool result
               T.isInfixOf "22" finalTxt `shouldBe` True
@@ -185,7 +188,7 @@ spec getResponse = do
 
       resp <- getResponse req
 
-      case parseOpenAIResponse @GLM45 resp of
+      case parseOpenAIResponse @GLM45 model configs msgs resp of
         Right [AssistantJSON jsonVal] -> do
           case jsonVal of
             Aeson.Object obj ->

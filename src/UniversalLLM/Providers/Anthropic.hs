@@ -39,8 +39,8 @@ baseComposableProvider = ComposableProvider
   , cpFromResponse = parseTextResponse
   }
   where
-    parseTextResponse acc (AnthropicError err) = acc
-    parseTextResponse acc (AnthropicSuccess resp) =
+    parseTextResponse _provider _model _configs _history acc (AnthropicError err) = acc
+    parseTextResponse _provider _model _configs _history acc (AnthropicSuccess resp) =
       case [txt | AnthropicTextBlock txt <- responseContent resp] of
         (txt:_) -> acc <> [AssistantText txt]
         [] -> acc
@@ -51,8 +51,8 @@ toolsComposableProvider = ComposableProvider
   , cpFromResponse = parseToolResponse
   }
   where
-    parseToolResponse acc (AnthropicError _) = acc
-    parseToolResponse acc (AnthropicSuccess resp) =
+    parseToolResponse _provider _model _configs _history acc (AnthropicError _) = acc
+    parseToolResponse _provider _model _configs _history acc (AnthropicSuccess resp) =
       acc <> [AssistantTool (ToolCall tid tname tinput) | AnthropicToolUseBlock tid tname tinput <- responseContent resp]
 
 -- Helper function to build Anthropic request from messages (replacement for old toRequest)

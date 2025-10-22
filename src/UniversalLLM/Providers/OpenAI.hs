@@ -137,14 +137,14 @@ baseComposableProvider = ComposableProvider
   , cpFromResponse = parseTextResponse
   }
   where
-    parseTextResponse acc (OpenAISuccess (OpenAISuccessResponse choices)) =
+    parseTextResponse _provider _model _configs _history acc (OpenAISuccess (OpenAISuccessResponse choices)) =
       case choices of
         [] -> acc
         (OpenAIChoice msg:_) ->
           case content msg of
             Just txt -> acc <> [AssistantText txt]
             Nothing -> acc
-    parseTextResponse acc _ = acc
+    parseTextResponse _provider _model _configs _history acc _ = acc
 
 -- Reasoning composable provider
 reasoningComposableProvider :: forall model. (HasReasoning model, HasReasoning OpenAI) => ComposableProvider OpenAI model
@@ -153,14 +153,14 @@ reasoningComposableProvider = ComposableProvider
   , cpFromResponse = parseReasoningResponse
   }
   where
-    parseReasoningResponse acc (OpenAISuccess (OpenAISuccessResponse choices)) =
+    parseReasoningResponse _provider _model _configs _history acc (OpenAISuccess (OpenAISuccessResponse choices)) =
       case choices of
         [] -> acc
         (OpenAIChoice msg:_) ->
           case reasoning_content msg of
             Just reasoningTxt -> acc <> [AssistantReasoning reasoningTxt]
             Nothing -> acc
-    parseReasoningResponse acc _ = acc
+    parseReasoningResponse _provider _model _configs _history acc _ = acc
 
 -- Tools composable provider
 toolsComposableProvider :: forall model. (HasTools model, HasTools OpenAI) => ComposableProvider OpenAI model
@@ -169,24 +169,35 @@ toolsComposableProvider = ComposableProvider
   , cpFromResponse = parseToolResponse
   }
   where
-    parseToolResponse acc (OpenAISuccess (OpenAISuccessResponse choices)) =
+    parseToolResponse _provider _model _configs _history acc (OpenAISuccess (OpenAISuccessResponse choices)) =
       case choices of
         [] -> acc
         (OpenAIChoice msg:_) ->
           case tool_calls msg of
             Just calls -> acc <> map (AssistantTool . convertToolCall) calls
             Nothing -> acc
-    parseToolResponse acc _ = acc
+    parseToolResponse _provider _model _configs _history acc _ = acc
 
 -- JSON composable provider
 -- Transforms AssistantText messages that contain valid JSON into AssistantJSON
+-- Only transforms if JSON was explicitly requested (checks history for UserRequestJSON)
 jsonComposableProvider :: forall model. (HasJSON model, HasJSON OpenAI) => ComposableProvider OpenAI model
 jsonComposableProvider = ComposableProvider
   { cpToRequest = handleJSON
   , cpFromResponse = parseJSONResponse
   }
   where
-    parseJSONResponse acc _resp = map transformTextToJSON acc
+    parseJSONResponse _provider _model _configs history acc _resp =
+      -- Only transform to JSON if user explicitly requested JSON mode
+      if hasJSONRequest history
+        then map transformTextToJSON acc
+        else acc
+
+    hasJSONRequest :: [Message model OpenAI] -> Bool
+    hasJSONRequest msgs = any isJSONRequest msgs
+      where
+        isJSONRequest (UserRequestJSON _ _) = True
+        isJSONRequest _ = False
 
     transformTextToJSON :: Message OpenAI model -> Message OpenAI model
     transformTextToJSON (AssistantText txt) =
