@@ -42,6 +42,9 @@ instance HasTools MistralModel OpenAI where
 instance HasJSON MistralModel OpenAI where
   jsonComposableProvider = UniversalLLM.Providers.OpenAI.jsonComposableProvider
 
+instance ProviderImplementation OpenAI MistralModel where
+  getComposableProvider = UniversalLLM.Providers.OpenAI.baseComposableProvider <> UniversalLLM.Providers.OpenAI.toolsComposableProvider <> UniversalLLM.Providers.OpenAI.jsonComposableProvider
+
 -- ============================================================================
 -- Tool Definition
 -- ============================================================================
@@ -87,28 +90,23 @@ getTimeTool = GetTime $ \_params -> do
 -- Request/Response Helpers
 -- ============================================================================
 
--- Build OpenAI request using composable providers
-buildRequest :: forall model. (ModelName OpenAI model, HasTools model OpenAI, HasJSON model OpenAI)
+-- Build OpenAI request using the model's provider implementation
+buildRequest :: forall model. ProviderImplementation OpenAI model
              => model
              -> [ModelConfig OpenAI model]
              -> [Message model OpenAI]
              -> OpenAIRequest
-buildRequest mdl configs msgs =
-  let provider = fullComposableProvider @model
-      handler = cpToRequest provider
-  in foldl (\req msg -> runHandler handler OpenAI mdl configs msg req) mempty msgs
+buildRequest = toProviderRequest OpenAI
 
--- Parse OpenAI response using composable providers
-parseResponse :: forall model. (ModelName OpenAI model, HasTools model OpenAI, HasJSON model OpenAI)
+-- Parse OpenAI response using the model's provider implementation
+parseResponse :: forall model. (ProviderImplementation OpenAI model, ModelName OpenAI model)
               => model
               -> [ModelConfig OpenAI model]
               -> [Message model OpenAI]  -- history
               -> OpenAIResponse
               -> Either LLMError [Message model OpenAI]
 parseResponse model configs history resp =
-  let provider = fullComposableProvider @model
-      parser = cpFromResponse provider
-      msgs = parser OpenAI model configs history [] resp
+  let msgs = fromProviderResponse OpenAI model configs history resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs

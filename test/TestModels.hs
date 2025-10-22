@@ -24,6 +24,9 @@ instance ModelName Anthropic ClaudeSonnet45 where
 instance HasTools ClaudeSonnet45 Anthropic where
   toolsComposableProvider = Anthropic.toolsComposableProvider
 
+instance ProviderImplementation Anthropic ClaudeSonnet45 where
+  getComposableProvider = Anthropic.baseComposableProvider <> Anthropic.toolsComposableProvider
+
 -- ============================================================================
 -- OpenAI-Compatible Models (for testing with llama.cpp/GLM4.5)
 -- ============================================================================
@@ -43,11 +46,16 @@ instance HasReasoning GLM45 OpenAI where
 instance HasJSON GLM45 OpenAI where
   jsonComposableProvider = OpenAI.jsonComposableProvider
 
+instance ProviderImplementation OpenAI GLM45 where
+  getComposableProvider = OpenAI.baseComposableProvider <> OpenAI.toolsComposableProvider <> OpenAI.reasoningComposableProvider <> OpenAI.jsonComposableProvider
+
 -- Basic text-only model (for compile-time safety tests)
 data BasicTextModel = BasicTextModel deriving (Show, Eq)
 
 instance ModelName OpenAI BasicTextModel where
   modelName _ = "basic-text-model"
+
+-- BasicTextModel uses the default overlappable instance (just baseComposableProvider)
 
 -- Tools-only model (no JSON, no reasoning)
 data ToolsOnlyModel = ToolsOnlyModel deriving (Show, Eq)
@@ -58,6 +66,9 @@ instance ModelName OpenAI ToolsOnlyModel where
 instance HasTools ToolsOnlyModel OpenAI where
   toolsComposableProvider = OpenAI.toolsComposableProvider
 
+instance ProviderImplementation OpenAI ToolsOnlyModel where
+  getComposableProvider = OpenAI.baseComposableProvider <> OpenAI.toolsComposableProvider
+
 -- JSON-capable model (no tools, no reasoning)
 data JSONModel = JSONModel deriving (Show, Eq)
 
@@ -66,3 +77,6 @@ instance ModelName OpenAI JSONModel where
 
 instance HasJSON JSONModel OpenAI where
   jsonComposableProvider = OpenAI.jsonComposableProvider
+
+instance ProviderImplementation OpenAI JSONModel where
+  getComposableProvider = OpenAI.baseComposableProvider <> OpenAI.jsonComposableProvider

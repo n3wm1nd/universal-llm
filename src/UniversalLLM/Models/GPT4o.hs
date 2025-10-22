@@ -22,6 +22,10 @@ instance HasTools GPT4o OpenAI where
 instance HasJSON GPT4o OpenAI where
   jsonComposableProvider = UniversalLLM.Providers.OpenAI.jsonComposableProvider
 
+-- Complete provider implementation
+instance ProviderImplementation OpenAI GPT4o where
+  getComposableProvider = UniversalLLM.Providers.OpenAI.baseComposableProvider <> UniversalLLM.Providers.OpenAI.toolsComposableProvider <> UniversalLLM.Providers.OpenAI.jsonComposableProvider
+
 -- Note: HasVision not implemented yet for OpenAI
 -- instance HasVision GPT4o OpenAI where
 --   visionComposableProvider = visionComposableProvider'

@@ -19,6 +19,10 @@ instance ModelName Anthropic Claude35Sonnet where
 instance HasTools Claude35Sonnet Anthropic where
   toolsComposableProvider = UniversalLLM.Providers.Anthropic.toolsComposableProvider
 
+-- Complete provider implementation
+instance ProviderImplementation Anthropic Claude35Sonnet where
+  getComposableProvider = UniversalLLM.Providers.Anthropic.baseComposableProvider <> UniversalLLM.Providers.Anthropic.toolsComposableProvider
+
 -- Note: HasVision not implemented yet for Anthropic
 -- instance HasVision Claude35Sonnet Anthropic where
 --   visionComposableProvider = visionComposableProvider'

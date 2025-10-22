@@ -18,20 +18,16 @@ import UniversalLLM.Core.Types
 import UniversalLLM.Protocols.OpenAI
 import UniversalLLM.Providers.OpenAI
 
--- Helper to build request using fullComposableProvider
--- Note: We use Message model provider order (Message GLM45 OpenAI) because that's what Message GADT uses
-buildRequest :: forall model. (ModelName OpenAI model, HasTools model OpenAI, HasJSON model OpenAI)
+-- Helper to build request using the model's provider implementation
+buildRequest :: forall model. ProviderImplementation OpenAI model
              => model
              -> [ModelConfig OpenAI model]
              -> [Message model OpenAI]
              -> OpenAIRequest
-buildRequest mdl configs msgs =
-  let handler = cpToRequest (fullComposableProvider @model)
-  in foldl (\req msg -> runHandler handler OpenAI mdl configs msg req) mempty msgs
+buildRequest = toProviderRequest OpenAI
 
--- Helper to parse response using fullComposableProvider
--- Note: ResponseParser returns [Message model provider], which is [Message model OpenAI]
-parseOpenAIResponse :: forall model. (ModelName OpenAI model, HasTools model OpenAI, HasJSON model OpenAI)
+-- Helper to parse response using the model's provider implementation
+parseOpenAIResponse :: forall model. (ProviderImplementation OpenAI model, ModelName OpenAI model)
                     => model
                     -> [ModelConfig OpenAI model]
                     -> [Message model OpenAI]  -- history
@@ -40,8 +36,7 @@ parseOpenAIResponse :: forall model. (ModelName OpenAI model, HasTools model Ope
 parseOpenAIResponse model configs history (OpenAIError (OpenAIErrorResponse errDetail)) =
   Left $ ProviderError (code errDetail) $ errorMessage errDetail <> " (" <> errorType errDetail <> ")"
 parseOpenAIResponse model configs history resp =
-  let parser = cpFromResponse (fullComposableProvider @model)
-      msgs = parser OpenAI model configs history [] resp  -- Pass all context
+  let msgs = fromProviderResponse OpenAI model configs history resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs

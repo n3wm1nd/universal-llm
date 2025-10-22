@@ -40,6 +40,9 @@ instance ModelName Anthropic ClaudeSonnet45 where
 instance HasTools ClaudeSonnet45 Anthropic where
   toolsComposableProvider = AnthropicProvider.toolsComposableProvider
 
+instance ProviderImplementation Anthropic ClaudeSonnet45 where
+  getComposableProvider = AnthropicProvider.baseComposableProvider <> AnthropicProvider.toolsComposableProvider
+
 -- ============================================================================
 -- Tool Definition
 -- ============================================================================
@@ -95,29 +98,23 @@ mkAnthropicCall oauthToken =
 -- Request/Response Helpers
 -- ============================================================================
 
--- Build Anthropic request using composable providers
--- Messages are grouped incrementally as they're added, no post-processing needed
-buildRequest :: forall model. (ModelName Anthropic model, HasTools model Anthropic)
+-- Build Anthropic request using the model's provider implementation
+buildRequest :: forall model. ProviderImplementation Anthropic model
              => model
              -> [ModelConfig Anthropic model]
              -> [Message model Anthropic]
              -> AnthropicRequest
-buildRequest mdl configs msgs =
-  let provider = AnthropicProvider.baseComposableProvider @model <> AnthropicProvider.toolsComposableProvider @model
-      handler = cpToRequest provider
-  in foldl (\req msg -> runHandler handler Anthropic mdl configs msg req) mempty msgs
+buildRequest = toProviderRequest Anthropic
 
--- Parse Anthropic response using composable providers
-parseResponse :: forall model. (ModelName Anthropic model, HasTools model Anthropic)
+-- Parse Anthropic response using the model's provider implementation
+parseResponse :: forall model. ProviderImplementation Anthropic model
               => model
               -> [ModelConfig Anthropic model]
               -> [Message model Anthropic]  -- history
               -> AnthropicResponse
               -> Either LLMError [Message model Anthropic]
 parseResponse model configs history resp =
-  let provider = AnthropicProvider.baseComposableProvider @model <> AnthropicProvider.toolsComposableProvider @model
-      parser = cpFromResponse provider
-      msgs = parser Anthropic model configs history [] resp
+  let msgs = fromProviderResponse Anthropic model configs history resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs

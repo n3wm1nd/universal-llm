@@ -158,6 +158,11 @@ class Provider provider model where
   type ProviderRequest provider
   type ProviderResponse provider
 
+-- ProviderImplementation: Encapsulates the complete provider composition for a model
+-- Each model declares how to build requests and parse responses for each provider it supports
+class Provider provider model => ProviderImplementation provider model where
+  getComposableProvider :: ComposableProvider provider model
+
 
 -- Composable request building via message folding
 -- A handler processes one message at a time, accumulating into the request
@@ -212,6 +217,34 @@ instance Monoid (ComposableProvider provider model) where
     { cpToRequest = mempty
     , cpFromResponse = \_provider _model _configs _history acc _resp -> acc
     }
+
+-- Helper functions for building requests and parsing responses
+
+-- Build a provider request from messages using the model's provider implementation
+toProviderRequest :: (ProviderImplementation provider model, Monoid (ProviderRequest provider))
+                  => provider
+                  -> model
+                  -> [ModelConfig provider model]
+                  -> [Message model provider]
+                  -> ProviderRequest provider
+toProviderRequest provider model configs msgs =
+  let composableProvider = getComposableProvider
+      handler = cpToRequest composableProvider
+      fold acc msg = runHandler handler provider model configs msg acc
+  in foldl fold mempty msgs
+
+-- Parse a provider response using the model's provider implementation
+fromProviderResponse :: ProviderImplementation provider model
+                     => provider
+                     -> model
+                     -> [ModelConfig provider model]
+                     -> [Message model provider]  -- history
+                     -> ProviderResponse provider
+                     -> [Message model provider]
+fromProviderResponse provider model configs history resp =
+  let composableProvider = getComposableProvider
+      parser = cpFromResponse composableProvider
+  in parser provider model configs history [] resp
 
 -- GADT Messages with capability constraints
 data Message model provider where

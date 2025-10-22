@@ -17,27 +17,23 @@ import UniversalLLM.Protocols.Anthropic
 import qualified UniversalLLM.Protocols.Anthropic as Proto
 import qualified UniversalLLM.Providers.Anthropic as Provider
 
--- Helper to build request using composable providers
--- Messages are grouped incrementally as they're added, no post-processing needed
-buildRequest :: forall model. (ModelName Provider.Anthropic model, HasTools model Provider.Anthropic)
+-- Helper to build request using the model's provider implementation
+buildRequest :: forall model. ProviderImplementation Provider.Anthropic model
              => model
              -> [ModelConfig Provider.Anthropic model]
              -> [Message model Provider.Anthropic]
              -> AnthropicRequest
-buildRequest mdl configs msgs =
-  let handler = cpToRequest (Provider.baseComposableProvider @model <> Provider.toolsComposableProvider @model)
-  in foldl (\req msg -> runHandler handler Provider.Anthropic mdl configs msg req) mempty msgs
+buildRequest = toProviderRequest Provider.Anthropic
 
--- Helper to parse response using composable providers
-parseResponse :: forall model. (ModelName Provider.Anthropic model, HasTools model Provider.Anthropic)
+-- Helper to parse response using the model's provider implementation
+parseResponse :: forall model. (ProviderImplementation Provider.Anthropic model, ModelName Provider.Anthropic model)
               => model
               -> [ModelConfig Provider.Anthropic model]
               -> [Message model Provider.Anthropic]  -- history
               -> AnthropicResponse
               -> Either LLMError [Message model Provider.Anthropic]
 parseResponse model configs history resp =
-  let parser = cpFromResponse (Provider.baseComposableProvider @model <> Provider.toolsComposableProvider @model)
-      msgs = parser Provider.Anthropic model configs history [] resp
+  let msgs = fromProviderResponse Provider.Anthropic model configs history resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs

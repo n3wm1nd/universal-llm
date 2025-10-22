@@ -234,6 +234,7 @@ jsonComposableProvider = ComposableProvider
         Left _ -> AssistantText txt  -- Keep as text if parsing fails
     transformTextToJSON other = other
 
--- Full composable provider for models with tools and JSON (like GPT4o)
-fullComposableProvider :: forall model. (ModelName OpenAI model, HasTools model OpenAI, HasJSON model OpenAI) => ComposableProvider OpenAI model
-fullComposableProvider = baseComposableProvider <> UniversalLLM.Providers.OpenAI.toolsComposableProvider <> UniversalLLM.Providers.OpenAI.jsonComposableProvider
+-- Default ProviderImplementation for basic text-only models
+-- Models with capabilities (tools, json, reasoning, etc.) should provide their own instances
+instance {-# OVERLAPPABLE #-} ModelName OpenAI model => ProviderImplementation OpenAI model where
+  getComposableProvider = baseComposableProvider

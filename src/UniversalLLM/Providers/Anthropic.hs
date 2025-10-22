@@ -126,7 +126,10 @@ toolsComposableProvider = ComposableProvider
     parseToolResponse _provider _model _configs _history acc (AnthropicSuccess resp) =
       acc <> [AssistantTool (ToolCall tid tname tinput) | AnthropicToolUseBlock tid tname tinput <- responseContent resp]
 
--- Helper function to build Anthropic request from messages (replacement for old toRequest)
+-- Default ProviderImplementation for basic text-only models
+-- Models with capabilities (tools, vision, etc.) should provide their own instances
+instance {-# OVERLAPPABLE #-} ModelName Anthropic model => ProviderImplementation Anthropic model where
+  getComposableProvider = baseComposableProvider
 
 
 -- | Add magic system prompt for OAuth authentication
