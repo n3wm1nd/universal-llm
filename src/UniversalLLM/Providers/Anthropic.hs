@@ -33,11 +33,9 @@ instance ModelName Anthropic model => Provider Anthropic model where
 -- Message handlers for Anthropic
 
 -- Base handler: model name and basic config
--- Sets model name always. Config values (max_tokens, temperature) are only
--- set if explicitly provided in this message's config.
--- IMPORTANT: Never reference req's own fields - only set fields based on external inputs
+-- Updates the request with model name and config
 handleBase :: ModelName Anthropic model => MessageHandler Anthropic model
-handleBase = MessageHandler $ \_provider model configs _msg req ->
+handleBase _provider model configs _msg req =
   req { model = modelName @Anthropic model
       , max_tokens = case [mt | MaxTokens mt <- configs] of { (mt:_) -> mt; [] -> max_tokens req }
       , temperature = case [t | Temperature t <- configs] of { (t:_) -> Just t; [] -> temperature req }
@@ -45,7 +43,7 @@ handleBase = MessageHandler $ \_provider model configs _msg req ->
 
 -- System prompt handler (from config)
 handleSystemPrompt :: MessageHandler Anthropic model
-handleSystemPrompt = MessageHandler $ \_provider _model configs _msg req ->
+handleSystemPrompt = \_provider _model configs _msg req ->
   let systemPrompts = [sp | SystemPrompt sp <- configs]
       sysBlocks = [AnthropicSystemBlock sp "text" | sp <- systemPrompts]
   in if null sysBlocks
@@ -54,7 +52,7 @@ handleSystemPrompt = MessageHandler $ \_provider _model configs _msg req ->
 
 -- Text message handler - groups messages incrementally
 handleTextMessages :: MessageHandler Anthropic model
-handleTextMessages = MessageHandler $ \_provider _model _configs msg req -> case msg of
+handleTextMessages = \_provider _model _configs msg req -> case msg of
   UserText txt -> req { messages = appendBlock (messages req) "user" (AnthropicTextBlock txt) }
   AssistantText txt -> req { messages = appendBlock (messages req) "assistant" (AnthropicTextBlock txt) }
   SystemText txt -> req { messages = appendBlock (messages req) "user" (AnthropicTextBlock txt) }
@@ -72,7 +70,7 @@ handleTextMessages = MessageHandler $ \_provider _model _configs msg req -> case
 
 -- Tools handler - groups tool blocks incrementally
 handleTools :: MessageHandler Anthropic model
-handleTools = MessageHandler $ \_provider _model configs msg req -> case msg of
+handleTools = \_provider _model configs msg req -> case msg of
   AssistantTool (ToolCall tcId tcName tcParams) ->
     req { messages = appendToolBlock (messages req) "assistant" (AnthropicToolUseBlock tcId tcName tcParams) }
   AssistantTool (InvalidToolCall tcId tcName rawArgs err) ->
@@ -110,7 +108,7 @@ handleTools = MessageHandler $ \_provider _model configs msg req -> case msg of
 
 baseComposableProvider :: forall model. ModelName Anthropic model => ComposableProvider Anthropic model
 baseComposableProvider = ComposableProvider
-  { cpToRequest = handleBase <> handleSystemPrompt <> handleTextMessages
+  { cpToRequest = handleBase >>> handleSystemPrompt >>> handleTextMessages
   , cpFromResponse = parseTextResponse
   }
   where
@@ -135,7 +133,7 @@ toolsComposableProvider = ComposableProvider
 -- This should be composed at the END of the provider chain
 ensureUserFirstProvider :: ComposableProvider Anthropic model
 ensureUserFirstProvider = ComposableProvider
-  { cpToRequest = MessageHandler $ \_provider _model _configs _msg req ->
+  { cpToRequest = \_provider _model _configs _msg req ->
       -- Anthropic API requires first message to be from user
       case messages req of
         [] -> req

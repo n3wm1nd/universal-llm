@@ -52,7 +52,7 @@ spec = do
           model = BasicModel
           configs = [Temperature 0.7, MaxTokens 100]
           msg = UserText "test"
-          req = runHandler handleBase provider model configs msg mempty
+          req = handleBase provider model configs msg mempty
 
       OAI.model req `shouldBe` "basic-model"
       temperature req `shouldBe` Just 0.7
@@ -63,7 +63,7 @@ spec = do
           model = BasicModel
           configs = []
           msg = UserText "Hello"
-          req = runHandler handleTextMessages provider model configs msg mempty
+          req = handleTextMessages provider model configs msg mempty
 
       length (messages req) `shouldBe` 1
       case head (messages req) of
@@ -78,8 +78,8 @@ spec = do
           configs = []
           msg1 = UserText "Hello"
           msg2 = UserText "World"
-          req1 = runHandler handleTextMessages provider model configs msg1 mempty
-          req2 = runHandler handleTextMessages provider model configs msg2 req1
+          req1 = handleTextMessages provider model configs msg1 mempty
+          req2 = handleTextMessages provider model configs msg2 req1
 
       length (messages req2) `shouldBe` 1
       case head (messages req2) of
@@ -95,8 +95,8 @@ spec = do
 
           -- Manual composition
           req0 = mempty
-          req1 = runHandler handleBase provider model configs msg req0
-          req2 = runHandler handleTextMessages provider model configs msg req1
+          req1 = handleBase provider model configs msg req0
+          req2 = handleTextMessages provider model configs msg req1
 
       OAI.model req2 `shouldBe` "basic-model"
       temperature req2 `shouldBe` Just 0.5
@@ -107,7 +107,7 @@ spec = do
           model = ReasoningModel
           configs = []
           msg = AssistantReasoning "thinking about the problem..."
-          req = runHandler OpenAIProvider.handleReasoning provider model configs msg mempty
+          req = OpenAIProvider.handleReasoning provider model configs msg mempty
 
       length (messages req) `shouldBe` 1
       case head (messages req) of
@@ -124,8 +124,8 @@ spec = do
 
           -- Compose: reasoning then text
           req0 = mempty
-          req1 = runHandler OpenAIProvider.handleReasoning provider model configs reasoningMsg req0
-          req2 = runHandler handleTextMessages provider model configs textMsg req1
+          req1 = OpenAIProvider.handleReasoning provider model configs reasoningMsg req0
+          req2 = handleTextMessages provider model configs textMsg req1
 
       length (messages req2) `shouldBe` 2
       case messages req2 of
@@ -135,15 +135,15 @@ spec = do
           content `shouldBe` "Here's my answer"
         _ -> expectationFailure "Expected reasoning message followed by text message"
 
-    it "handlers compose via Monoid (<>) operator (BasicModel)" $ do
+    it "handlers chain sequentially (BasicModel)" $ do
       let provider = OpenAI
           model = BasicModel
           configs = [Temperature 0.5]
           msg = UserText "test"
 
-          -- Compose using <>
-          composedHandler = handleBase <> handleTextMessages
-          req = runHandler composedHandler provider model configs msg mempty
+          -- Chain handlers manually
+          req = handleTextMessages provider model configs msg
+                  (handleBase provider model configs msg mempty)
 
       OAI.model req `shouldBe` "basic-model"
       temperature req `shouldBe` Just 0.5
@@ -153,17 +153,18 @@ spec = do
           content `shouldBe` "test"
         _ -> expectationFailure "Expected user message"
 
-    it "handlers compose via Monoid with reasoning (ReasoningModel)" $ do
+    it "handlers chain with reasoning (ReasoningModel)" $ do
       let provider = OpenAI
           model = ReasoningModel
           configs = []
           reasoningMsg = AssistantReasoning "thinking..."
           textMsg = AssistantText "answer"
 
-          -- Compose handlers
-          composedHandler = OpenAIProvider.handleReasoning <> handleTextMessages
-          req1 = runHandler composedHandler provider model configs reasoningMsg mempty
-          req2 = runHandler composedHandler provider model configs textMsg req1
+          -- Chain handlers manually
+          req1 = handleTextMessages provider model configs reasoningMsg
+                   (OpenAIProvider.handleReasoning provider model configs reasoningMsg mempty)
+          req2 = handleTextMessages provider model configs textMsg
+                   (OpenAIProvider.handleReasoning provider model configs textMsg req1)
 
       length (messages req2) `shouldBe` 2
 
@@ -175,7 +176,7 @@ spec = do
           configs = []
           msg = UserText "Hello"
           cp = baseComposableProvider @BasicModel
-          req = runHandler (cpToRequest cp) provider model configs msg mempty
+          req = cpToRequest cp provider model configs msg mempty
 
       length (messages req) `shouldBe` 1
       case head (messages req) of
@@ -191,7 +192,7 @@ spec = do
 
           -- Compose base + reasoning
           cp = baseComposableProvider <> OpenAIProvider.reasoningComposableProvider
-          req = runHandler (cpToRequest cp) provider model configs msg mempty
+          req = cpToRequest cp provider model configs msg mempty
 
       length (messages req) `shouldBe` 1
       case head (messages req) of
@@ -207,6 +208,6 @@ spec = do
           model = BasicModel  -- BasicModel does NOT have HasReasoning!
           configs = []
           msg = AssistantReasoning "this should fail"
-          req = runHandler OpenAIProvider.handleReasoning provider model configs msg mempty
+          req = OpenAIProvider.handleReasoning provider model configs msg mempty
       length (messages req) `shouldBe` 1
     -}

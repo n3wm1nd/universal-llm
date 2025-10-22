@@ -164,30 +164,34 @@ class Provider provider model => ProviderImplementation provider model where
   getComposableProvider :: ComposableProvider provider model
 
 
--- Composable request building via message folding
--- A handler processes one message at a time, accumulating into the request
-newtype MessageHandler provider model = MessageHandler
-  { runHandler :: provider
-               -> model
-               -> [ModelConfig provider model]
-               -> Message model provider
-               -> ProviderRequest provider
-               -> ProviderRequest provider
-  }
+-- ============================================================================
+-- Composition Operator for Parameter Threading
+-- ============================================================================
 
--- Handlers compose via Semigroup/Monoid
-instance Semigroup (MessageHandler provider model) where
-  MessageHandler h1 <> MessageHandler h2 = MessageHandler $ \provider model configs msg req ->
-    let req' = h1 provider model configs msg req
-    in h2 provider model configs msg req'
+-- Threads common parameters through function composition
+-- The first 4 parameters (p, m, cfg, msg) are automatically passed to both functions
+infixl 1 >>>
+(>>>) :: (p -> m -> cfg -> msg -> a -> b)
+      -> (p -> m -> cfg -> msg -> b -> c)
+      -> (p -> m -> cfg -> msg -> a -> c)
+f >>> g = \p m cfg msg a -> g p m cfg msg (f p m cfg msg a)
 
-instance Monoid (MessageHandler provider model) where
-  mempty = MessageHandler $ \_ _ _ _ req -> req  -- Identity handler: pass through
+-- ============================================================================
+-- Handler Types (now just type aliases, no newtypes)
+-- ============================================================================
+
+-- A handler processes one message at a time, transforming the request
+type MessageHandler provider model =
+  provider
+  -> model
+  -> [ModelConfig provider model]
+  -> Message model provider
+  -> ProviderRequest provider
+  -> ProviderRequest provider
 
 -- A parser extracts messages from a response and can transform previously parsed messages
 -- Takes: provider, model, configs, message history, accumulated messages, response -> produces final messages
 -- Having full context allows intelligent interpretation (e.g., checking if JSON was requested)
--- Note: All Message types use consistent order: Message model provider
 type ResponseParser provider model =
   provider
   -> model
@@ -206,7 +210,9 @@ data ComposableProvider provider model = ComposableProvider
 -- ComposableProviders compose via Semigroup/Monoid
 instance Semigroup (ComposableProvider provider model) where
   cp1 <> cp2 = ComposableProvider
-    { cpToRequest = cpToRequest cp1 <> cpToRequest cp2
+    { cpToRequest = \provider model configs msg req ->
+        let req' = cpToRequest cp1 provider model configs msg req
+        in cpToRequest cp2 provider model configs msg req'
     , cpFromResponse = \provider model configs history acc resp ->
         let acc' = cpFromResponse cp1 provider model configs history acc resp
         in cpFromResponse cp2 provider model configs history acc' resp
@@ -214,7 +220,7 @@ instance Semigroup (ComposableProvider provider model) where
 
 instance Monoid (ComposableProvider provider model) where
   mempty = ComposableProvider
-    { cpToRequest = mempty
+    { cpToRequest = \_provider _model _configs _msg req -> req
     , cpFromResponse = \_provider _model _configs _history acc _resp -> acc
     }
 
@@ -230,7 +236,7 @@ toProviderRequest :: (ProviderImplementation provider model, Monoid (ProviderReq
 toProviderRequest provider model configs msgs =
   let composableProvider = getComposableProvider
       handler = cpToRequest composableProvider
-      fold acc msg = runHandler handler provider model configs msg acc
+      fold acc msg = handler provider model configs msg acc
   in foldl fold mempty msgs
 
 -- Parse a provider response using the model's provider implementation
