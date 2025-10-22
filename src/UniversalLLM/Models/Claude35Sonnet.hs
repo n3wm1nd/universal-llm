@@ -11,8 +11,9 @@ import UniversalLLM.Providers.Anthropic
 -- Claude 3.5 Sonnet model (just model identity)
 data Claude35Sonnet = Claude35Sonnet deriving (Show, Eq)
 
--- Capabilities
-instance HasVision Claude35Sonnet
+-- Anthropic-specific capabilities
+instance HasVision Claude35Sonnet Anthropic
+instance HasTools Claude35Sonnet Anthropic
 
 -- Provider-specific model names and support
 instance ModelName Anthropic Claude35Sonnet where

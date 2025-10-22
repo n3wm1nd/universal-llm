@@ -17,12 +17,13 @@ import qualified Data.Text as Text
 -- Anthropic provider (phantom type)
 data Anthropic = Anthropic deriving (Show, Eq)
 
--- Declare Anthropic capabilities
-instance HasTools Anthropic
+-- Declare Anthropic parameter support
 instance SupportsTemperature Anthropic
 instance SupportsMaxTokens Anthropic
 instance SupportsSystemPrompt Anthropic
 -- Note: Anthropic does NOT support Seed or JSON mode
+
+-- Anthropic capabilities are now declared per-model (see model files)
 
 -- Provider typeclass implementation (just type associations)
 instance ModelName Anthropic model => Provider Anthropic model where
@@ -33,7 +34,7 @@ instance ModelName Anthropic model => Provider Anthropic model where
 -- Note: Anthropic requires grouping all messages at once (alternating user/assistant)
 -- so we use a simpler approach: build the full request from all messages at the end
 
-baseComposableProvider :: forall model. (ModelName Anthropic model, HasTools model) => ComposableProvider Anthropic model
+baseComposableProvider :: forall model. ModelName Anthropic model => ComposableProvider Anthropic model
 baseComposableProvider = ComposableProvider
   { cpToRequest = mempty  -- No incremental building - Anthropic needs all messages
   , cpFromResponse = parseTextResponse
@@ -45,7 +46,7 @@ baseComposableProvider = ComposableProvider
         (txt:_) -> acc <> [AssistantText txt]
         [] -> acc
 
-toolsComposableProvider :: forall model. (ModelName Anthropic model, HasTools model, HasTools Anthropic) => ComposableProvider Anthropic model
+toolsComposableProvider :: forall model. HasTools model Anthropic => ComposableProvider Anthropic model
 toolsComposableProvider = ComposableProvider
   { cpToRequest = mempty
   , cpFromResponse = parseToolResponse
@@ -81,7 +82,7 @@ buildAnthropicRequest _provider mdl configs msgs =
         }
   in baseRequest
 -- Helper function to parse Anthropic response (replacement for old fromResponse)
-parseAnthropicResponse :: (HasTools model, HasTools Anthropic)
+parseAnthropicResponse :: HasTools model Anthropic
                        => AnthropicResponse
                        -> Either LLMError [Message model Anthropic]
 parseAnthropicResponse (AnthropicError err) =

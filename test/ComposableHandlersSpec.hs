@@ -24,19 +24,19 @@ instance ModelName OpenAI BasicModel where
 -- ToolsModel: text + tools
 instance ModelName OpenAI ToolsModel where
   modelName _ = "tools-model"
-instance HasTools ToolsModel
+instance HasTools ToolsModel OpenAI
 
 -- ReasoningModel: text + reasoning
 instance ModelName OpenAI ReasoningModel where
   modelName _ = "reasoning-model"
-instance HasReasoning ReasoningModel
+instance HasReasoning ReasoningModel OpenAI
 
 -- FullFeaturedModel: text + tools + reasoning + JSON
 instance ModelName OpenAI FullFeaturedModel where
   modelName _ = "full-featured-model"
-instance HasTools FullFeaturedModel
-instance HasReasoning FullFeaturedModel
-instance HasJSON FullFeaturedModel
+instance HasTools FullFeaturedModel OpenAI
+instance HasReasoning FullFeaturedModel OpenAI
+instance HasJSON FullFeaturedModel OpenAI
 
 spec :: Spec
 spec = do

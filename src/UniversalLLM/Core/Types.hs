@@ -32,11 +32,13 @@ class SupportsMaxTokens a
 class SupportsSeed a
 class SupportsSystemPrompt a
 
--- HasX for capabilities (features models/providers have)
-class HasTools a
-class HasVision a
-class HasJSON a
-class HasReasoning a
+-- HasX for capabilities (features that require both model AND provider support)
+-- These take two parameters: model and provider
+-- Instances must be declared explicitly for each model/provider combination
+class HasTools model provider
+class HasVision model provider
+class HasJSON model provider
+class HasReasoning model provider
 
 -- ModelConfig GADT - configuration values with provider and model constraints
 -- Only constructible if the provider supports the parameter and/or model
@@ -45,8 +47,8 @@ data ModelConfig provider model where
   MaxTokens :: SupportsMaxTokens provider => Int -> ModelConfig provider model
   Seed :: SupportsSeed provider => Int -> ModelConfig provider model
   SystemPrompt :: SupportsSystemPrompt provider => Text -> ModelConfig provider model
-  Tools :: (HasTools model, HasTools provider) => [ToolDefinition] -> ModelConfig provider model
-  Reasoning :: (HasReasoning model, HasReasoning provider) => Bool -> ModelConfig provider model
+  Tools :: HasTools model provider => [ToolDefinition] -> ModelConfig provider model
+  Reasoning :: HasReasoning model provider => Bool -> ModelConfig provider model
 
 -- Provider-specific model names
 class ModelName provider model where
@@ -172,14 +174,15 @@ instance Monoid (MessageHandler provider model) where
 -- A parser extracts messages from a response and can transform previously parsed messages
 -- Takes: provider, model, configs, message history, accumulated messages, response -> produces final messages
 -- Having full context allows intelligent interpretation (e.g., checking if JSON was requested)
+-- Note: All Message types use consistent order: Message model provider
 type ResponseParser provider model =
   provider
   -> model
   -> [ModelConfig provider model]
   -> [Message model provider]  -- history (input messages)
-  -> [Message provider model]  -- accumulator (parsed messages so far)
+  -> [Message model provider]  -- accumulator (parsed messages so far)
   -> ProviderResponse provider
-  -> [Message provider model]
+  -> [Message model provider]
 
 -- Composable bidirectional provider (couples toRequest and fromResponse)
 data ComposableProvider provider model = ComposableProvider
@@ -205,14 +208,14 @@ instance Monoid (ComposableProvider provider model) where
 -- GADT Messages with capability constraints
 data Message model provider where
   UserText :: Text -> Message model provider
-  UserImage :: HasVision model => Text -> Text -> Message model provider
-  UserRequestJSON :: (HasJSON model, HasJSON provider) => Text -> Value -> Message model provider  -- Text query + JSON schema
+  UserImage :: HasVision model provider => Text -> Text -> Message model provider
+  UserRequestJSON :: HasJSON model provider => Text -> Value -> Message model provider  -- Text query + JSON schema
   AssistantText :: Text -> Message model provider
-  AssistantReasoning :: Text -> Message model provider
-  AssistantTool :: (HasTools model, HasTools provider) => ToolCall -> Message model provider
-  AssistantJSON :: (HasJSON model, HasJSON provider) => Value -> Message model provider
+  AssistantReasoning :: HasReasoning model provider => Text -> Message model provider
+  AssistantTool :: HasTools model provider => ToolCall -> Message model provider
+  AssistantJSON :: HasJSON model provider => Value -> Message model provider
   SystemText :: Text -> Message model provider
-  ToolResultMsg :: (HasTools model, HasTools provider) => ToolResult -> Message model provider
+  ToolResultMsg :: HasTools model provider => ToolResult -> Message model provider
 
 instance Show (Message model provider) where
   show (UserText _) = "UserText"

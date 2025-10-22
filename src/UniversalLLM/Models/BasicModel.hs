@@ -10,8 +10,8 @@ import Data.Text (Text)
 -- Basic model - parameterized by model name for universal provider support
 data BasicModel = BasicModel Text deriving (Show, Eq)
 
--- Default basic model instances
-instance HasTools BasicModel
+-- Basic model has tools capability with any provider
+instance HasTools BasicModel provider
 
 -- Universal ModelName instance - works with any provider
 instance ModelName provider BasicModel where

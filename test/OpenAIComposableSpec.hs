@@ -20,7 +20,7 @@ import UniversalLLM.Providers.OpenAI
 
 -- Helper to build request using fullComposableProvider
 -- Note: We use Message model provider order (Message GLM45 OpenAI) because that's what Message GADT uses
-buildRequest :: forall model. (ModelName OpenAI model, HasTools model, HasJSON model)
+buildRequest :: forall model. (ModelName OpenAI model, HasTools model OpenAI, HasJSON model OpenAI)
              => model
              -> [ModelConfig OpenAI model]
              -> [Message model OpenAI]
@@ -30,13 +30,13 @@ buildRequest mdl configs msgs =
   in foldl (\req msg -> runHandler handler OpenAI mdl configs msg req) mempty msgs
 
 -- Helper to parse response using fullComposableProvider
--- Note: ResponseParser returns [Message provider model], which is [Message OpenAI model]
-parseOpenAIResponse :: forall model. (ModelName OpenAI model, HasTools model, HasJSON model)
+-- Note: ResponseParser returns [Message model provider], which is [Message model OpenAI]
+parseOpenAIResponse :: forall model. (ModelName OpenAI model, HasTools model OpenAI, HasJSON model OpenAI)
                     => model
                     -> [ModelConfig OpenAI model]
                     -> [Message model OpenAI]  -- history
                     -> OpenAIResponse
-                    -> Either LLMError [Message OpenAI model]
+                    -> Either LLMError [Message model OpenAI]
 parseOpenAIResponse model configs history (OpenAIError (OpenAIErrorResponse errDetail)) =
   Left $ ProviderError (code errDetail) $ errorMessage errDetail <> " (" <> errorType errDetail <> ")"
 parseOpenAIResponse model configs history resp =

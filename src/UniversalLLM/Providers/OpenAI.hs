@@ -19,14 +19,13 @@ import qualified Data.ByteString.Lazy as BSL
 -- OpenAI provider (phantom type)
 data OpenAI = OpenAI deriving (Show, Eq)
 
--- Declare OpenAI capabilities
-instance HasTools OpenAI
-instance HasJSON OpenAI
-instance HasReasoning OpenAI
+-- Declare OpenAI parameter support
 instance SupportsTemperature OpenAI
 instance SupportsMaxTokens OpenAI
 instance SupportsSeed OpenAI
 instance SupportsSystemPrompt OpenAI
+
+-- OpenAI capabilities are now declared per-model (see model files)
 
 instance Provider OpenAI model where
   type ProviderRequest OpenAI = OpenAIRequest
@@ -87,7 +86,7 @@ handleTextMessages = MessageHandler $ \_provider _model _configs msg req -> case
   _ -> req  -- Not a text message
 
 -- Tools handler
-handleTools :: HasTools model => MessageHandler OpenAI model
+handleTools :: HasTools model OpenAI => MessageHandler OpenAI model
 handleTools = MessageHandler $ \_provider _model configs msg req -> case msg of
   AssistantTool call ->
     case lastMessage req of
@@ -110,7 +109,7 @@ handleTools = MessageHandler $ \_provider _model configs msg req -> case msg of
        else req { tools = Just (map toOpenAIToolDef (concat toolDefs)) }
 
 -- JSON handler
-handleJSON :: (HasJSON model, HasJSON OpenAI) => MessageHandler OpenAI model
+handleJSON :: HasJSON model OpenAI => MessageHandler OpenAI model
 handleJSON = MessageHandler $ \_provider _model _configs msg req -> case msg of
   UserRequestJSON txt schema ->
     req { messages = messages req <> [OpenAIMessage "user" (Just txt) Nothing Nothing Nothing]
@@ -122,7 +121,7 @@ handleJSON = MessageHandler $ \_provider _model _configs msg req -> case msg of
   _ -> req
 
 -- Reasoning handler
-handleReasoning :: (HasReasoning model, HasReasoning OpenAI) => MessageHandler OpenAI model
+handleReasoning :: HasReasoning model OpenAI => MessageHandler OpenAI model
 handleReasoning = MessageHandler $ \_provider _model _configs msg req -> case msg of
   AssistantReasoning txt ->
     req { messages = messages req <> [OpenAIMessage "assistant" Nothing (Just txt) Nothing Nothing] }
@@ -147,7 +146,7 @@ baseComposableProvider = ComposableProvider
     parseTextResponse _provider _model _configs _history acc _ = acc
 
 -- Reasoning composable provider
-reasoningComposableProvider :: forall model. (HasReasoning model, HasReasoning OpenAI) => ComposableProvider OpenAI model
+reasoningComposableProvider :: forall model. HasReasoning model OpenAI => ComposableProvider OpenAI model
 reasoningComposableProvider = ComposableProvider
   { cpToRequest = UniversalLLM.Providers.OpenAI.handleReasoning
   , cpFromResponse = parseReasoningResponse
@@ -163,7 +162,7 @@ reasoningComposableProvider = ComposableProvider
     parseReasoningResponse _provider _model _configs _history acc _ = acc
 
 -- Tools composable provider
-toolsComposableProvider :: forall model. (HasTools model, HasTools OpenAI) => ComposableProvider OpenAI model
+toolsComposableProvider :: forall model. HasTools model OpenAI => ComposableProvider OpenAI model
 toolsComposableProvider = ComposableProvider
   { cpToRequest = handleTools
   , cpFromResponse = parseToolResponse
@@ -181,7 +180,7 @@ toolsComposableProvider = ComposableProvider
 -- JSON composable provider
 -- Transforms AssistantText messages that contain valid JSON into AssistantJSON
 -- Only transforms if JSON was explicitly requested (checks response format in request)
-jsonComposableProvider :: forall model. (HasJSON model, HasJSON OpenAI) => ComposableProvider OpenAI model
+jsonComposableProvider :: forall model. HasJSON model OpenAI => ComposableProvider OpenAI model
 jsonComposableProvider = ComposableProvider
   { cpToRequest = handleJSON
   , cpFromResponse = parseJSONResponse
@@ -219,7 +218,7 @@ jsonComposableProvider = ComposableProvider
     isSuccessResponse (OpenAISuccess _) = True
     isSuccessResponse (OpenAIError _) = False
 
-    transformTextToJSON :: Message OpenAI model -> Message OpenAI model
+    transformTextToJSON :: Message model OpenAI -> Message model OpenAI
     transformTextToJSON (AssistantText txt) =
       -- Only transform if it's valid JSON and not empty
       case Aeson.eitherDecodeStrict (TE.encodeUtf8 txt) of
@@ -236,5 +235,5 @@ jsonComposableProvider = ComposableProvider
     transformTextToJSON other = other
 
 -- Full composable provider for models with tools and JSON (like GPT4o)
-fullComposableProvider :: forall model. (ModelName OpenAI model, HasTools model, HasJSON model) => ComposableProvider OpenAI model
+fullComposableProvider :: forall model. (ModelName OpenAI model, HasTools model OpenAI, HasJSON model OpenAI) => ComposableProvider OpenAI model
 fullComposableProvider = baseComposableProvider <> toolsComposableProvider <> jsonComposableProvider
