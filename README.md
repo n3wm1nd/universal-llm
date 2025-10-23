@@ -1,75 +1,121 @@
 # Universal LLM
 
-A type-safe, protocol-agnostic Haskell library for interacting with multiple Large Language Model APIs.
+A type-safe Haskell library for encoding and decoding Large Language Model API protocols.
+
+## What This Library Does
+
+This library **encodes messages to provider-specific request formats** and **decodes provider responses back to messages**. It does NOT handle HTTP transport, retries, streaming, or rate limiting - that's your responsibility. Think of it as a type-safe protocol codec with compile-time capability constraints.
 
 ## Features
 
-- **Type-Safe Translation**: Pure translation layer between universal message format and provider wire formats
-- **Multiple Providers**: Support for OpenAI, Anthropic, and other LLM protocols
+- **Pure Protocol Encoding/Decoding**: Transform messages to/from provider wire formats (JSON)
+- **Multiple Providers**: OpenAI, Anthropic, and custom protocol support
 - **Compile-time Capability Checks**: Invalid capability combinations caught at compile time via GADTs
-- **Protocol Separation**: Clean separation between wire formats (protocols) and capabilities (providers)
+- **Composable Providers**: Build complex behavior by composing simple handlers via Monoid/Semigroup
 - **Tool Calling Support**: Type-safe tool definitions with automatic parameter validation
+- **Provider-Agnostic Business Logic**: Write code once, run with any compatible provider/model
 
 ## Design Principles
 
-- **Translation, Not Transport**: Library handles protocol translation; users handle HTTP/transport
-- **Compile-time Safety**: GADT-based message types ensure capability constraints are checked at compile time
-- **Pure Functions**: All translation logic is pure for easy testing and composition
-- **Universal Message Format**: Messages can be converted between different providers/models
+- **Protocol Layer Only**: You provide the bytes (HTTP/transport), we provide type-safe encoding/decoding
+- **Compile-time Safety**: GADT-based messages ensure capability constraints are verified at compile time
+- **Pure Functions**: All encoding/decoding logic is pure for easy testing and composition
+- **Composable Architecture**: Build complex protocol behavior by composing simple transformations
 
 ## Quick Example
 
 ```haskell
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 import UniversalLLM
 
--- Define your messages with capabilities enforced by types
-let messages = [ UserText "What's the weather in Paris?"
-               , AssistantTool weatherToolCall  -- Only valid if model HasTools
-               , ToolResultMsg weatherResult
-               , AssistantText "It's 22°C and sunny!"
-               ]
+-- Write business logic polymorphic over any provider/model with tools
+processQuery :: (ProviderImplementation provider model, HasTools model provider, Monoid (ProviderRequest provider))
+             => provider -> model -> [LLMTool IO] -> Text -> IO ()
+processQuery provider model tools query = do
+  let configs = [Temperature 0.7, MaxTokens 200, Tools toolDefs]
+      messages = [UserText query]
 
--- Configure the request
-let configs = [ Temperature 0.7
-              , MaxTokens 200
-              , Tools [weatherToolDef]  -- Only valid if provider HasTools
-              ]
+  -- Encode to provider's wire format (pure function)
+  let request = toProviderRequest provider model configs messages
 
--- Translate to provider's wire format (pure function)
-let request = toRequest OpenAI GPT4o configs messages
+  -- YOU handle HTTP transport here (not part of this library)
+  response <- yourHttpClient request
 
--- Send via your own HTTP transport...
--- Parse response (pure function)
-let result = fromResponse @OpenAI @GPT4o response
+  -- Decode response (pure function)
+  let parsedMessages = fromProviderResponse provider model configs messages response
+
+  -- Handle results...
+  processMessages parsedMessages
+
+-- Select concrete provider/model at application entry point
+main = do
+  let provider = Anthropic
+      model = Claude35Sonnet
+      tools = [LLMTool myTool]
+
+  processQuery provider model tools "What's the weather?"
+  -- Business logic (processQuery) works with ANY compatible provider/model
 ```
 
 ## Architecture
 
-The library separates three orthogonal concerns:
+### Core Abstractions
 
-1. **Protocols** (`OpenAI`, `Anthropic`): Wire format specifications (JSON schemas)
-2. **Providers** (phantom types or data): Capability declarations, optionally carrying provider-specific config
-3. **Models** (phantom types or data): Model identifiers with name mapping, optionally carrying model-specific config
+1. **Protocols** (`UniversalLLM.Protocols.OpenAI`, `UniversalLLM.Protocols.Anthropic`): Wire format specifications - the actual JSON schemas for each provider's API
 
-Generic/portable settings use `ModelConfig` (Temperature, MaxTokens, etc.), while provider-specific or model-specific behavior can use data fields.
+2. **Providers** (`OpenAI`, `Anthropic`): Capability declarations + protocol implementations. Can be phantom types or carry provider-specific config
 
-Messages are universal and can be translated between any compatible provider/model combination. Capabilities are enforced at compile time via GADT constructors with type constraints.
+3. **Models** (`GPT4o`, `Claude35Sonnet`): Model identifiers with capability instances. Can be phantom types or carry model-specific config
+
+4. **Messages**: Universal message format parameterized by model and provider. GADT constructors enforce capability constraints at compile time
+
+5. **Composable Providers**: Protocol transformations that compose via Monoid/Semigroup. Each provider implementation is built by composing handlers:
+   ```haskell
+   baseComposableProvider <> toolsComposableProvider <> jsonComposableProvider
+   ```
+
+### Message Translation
+
+Messages are parameterized by `model` and `provider` but contain no provider-specific data - just phantom types for constraints. This means:
+- Messages can be converted between compatible provider/model pairs
+- Conversion is safe (just type coercion) when capabilities match
+- Type system prevents invalid conversions (e.g., vision message to non-vision model)
 
 ### Extensibility
 
-- **Model Extension**: Newtype-derive capabilities from existing models to create variations
-- **Provider Wrapping**: Wrap `toRequest`/`fromResponse` to add behavior (caching, retry logic, emulation layers)
-- **Custom Protocols**: Implement your own protocol instances for proprietary APIs
+- **Add New Models**: Define a model type, implement `ModelName` and capability instances (`HasTools`, `HasVision`, etc.)
+- **Add New Providers**: Implement protocol types and composable provider handlers
+- **Compose Behavior**: Build complex protocol handling by composing simple `ComposableProvider` instances
+- **Custom Protocols**: Implement your own protocol for proprietary APIs
 
-Example emulation via provider wrapping:
+Example: Adding tool support to a new model
 ```haskell
--- Add seed emulation for providers that don't support it
-data EmulatedProvider base = EmulatedProvider base
+data MyModel = MyModel
 
-instance Provider base model => Provider (EmulatedProvider base) model where
-  toRequest (EmulatedProvider base) model configs msgs =
-    -- Filter out Seed config, handle it manually if needed
-    toRequest base model (filter (not . isSeed) configs) msgs
+instance ModelName OpenAI MyModel where
+  modelName _ = "my-model-name"
+
+instance HasTools MyModel OpenAI where
+  toolsComposableProvider = OpenAI.toolsComposableProvider
+
+instance ProviderImplementation OpenAI MyModel where
+  getComposableProvider = baseComposableProvider <> toolsComposableProvider
 ```
+
+## What You Need to Provide
+
+This library handles **protocol encoding/decoding only**. You are responsible for:
+
+- **HTTP Transport**: Making actual HTTP requests to LLM providers
+- **Streaming**: If you want streaming responses, handle that in your transport layer
+- **Error Handling**: Retries, exponential backoff, rate limiting, fallback strategies
+- **Observability**: Logging, metrics, tracing, cost tracking
+- **Connection Management**: Connection pooling, timeouts, keep-alive
+
+The `examples/` directory includes simple HTTP transport implementations for reference, but they're not part of the library - they're just to demonstrate usage.
+
+## See Also
+
+- `examples/claude/` - Full tool-calling example with Anthropic
+- `examples/llama-cpp/` - OpenAI-compatible API example (llama.cpp server)
+- `test/` - Property tests and integration tests demonstrating the API
