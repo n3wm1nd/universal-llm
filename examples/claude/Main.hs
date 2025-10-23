@@ -8,6 +8,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Main (main) where
 
@@ -95,57 +96,62 @@ mkAnthropicCall oauthToken =
   in \request -> baseLLMCall (withMagicSystemPrompt request)
 
 -- ============================================================================
--- Request/Response Helpers
+-- Agent Loop (polymorphic business logic - works with ANY provider/model supporting tools)
 -- ============================================================================
-
--- Build Anthropic request using the model's provider implementation
-buildRequest :: forall model. ProviderImplementation Anthropic model
-             => model
-             -> [ModelConfig Anthropic model]
-             -> [Message model Anthropic]
-             -> AnthropicRequest
-buildRequest = toProviderRequest Anthropic
-
--- Parse Anthropic response using the model's provider implementation
-parseResponse :: forall model. ProviderImplementation Anthropic model
-              => model
-              -> [ModelConfig Anthropic model]
-              -> [Message model Anthropic]  -- history
-              -> AnthropicResponse
-              -> Either LLMError [Message model Anthropic]
-parseResponse model configs history resp =
-  let msgs = fromProviderResponse Anthropic model configs history resp
-  in if null msgs
-     then Left $ ParseError "No messages parsed from response"
-     else Right msgs
-
--- ============================================================================
--- Agent Loop
+--
+-- KEY ARCHITECTURAL POINT:
+-- The business logic below is fully polymorphic over provider and model types.
+-- It works with ANY provider/model combination that supports the required capabilities
+-- (in this case: ProviderImplementation and HasTools).
+--
+-- This demonstrates how user code should be written: decoupled from specific providers
+-- and models, using only the capability constraints needed. The concrete provider/model
+-- selection happens only at the entry point (main), making the code flexible and reusable.
+--
 -- ============================================================================
 
 -- Main agent loop - continues until text response (non-tool)
-agentLoop :: [LLMTool IO] -> LLMCall AnthropicRequest AnthropicResponse -> [ModelConfig Anthropic ClaudeSonnet45] -> [Message ClaudeSonnet45 Anthropic] -> ExceptT LLMError IO ()
-agentLoop tools callClaude configs messages = do
-  -- Build and send request
-  let request = withMagicSystemPrompt $ buildRequest @ClaudeSonnet45 ClaudeSonnet45 configs messages
-  response <- callClaude request
-  responses <- except $ parseResponse @ClaudeSonnet45 ClaudeSonnet45 configs messages response
+-- This is polymorphic over BOTH provider and model
+agentLoop :: forall provider model req resp.
+             (ProviderImplementation provider model, HasTools model provider,
+              req ~ ProviderRequest provider, resp ~ ProviderResponse provider,
+              Monoid req)
+          => provider
+          -> model
+          -> [LLMTool IO]
+          -> LLMCall req resp
+          -> [ModelConfig provider model]
+          -> [Message model provider]
+          -> ExceptT LLMError IO ()
+agentLoop provider model tools callLLM configs messages = do
+  -- Build and send request (provider-agnostic)
+  let request = toProviderRequest provider model configs messages
+  response <- callLLM request
+
+  -- Parse response (provider-agnostic)
+  let msgs = fromProviderResponse provider model configs messages response
+  responses <- if null msgs
+               then except $ Left $ ParseError "No messages parsed from response"
+               else return msgs
 
   newMsgs <- liftIO $ concat <$> mapM (handleResponse tools) responses
   -- Continue loop only if there are tool results to send back
   unless (null newMsgs) $
-    agentLoop tools callClaude configs (messages ++ responses ++ newMsgs)
+    agentLoop provider model tools callLLM configs (messages ++ responses ++ newMsgs)
 
--- Handle different response types
+-- Handle different response types (polymorphic over provider and model)
 -- Returns empty list for text (stops loop), tool results for tool calls (continues loop)
-handleResponse :: [LLMTool IO] -> Message ClaudeSonnet45 Anthropic -> IO [Message ClaudeSonnet45 Anthropic]
+handleResponse :: forall provider model. HasTools model provider
+               => [LLMTool IO]
+               -> Message model provider
+               -> IO [Message model provider]
 handleResponse _ (AssistantText text) = do
   putStrLn $ "🤖 " <> T.unpack text
   return [] -- Empty list stops the loop
 
-handleResponse tools (AssistantTool call) = do
+handleResponse tools (AssistantTool toolCall) = do
   putStrLn $ "🔧 Calling tool"
-  result <- executeCall tools call
+  result <- executeCall tools toolCall
   return [ToolResultMsg result]  -- Tool result continues loop
 
 handleResponse _ _ = return []
@@ -180,7 +186,11 @@ main = do
   let tools :: [LLMTool IO]
       tools = [LLMTool (getTimeTool @IO)]
 
-  -- Build config for ClaudeSonnet45 with Anthropic provider
+  -- Concrete provider and model selection (only place where specific types matter)
+  let provider = Anthropic
+      model = ClaudeSonnet45
+
+  -- Build config
   let toolDefs = map llmToolToDefinition tools
       configs = [ Temperature 0.7
                 , MaxTokens 200
@@ -188,7 +198,8 @@ main = do
                 ]
   let initialMsg = [UserText "Use the get_time tool to tell me what time it is."]
 
-  result <- runExceptT $ agentLoop tools callClaude configs initialMsg
+  -- Business logic (agentLoop) is polymorphic - works with any provider/model
+  result <- runExceptT $ agentLoop provider model tools callClaude configs initialMsg
   case result of
     Left err -> putStrLn $ "❌ Error: " <> show err
     Right () -> return ()

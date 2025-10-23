@@ -8,12 +8,12 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Main (main) where
 
 import UniversalLLM
 import UniversalLLM.Providers.OpenAI
-import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import Common.HTTP (LLMCall, mkLLMCall)
 import System.Environment (lookupEnv)
 import System.Exit (exitFailure)
@@ -87,65 +87,66 @@ getTimeTool = GetTime $ \_params -> do
 
 
 -- ============================================================================
--- Request/Response Helpers
+-- Agent Loop (polymorphic business logic - works with ANY provider/model supporting tools)
 -- ============================================================================
-
--- Build OpenAI request using the model's provider implementation
-buildRequest :: forall model. ProviderImplementation OpenAI model
-             => model
-             -> [ModelConfig OpenAI model]
-             -> [Message model OpenAI]
-             -> OpenAIRequest
-buildRequest = toProviderRequest OpenAI
-
--- Parse OpenAI response using the model's provider implementation
-parseResponse :: forall model. (ProviderImplementation OpenAI model, ModelName OpenAI model)
-              => model
-              -> [ModelConfig OpenAI model]
-              -> [Message model OpenAI]  -- history
-              -> OpenAIResponse
-              -> Either LLMError [Message model OpenAI]
-parseResponse model configs history resp =
-  let msgs = fromProviderResponse OpenAI model configs history resp
-  in if null msgs
-     then Left $ ParseError "No messages parsed from response"
-     else Right msgs
-
--- ============================================================================
--- Agent Loop
+--
+-- KEY ARCHITECTURAL POINT:
+-- The business logic below is fully polymorphic over provider and model types.
+-- It works with ANY provider/model combination that supports the required capabilities
+-- (in this case: ProviderImplementation and HasTools).
+--
+-- This demonstrates how user code should be written: decoupled from specific providers
+-- and models, using only the capability constraints needed. The concrete provider/model
+-- selection happens only at the entry point (main), making the code flexible and reusable.
+--
 -- ============================================================================
 
 -- Main agent loop - continues until text response (non-tool)
-agentLoop :: LLMCall OpenAIRequest OpenAIResponse -> [ModelConfig OpenAI MistralModel] -> [Message MistralModel OpenAI] -> ExceptT LLMError IO ()
-agentLoop callLLM configs messages = do
-  -- Available tools (for execution)
-  let tools :: [LLMTool IO]
-      tools = [LLMTool (getTimeTool @IO)]
-
-      -- Build config with tools added
-      toolDefs = map llmToolToDefinition tools
+-- This is polymorphic over BOTH provider and model
+agentLoop :: forall provider model req resp.
+             (ProviderImplementation provider model, HasTools model provider,
+              req ~ ProviderRequest provider, resp ~ ProviderResponse provider,
+              Monoid req)
+          => provider
+          -> model
+          -> [LLMTool IO]
+          -> LLMCall req resp
+          -> [ModelConfig provider model]
+          -> [Message model provider]
+          -> ExceptT LLMError IO ()
+agentLoop provider model tools callLLM configs messages = do
+  -- Build config with tools added
+  let toolDefs = map llmToolToDefinition tools
       configs' = configs ++ [Tools toolDefs]
 
-  -- Call LLM (model + config)
-  let request = buildRequest @MistralModel MistralModel configs' messages
+  -- Build and send request (provider-agnostic)
+  let request = toProviderRequest provider model configs' messages
   response <- callLLM request
-  responses <- except $ parseResponse @MistralModel MistralModel configs' messages response
+
+  -- Parse response (provider-agnostic)
+  let msgs = fromProviderResponse provider model configs' messages response
+  responses <- if null msgs
+               then except $ Left $ ParseError "No messages parsed from response"
+               else return msgs
 
   newMsgs <- liftIO $ concat <$> mapM (handleResponse tools) responses
   -- Continue loop only if there are tool results to send back
   unless (null newMsgs) $
-    agentLoop callLLM configs' (messages ++ responses ++ newMsgs)
+    agentLoop provider model tools callLLM configs' (messages ++ responses ++ newMsgs)
 
--- Handle different response types
+-- Handle different response types (polymorphic over provider and model)
 -- Returns empty list for text (stops loop), tool results for tool calls (continues loop)
-handleResponse :: [LLMTool IO] -> Message MistralModel OpenAI -> IO [Message MistralModel OpenAI]
+handleResponse :: forall provider model. HasTools model provider
+               => [LLMTool IO]
+               -> Message model provider
+               -> IO [Message model provider]
 handleResponse _ (AssistantText text) = do
   putStrLn $ "🤖 " <> T.unpack text
   return [] -- Empty list stops the loop
 
-handleResponse tools (AssistantTool call) = do
+handleResponse tools (AssistantTool toolCall) = do
   putStrLn $ "🔧 Calling tool"
-  result <- executeCall tools call
+  result <- executeCall tools toolCall
   return [ToolResultMsg result]  -- Tool result continues loop
 
 handleResponse _ _ = return []
@@ -176,13 +177,22 @@ main = do
   -- Build LLM call function with endpoint and headers
   let callLLM = mkLLMCall (serverUrl ++ "/v1/chat/completions") [("Content-Type", "application/json")]
 
-  -- Build config for MistralModel with OpenAI provider
+  -- Available tools (for execution)
+  let tools :: [LLMTool IO]
+      tools = [LLMTool (getTimeTool @IO)]
+
+  -- Concrete provider and model selection (only place where specific types matter)
+  let provider = OpenAI
+      model = MistralModel
+
+  -- Build config
   let configs = [ Temperature 0.7
                 , MaxTokens 200
                 ]
   let initialMsg = [UserText "Use the get_time tool to tell me what time it is."]
 
-  result <- runExceptT $ agentLoop callLLM configs initialMsg
+  -- Business logic (agentLoop) is polymorphic - works with any provider/model
+  result <- runExceptT $ agentLoop provider model tools callLLM configs initialMsg
   case result of
     Left err -> putStrLn $ "❌ Error: " <> show err
     Right () -> return ()
