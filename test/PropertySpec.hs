@@ -24,18 +24,29 @@ import TestModels
 -- Arbitrary instances
 -- ============================================================================
 
--- Generator for safe text (avoiding control characters that might cause issues)
-genSafeText :: Gen Text
-genSafeText = T.pack <$> listOf (elements (['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ " .,!?"))
+-- Generator for realistic text (including unicode, special chars, etc)
+genRealisticText :: Gen Text
+genRealisticText = T.pack <$> listOf (frequency
+  [ (60, elements (['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ " .,!?"))  -- Common
+  , (10, elements "\n\t\r")  -- Whitespace
+  , (10, elements "{}[]()<>")  -- Brackets
+  , (5, elements "\"'`")  -- Quotes
+  , (5, elements "\\/@#$%^&*-_+=|:;")  -- Special chars
+  , (5, elements "éñ中文🔥💯")  -- Unicode samples
+  , (5, arbitrary)  -- Occasional truly random char
+  ])
 
--- Generator for non-empty safe text
+-- Generator for non-empty realistic text
 genNonEmptyText :: Gen Text
-genNonEmptyText = T.pack <$> listOf1 (elements (['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ " .,!?"))
+genNonEmptyText = do
+  first <- elements (['a'..'z'] ++ ['A'..'Z'])  -- Start with letter
+  rest <- genRealisticText
+  return $ T.pack (first : T.unpack rest)
 
 -- Generate a simple JSON Value
 genSimpleValue :: Gen Value
 genSimpleValue = oneof
-  [ Aeson.String <$> genSafeText
+  [ Aeson.String <$> genRealisticText
   , Aeson.Number . fromInteger <$> arbitrary
   , Aeson.Bool <$> arbitrary
   , return Aeson.Null
@@ -46,7 +57,7 @@ genSimpleValue = oneof
 instance Arbitrary ToolDefinition where
   arbitrary = ToolDefinition
     <$> genNonEmptyText
-    <*> genSafeText
+    <*> genRealisticText
     <*> genSimpleValue
   shrink (ToolDefinition name desc params) =
     [ ToolDefinition name' desc' params'
@@ -67,8 +78,8 @@ instance Arbitrary ToolCall where
     , InvalidToolCall
         <$> genNonEmptyText  -- id
         <*> genNonEmptyText  -- name
-        <*> genSafeText      -- raw args
-        <*> genSafeText      -- error message
+        <*> genRealisticText -- raw args
+        <*> genRealisticText -- error message
     ]
 
 -- Generate Messages for ClaudeSonnet45 (Anthropic with tools)
@@ -82,7 +93,7 @@ genMessageAnthropicTools = oneof
   ]
   where
     genToolOutput = oneof
-      [ Left <$> genSafeText
+      [ Left <$> genRealisticText
       , Right <$> genSimpleValue
       ]
 
@@ -100,7 +111,7 @@ genMessageOpenAIFull = oneof
   ]
   where
     genToolOutput = oneof
-      [ Left <$> genSafeText
+      [ Left <$> genRealisticText
       , Right <$> genSimpleValue
       ]
 
@@ -109,7 +120,7 @@ genConfigAnthropic :: Gen (ModelConfig AnthropicProvider.Anthropic ClaudeSonnet4
 genConfigAnthropic = oneof
   [ Temperature <$> choose (0.0, 2.0)
   , MaxTokens <$> choose (1, 4096)
-  , SystemPrompt <$> genSafeText
+  , SystemPrompt <$> genRealisticText
   , Tools <$> listOf1 arbitrary
   ]
 
@@ -119,7 +130,7 @@ genConfigOpenAI = oneof
   [ Temperature <$> choose (0.0, 2.0)
   , MaxTokens <$> choose (1, 4096)
   , Seed <$> arbitrary
-  , SystemPrompt <$> genSafeText
+  , SystemPrompt <$> genRealisticText
   , Tools <$> listOf1 arbitrary
   , Reasoning <$> arbitrary
   ]
