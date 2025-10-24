@@ -138,3 +138,45 @@ executable claude-example
     autodocodec-schema,
     time,
     transformers
+
+executable llm-proxy
+  import: shared-properties
+  main-is: Main.hs
+  other-modules:
+    Proxy.OpenAICompat
+  hs-source-dirs: proxy
+
+  build-depends:
+    base,
+    universal-llm,
+    text,
+    aeson,
+    autodocodec,
+    bytestring,
+    warp >= 3.3 && < 4,
+    wai >= 3.2 && < 4,
+    http-types >= 0.12 && < 1,
+    http-conduit,
+    case-insensitive,
+    transformers
+
+executable llm-proxy-anthropic
+  import: shared-properties
+  main-is: MainAnthropic.hs
+  other-modules:
+    Proxy.OpenAICompat
+  hs-source-dirs: proxy
+
+  build-depends:
+    base,
+    universal-llm,
+    text,
+    aeson,
+    autodocodec,
+    bytestring,
+    warp >= 3.3 && < 4,
+    wai >= 3.2 && < 4,
+    http-types >= 0.12 && < 1,
+    http-conduit,
+    case-insensitive,
+    transformers
