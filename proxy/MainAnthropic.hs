@@ -2,12 +2,14 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Main (main) where
 
 import UniversalLLM
-import UniversalLLM.Models.Claude35Sonnet (Claude35Sonnet(..))
 import UniversalLLM.Providers.Anthropic (Anthropic(..), withMagicSystemPrompt, oauthHeaders)
+import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
 import UniversalLLM.Protocols.OpenAI
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
 import Proxy.OpenAICompat
@@ -28,18 +30,35 @@ import Data.CaseInsensitive (mk)
 import Network.HTTP.Simple (httpLBS, setRequestBodyLBS, setRequestHeaders, parseRequest_, getResponseBody, setRequestMethod)
 
 -- ============================================================================
+-- Model Definition
+-- ============================================================================
+
+-- Define the specific model we're using in this proxy
+data ClaudeSonnet45 = ClaudeSonnet45 deriving (Show, Eq)
+
+instance ModelName Anthropic ClaudeSonnet45 where
+  modelName _ = "claude-sonnet-4.5-20250514"
+
+instance HasTools ClaudeSonnet45 Anthropic where
+  toolsComposableProvider = AnthropicProvider.toolsComposableProvider
+
+instance ProviderImplementation Anthropic ClaudeSonnet45 where
+  getComposableProvider =
+    AnthropicProvider.baseComposableProvider
+    <> AnthropicProvider.toolsComposableProvider
+
+-- ============================================================================
 -- Configuration
 -- ============================================================================
 
--- Anthropic Claude backend
 type BackendProvider = Anthropic
-type BackendModel = Claude35Sonnet
+type BackendModel = ClaudeSonnet45
 
 backendProvider :: BackendProvider
 backendProvider = Anthropic
 
 backendModel :: BackendModel
-backendModel = Claude35Sonnet
+backendModel = ClaudeSonnet45
 
 -- ============================================================================
 -- HTTP Transport (copied from examples, will be shared eventually)
@@ -103,7 +122,7 @@ handleProxy apiKey reqBody = do
                          (proxyConfigs proxyConfig)
                          (proxyMessages proxyConfig)
 
-  liftIO $ putStrLn $ "📤 Sending to backend provider (Anthropic Claude 3.5 Sonnet)"
+  liftIO $ putStrLn $ "📤 Sending to backend provider (Anthropic Claude Sonnet 4.5)"
 
   -- 4. Call backend
   backendResponse <- liftIO $ callBackend apiKey backendRequest
@@ -170,7 +189,7 @@ main = do
 
   let port = 8081
   putStrLn $ "🚀 Universal LLM Proxy (Anthropic Backend) starting on port " <> show port
-  putStrLn $ "📍 Backend: Anthropic Claude 3.5 Sonnet"
+  putStrLn $ "📍 Backend: Anthropic Claude Sonnet 4.5"
   putStrLn $ "🔌 Endpoint: http://localhost:" <> show port <> "/v1/chat/completions"
   putStrLn $ "💡 Accepts OpenAI-format requests, translates to Anthropic"
   putStrLn ""

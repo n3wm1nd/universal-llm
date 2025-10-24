@@ -2,13 +2,14 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Main (main) where
 
 import UniversalLLM
-import UniversalLLM.Models.GPT4o (GPT4o(..))
-import UniversalLLM.Models.Claude35Sonnet (Claude35Sonnet(..))
 import UniversalLLM.Providers.OpenAI (OpenAI(..))
+import qualified UniversalLLM.Providers.OpenAI as OpenAIProvider
 import UniversalLLM.Providers.Anthropic (Anthropic(..), withMagicSystemPrompt, oauthHeaders)
 import UniversalLLM.Protocols.OpenAI
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
@@ -30,11 +31,31 @@ import Data.CaseInsensitive (mk)
 import Network.HTTP.Simple (httpLBS, setRequestBodyLBS, setRequestHeaders, parseRequest_, getResponseBody, setRequestMethod)
 
 -- ============================================================================
+-- Model Definition
+-- ============================================================================
+
+-- Define the specific model we're using in this proxy
+data GPT4o = GPT4o deriving (Show, Eq)
+
+instance ModelName OpenAI GPT4o where
+  modelName _ = "gpt-4o"
+
+instance HasTools GPT4o OpenAI where
+  toolsComposableProvider = OpenAIProvider.toolsComposableProvider
+
+instance HasJSON GPT4o OpenAI where
+  jsonComposableProvider = OpenAIProvider.jsonComposableProvider
+
+instance ProviderImplementation OpenAI GPT4o where
+  getComposableProvider =
+    OpenAIProvider.baseComposableProvider
+    <> OpenAIProvider.toolsComposableProvider
+    <> OpenAIProvider.jsonComposableProvider
+
+-- ============================================================================
 -- Configuration
 -- ============================================================================
 
--- For now, hardcoded to GPT-4o via OpenAI
--- Future: Make this configurable via environment/config file
 type BackendProvider = OpenAI
 type BackendModel = GPT4o
 

@@ -16,20 +16,85 @@ import qualified Data.Text.Encoding as TE
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as BSL
 
--- OpenAI provider (phantom type)
+-- OpenAI provider (official OpenAI API)
 data OpenAI = OpenAI deriving (Show, Eq)
 
--- Declare OpenAI parameter support
+-- OpenAI-compatible providers
+-- These all use OpenAI protocol but may have provider-specific quirks
+data OpenAICompatible = OpenAICompatible deriving (Show, Eq)  -- Generic OpenAI-compatible
+data OpenRouter = OpenRouter deriving (Show, Eq)              -- OpenRouter aggregator
+data LlamaCpp = LlamaCpp deriving (Show, Eq)                  -- llama.cpp server
+data Ollama = Ollama deriving (Show, Eq)                      -- Ollama
+data VLLM = VLLM deriving (Show, Eq)                          -- vLLM
+data LiteLLM = LiteLLM deriving (Show, Eq)                    -- LiteLLM proxy
+
+-- Declare parameter support for all OpenAI-compatible providers
+-- All support the same parameter set (temperature, max_tokens, seed, system_prompt)
 instance SupportsTemperature OpenAI
 instance SupportsMaxTokens OpenAI
 instance SupportsSeed OpenAI
 instance SupportsSystemPrompt OpenAI
 
+instance SupportsTemperature OpenAICompatible
+instance SupportsMaxTokens OpenAICompatible
+instance SupportsSeed OpenAICompatible
+instance SupportsSystemPrompt OpenAICompatible
+
+instance SupportsTemperature OpenRouter
+instance SupportsMaxTokens OpenRouter
+instance SupportsSeed OpenRouter
+instance SupportsSystemPrompt OpenRouter
+
+instance SupportsTemperature LlamaCpp
+instance SupportsMaxTokens LlamaCpp
+instance SupportsSeed LlamaCpp
+instance SupportsSystemPrompt LlamaCpp
+
+instance SupportsTemperature Ollama
+instance SupportsMaxTokens Ollama
+instance SupportsSeed Ollama
+instance SupportsSystemPrompt Ollama
+
+instance SupportsTemperature VLLM
+instance SupportsMaxTokens VLLM
+instance SupportsSeed VLLM
+instance SupportsSystemPrompt VLLM
+
+instance SupportsTemperature LiteLLM
+instance SupportsMaxTokens LiteLLM
+instance SupportsSeed LiteLLM
+instance SupportsSystemPrompt LiteLLM
+
 -- OpenAI capabilities are now declared per-model (see model files)
 
+-- All OpenAI-compatible providers use the same request/response types
 instance Provider OpenAI model where
   type ProviderRequest OpenAI = OpenAIRequest
-  type ProviderResponse OpenAI = OpenAIResponse 
+  type ProviderResponse OpenAI = OpenAIResponse
+
+instance Provider OpenAICompatible model where
+  type ProviderRequest OpenAICompatible = OpenAIRequest
+  type ProviderResponse OpenAICompatible = OpenAIResponse
+
+instance Provider OpenRouter model where
+  type ProviderRequest OpenRouter = OpenAIRequest
+  type ProviderResponse OpenRouter = OpenAIResponse
+
+instance Provider LlamaCpp model where
+  type ProviderRequest LlamaCpp = OpenAIRequest
+  type ProviderResponse LlamaCpp = OpenAIResponse
+
+instance Provider Ollama model where
+  type ProviderRequest Ollama = OpenAIRequest
+  type ProviderResponse Ollama = OpenAIResponse
+
+instance Provider VLLM model where
+  type ProviderRequest VLLM = OpenAIRequest
+  type ProviderResponse VLLM = OpenAIResponse
+
+instance Provider LiteLLM model where
+  type ProviderRequest LiteLLM = OpenAIRequest
+  type ProviderResponse LiteLLM = OpenAIResponse 
 
 -- Helper: Get last message from request
 lastMessage :: OpenAIRequest -> Maybe OpenAIMessage
