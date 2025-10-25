@@ -175,7 +175,7 @@ spec = do
           model = BasicModel
           configs = []
           msg = UserText "Hello"
-          cp = baseComposableProvider @BasicModel
+          cp = baseComposableProvider @OpenAI @BasicModel
           req = cpToRequest cp provider model configs msg mempty
 
       length (messages req) `shouldBe` 1
@@ -191,7 +191,7 @@ spec = do
           msg = AssistantReasoning "thinking"
 
           -- Compose base + reasoning
-          cp = baseComposableProvider <> OpenAIProvider.reasoningComposableProvider
+          cp = baseComposableProvider @OpenAI @ReasoningModel <> OpenAIProvider.reasoningComposableProvider @OpenAI @ReasoningModel
           req = cpToRequest cp provider model configs msg mempty
 
       length (messages req) `shouldBe` 1
