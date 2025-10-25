@@ -41,9 +41,10 @@ handleBase _provider model configs _msg req =
       , temperature = case [t | Temperature t <- configs] of { (t:_) -> Just t; [] -> temperature req }
       }
 
--- System prompt handler (from config)
-handleSystemPrompt :: MessageHandler Anthropic model
-handleSystemPrompt = \_provider _model configs _msg req ->
+-- System prompt config handler (from config)
+-- This is a ConfigHandler, not a MessageHandler - it runs after all messages are processed
+handleSystemPrompt :: ConfigHandler Anthropic model
+handleSystemPrompt = \_provider _model configs req ->
   let systemPrompts = [sp | SystemPrompt sp <- configs]
       sysBlocks = [AnthropicSystemBlock sp "text" | sp <- systemPrompts]
   in if null sysBlocks
@@ -108,7 +109,8 @@ handleTools = \_provider _model configs msg req -> case msg of
 
 baseComposableProvider :: forall model. ModelName Anthropic model => ComposableProvider Anthropic model
 baseComposableProvider = ComposableProvider
-  { cpToRequest = handleBase >>> handleSystemPrompt >>> handleTextMessages
+  { cpToRequest = handleBase >>> handleTextMessages
+  , cpConfigHandler = handleSystemPrompt
   , cpFromResponse = parseTextResponse
   }
   where
@@ -121,6 +123,7 @@ baseComposableProvider = ComposableProvider
 toolsComposableProvider :: forall model. HasTools model Anthropic => ComposableProvider Anthropic model
 toolsComposableProvider = ComposableProvider
   { cpToRequest = handleTools
+  , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
   , cpFromResponse = parseToolResponse
   }
   where
@@ -133,7 +136,8 @@ toolsComposableProvider = ComposableProvider
 -- This should be composed at the END of the provider chain
 ensureUserFirstProvider :: ComposableProvider Anthropic model
 ensureUserFirstProvider = ComposableProvider
-  { cpToRequest = \_provider _model _configs _msg req ->
+  { cpToRequest = \_provider _model _configs _msg req -> req  -- No message handling needed
+  , cpConfigHandler = \_provider _model _configs req ->
       -- Anthropic API requires first message to be from user
       case messages req of
         [] -> req

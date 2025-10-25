@@ -201,9 +201,18 @@ type ResponseParser provider model =
   -> ProviderResponse provider
   -> [Message model provider]
 
+-- Config handler: processes configs after messages (e.g., for system prompts, tools)
+type ConfigHandler provider model =
+  provider
+  -> model
+  -> [ModelConfig provider model]
+  -> ProviderRequest provider
+  -> ProviderRequest provider
+
 -- Composable bidirectional provider (couples toRequest and fromResponse)
 data ComposableProvider provider model = ComposableProvider
   { cpToRequest :: MessageHandler provider model
+  , cpConfigHandler :: ConfigHandler provider model  -- Applied after message processing
   , cpFromResponse :: ResponseParser provider model
   }
 
@@ -213,6 +222,9 @@ instance Semigroup (ComposableProvider provider model) where
     { cpToRequest = \provider model configs msg req ->
         let req' = cpToRequest cp1 provider model configs msg req
         in cpToRequest cp2 provider model configs msg req'
+    , cpConfigHandler = \provider model configs req ->
+        let req' = cpConfigHandler cp1 provider model configs req
+        in cpConfigHandler cp2 provider model configs req'
     , cpFromResponse = \provider model configs history acc resp ->
         let acc' = cpFromResponse cp1 provider model configs history acc resp
         in cpFromResponse cp2 provider model configs history acc' resp
@@ -221,6 +233,7 @@ instance Semigroup (ComposableProvider provider model) where
 instance Monoid (ComposableProvider provider model) where
   mempty = ComposableProvider
     { cpToRequest = \_provider _model _configs _msg req -> req
+    , cpConfigHandler = \_provider _model _configs req -> req
     , cpFromResponse = \_provider _model _configs _history acc _resp -> acc
     }
 
@@ -235,9 +248,13 @@ toProviderRequest :: (ProviderImplementation provider model, Monoid (ProviderReq
                   -> ProviderRequest provider
 toProviderRequest provider model configs msgs =
   let composableProvider = getComposableProvider
-      handler = cpToRequest composableProvider
-      fold acc msg = handler provider model configs msg acc
-  in foldl fold mempty msgs
+      messageHandler = cpToRequest composableProvider
+      configHandler = cpConfigHandler composableProvider
+      -- First: process all messages
+      fold acc msg = messageHandler provider model configs msg acc
+      reqAfterMessages = foldl fold mempty msgs
+      -- Second: apply config handlers
+  in configHandler provider model configs reqAfterMessages
 
 -- Parse a provider response using the model's provider implementation
 fromProviderResponse :: ProviderImplementation provider model

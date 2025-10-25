@@ -110,9 +110,10 @@ modifyLastMessage req f = case messages req of
 
 -- Base handler: model name and basic config
 -- Updates the request with model name and config
-handleBase :: ModelName OpenAI model => MessageHandler OpenAI model
+-- Polymorphic over any provider that uses OpenAI protocol
+handleBase :: forall provider model. (ModelName provider model, ProviderRequest provider ~ OpenAIRequest) => MessageHandler provider model
 handleBase _provider model configs _msg req =
-  req { model = modelName @OpenAI model
+  req { model = modelName @provider model
       , temperature = getFirst [t | Temperature t <- configs]
       , max_tokens = getFirst [mt | MaxTokens mt <- configs]
       , seed = getFirst [s | Seed s <- configs]
@@ -121,15 +122,18 @@ handleBase _provider model configs _msg req =
     getFirst [] = Nothing
     getFirst (x:_) = Just x
 
--- System prompt handler (from config)
-handleSystemPrompt :: MessageHandler OpenAI model
-handleSystemPrompt =  \_provider _model configs _msg req ->
+-- System prompt config handler (from config)
+-- Polymorphic over any provider that uses OpenAI protocol
+-- This is a ConfigHandler, not a MessageHandler - it runs after all messages are processed
+configureSystemPrompt :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => ConfigHandler provider model
+configureSystemPrompt = \_provider _model configs req ->
   let systemPrompts = [sp | SystemPrompt sp <- configs]
       sysMessages = [OpenAIMessage "system" (Just sp) Nothing Nothing Nothing | sp <- systemPrompts]
   in req { messages = sysMessages <> messages req }
 
 -- Basic text message handler
-handleTextMessages :: MessageHandler OpenAI model
+-- Polymorphic over any provider that uses OpenAI protocol
+handleTextMessages :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageHandler provider model
 handleTextMessages =  \_provider _model _configs msg req -> case msg of
   UserText txt ->
     case lastMessage req of
@@ -152,7 +156,8 @@ handleTextMessages =  \_provider _model _configs msg req -> case msg of
   _ -> req  -- Not a text message
 
 -- Tools handler
-handleTools :: MessageHandler OpenAI model
+-- Polymorphic over any provider that uses OpenAI protocol
+handleTools :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageHandler provider model
 handleTools =  \_provider _model configs msg req -> case msg of
   AssistantTool call ->
     case lastMessage req of
@@ -175,7 +180,8 @@ handleTools =  \_provider _model configs msg req -> case msg of
        else req { tools = Just (map toOpenAIToolDef (concat toolDefs)) }
 
 -- JSON handler
-handleJSON :: MessageHandler OpenAI model
+-- Polymorphic over any provider that uses OpenAI protocol
+handleJSON :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageHandler provider model
 handleJSON =  \_provider _model _configs msg req -> case msg of
   UserRequestJSON txt schema ->
     req { messages = messages req <> [OpenAIMessage "user" (Just txt) Nothing Nothing Nothing]
@@ -187,7 +193,8 @@ handleJSON =  \_provider _model _configs msg req -> case msg of
   _ -> req
 
 -- Reasoning handler
-handleReasoning :: MessageHandler OpenAI model
+-- Polymorphic over any provider that uses OpenAI protocol
+handleReasoning :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageHandler provider model
 handleReasoning =  \_provider _model _configs msg req -> case msg of
   AssistantReasoning txt ->
     req { messages = messages req <> [OpenAIMessage "assistant" Nothing (Just txt) Nothing Nothing] }
@@ -196,9 +203,11 @@ handleReasoning =  \_provider _model _configs msg req -> case msg of
 -- Composable providers (bidirectional handlers)
 
 -- Base composable provider: model name, basic config, text messages
-baseComposableProvider :: forall model. ModelName OpenAI model => ComposableProvider OpenAI model
+-- Polymorphic over any provider that uses OpenAI protocol
+baseComposableProvider :: forall provider model. (ModelName provider model, Provider provider model, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
 baseComposableProvider = ComposableProvider
-  { cpToRequest = handleBase >>> handleSystemPrompt >>> handleTextMessages
+  { cpToRequest = handleBase >>> handleTextMessages
+  , cpConfigHandler = configureSystemPrompt
   , cpFromResponse = parseTextResponse
   }
   where
@@ -212,9 +221,11 @@ baseComposableProvider = ComposableProvider
     parseTextResponse _provider _model _configs _history acc _ = acc
 
 -- Reasoning composable provider
-reasoningComposableProvider :: forall model. HasReasoning model OpenAI => ComposableProvider OpenAI model
+-- Polymorphic over any provider that uses OpenAI protocol
+reasoningComposableProvider :: forall provider model. (HasReasoning model provider, Provider provider model, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
 reasoningComposableProvider = ComposableProvider
   { cpToRequest = UniversalLLM.Providers.OpenAI.handleReasoning
+  , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
   , cpFromResponse = parseReasoningResponse
   }
   where
@@ -228,9 +239,11 @@ reasoningComposableProvider = ComposableProvider
     parseReasoningResponse _provider _model _configs _history acc _ = acc
 
 -- Tools composable provider
-toolsComposableProvider :: forall model. HasTools model OpenAI => ComposableProvider OpenAI model
+-- Polymorphic over any provider that uses OpenAI protocol
+toolsComposableProvider :: forall provider model. (HasTools model provider, Provider provider model, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
 toolsComposableProvider = ComposableProvider
   { cpToRequest = handleTools
+  , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
   , cpFromResponse = parseToolResponse
   }
   where
@@ -246,9 +259,11 @@ toolsComposableProvider = ComposableProvider
 -- JSON composable provider
 -- Transforms AssistantText messages that contain valid JSON into AssistantJSON
 -- Only transforms if JSON was explicitly requested (checks response format in request)
-jsonComposableProvider :: forall model. HasJSON model OpenAI => ComposableProvider OpenAI model
+-- Polymorphic over any provider that uses OpenAI protocol
+jsonComposableProvider :: forall provider model. (HasJSON model provider, Provider provider model, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
 jsonComposableProvider = ComposableProvider
   { cpToRequest = handleJSON
+  , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
   , cpFromResponse = parseJSONResponse
   }
   where
@@ -261,7 +276,7 @@ jsonComposableProvider = ComposableProvider
         then map transformTextToJSON acc
         else acc
 
-    lastMessageRequestedJSON :: [Message model OpenAI] -> Bool
+    lastMessageRequestedJSON :: [Message model provider] -> Bool
     lastMessageRequestedJSON msgs =
       case lastUserMessage msgs of
         Just (UserRequestJSON _ _) -> True
@@ -284,7 +299,7 @@ jsonComposableProvider = ComposableProvider
     isSuccessResponse (OpenAISuccess _) = True
     isSuccessResponse (OpenAIError _) = False
 
-    transformTextToJSON :: Message model OpenAI -> Message model OpenAI
+    transformTextToJSON :: Message model provider -> Message model provider
     transformTextToJSON (AssistantText txt) =
       -- Only transform if it's valid JSON and not empty
       case Aeson.eitherDecodeStrict (TE.encodeUtf8 txt) of
