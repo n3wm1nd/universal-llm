@@ -41,16 +41,13 @@ instance ModelName OpenAI GPT4o where
   modelName _ = "gpt-4o"
 
 instance HasTools GPT4o OpenAI where
-  toolsComposableProvider = OpenAIProvider.toolsComposableProvider
+  withTools = OpenAIProvider.openAIWithTools
 
 instance HasJSON GPT4o OpenAI where
-  jsonComposableProvider = OpenAIProvider.jsonComposableProvider
+  withJSON = OpenAIProvider.openAIWithJSON
 
 instance ProviderImplementation OpenAI GPT4o where
-  getComposableProvider =
-    OpenAIProvider.baseComposableProvider
-    <> OpenAIProvider.toolsComposableProvider
-    <> OpenAIProvider.jsonComposableProvider
+  getComposableProvider = withJSON . withTools $ OpenAIProvider.baseComposableProvider
 
 -- ============================================================================
 -- Configuration

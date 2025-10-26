@@ -22,10 +22,10 @@ instance ModelName Anthropic ClaudeSonnet45 where
   modelName _ = "claude-sonnet-4-5-20250929"
 
 instance HasTools ClaudeSonnet45 Anthropic where
-  toolsComposableProvider = Anthropic.toolsComposableProvider
+  withTools = Anthropic.anthropicWithTools
 
 instance ProviderImplementation Anthropic ClaudeSonnet45 where
-  getComposableProvider = Anthropic.baseComposableProvider <> Anthropic.toolsComposableProvider <> Anthropic.ensureUserFirstProvider
+  getComposableProvider = Anthropic.ensureUserFirst . withTools $ Anthropic.baseComposableProvider
 
 -- ============================================================================
 -- OpenAI-Compatible Models (for testing with llama.cpp/GLM4.5)
@@ -38,16 +38,16 @@ instance ModelName OpenAI GLM45 where
   modelName _ = "glm-4-plus"
 
 instance HasTools GLM45 OpenAI where
-  toolsComposableProvider = OpenAI.toolsComposableProvider
+  withTools = OpenAI.openAIWithTools
 
 instance HasReasoning GLM45 OpenAI where
-  reasoningComposableProvider = OpenAI.reasoningComposableProvider
+  withReasoning = OpenAI.openAIWithReasoning
 
 instance HasJSON GLM45 OpenAI where
-  jsonComposableProvider = OpenAI.jsonComposableProvider
+  withJSON = OpenAI.openAIWithJSON
 
 instance ProviderImplementation OpenAI GLM45 where
-  getComposableProvider = OpenAI.baseComposableProvider <> OpenAI.toolsComposableProvider <> OpenAI.reasoningComposableProvider <> OpenAI.jsonComposableProvider
+  getComposableProvider = withJSON . withReasoning . withTools $ OpenAI.baseComposableProvider
 
 -- Basic text-only model (for compile-time safety tests)
 data BasicTextModel = BasicTextModel deriving (Show, Eq)
@@ -64,10 +64,10 @@ instance ModelName OpenAI ToolsOnlyModel where
   modelName _ = "tools-only-model"
 
 instance HasTools ToolsOnlyModel OpenAI where
-  toolsComposableProvider = OpenAI.toolsComposableProvider
+  withTools = OpenAI.openAIWithTools
 
 instance ProviderImplementation OpenAI ToolsOnlyModel where
-  getComposableProvider = OpenAI.baseComposableProvider <> OpenAI.toolsComposableProvider
+  getComposableProvider = withTools $ OpenAI.baseComposableProvider
 
 -- JSON-capable model (no tools, no reasoning)
 data JSONModel = JSONModel deriving (Show, Eq)
@@ -76,7 +76,7 @@ instance ModelName OpenAI JSONModel where
   modelName _ = "json-model"
 
 instance HasJSON JSONModel OpenAI where
-  jsonComposableProvider = OpenAI.jsonComposableProvider
+  withJSON = OpenAI.openAIWithJSON
 
 instance ProviderImplementation OpenAI JSONModel where
-  getComposableProvider = OpenAI.baseComposableProvider <> OpenAI.jsonComposableProvider
+  getComposableProvider = withJSON $ OpenAI.baseComposableProvider

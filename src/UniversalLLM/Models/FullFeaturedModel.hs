@@ -19,36 +19,30 @@ instance ModelName OpenAI FullFeaturedModel where
   modelName _ = "full-featured-model"
 
 instance HasTools FullFeaturedModel OpenAI where
-  toolsComposableProvider = UniversalLLM.Providers.OpenAI.toolsComposableProvider
+  withTools = UniversalLLM.Providers.OpenAI.openAIWithTools
 
 instance HasJSON FullFeaturedModel OpenAI where
-  jsonComposableProvider = UniversalLLM.Providers.OpenAI.jsonComposableProvider
+  withJSON = UniversalLLM.Providers.OpenAI.openAIWithJSON
 
 instance HasReasoning FullFeaturedModel OpenAI where
-  reasoningComposableProvider = UniversalLLM.Providers.OpenAI.reasoningComposableProvider
+  withReasoning = UniversalLLM.Providers.OpenAI.openAIWithReasoning
 
 -- Note: HasVision intentionally NOT implemented yet (no provider supports it)
 -- instance HasVision FullFeaturedModel OpenAI where
---   visionComposableProvider = UniversalLLM.Providers.OpenAI.visionComposableProvider
+--   withVision = UniversalLLM.Providers.OpenAI.openAIWithVision
 
 instance ProviderImplementation OpenAI FullFeaturedModel where
-  getComposableProvider =
-    UniversalLLM.Providers.OpenAI.baseComposableProvider
-    <> UniversalLLM.Providers.OpenAI.toolsComposableProvider
-    <> UniversalLLM.Providers.OpenAI.jsonComposableProvider
-    <> UniversalLLM.Providers.OpenAI.reasoningComposableProvider
+  getComposableProvider = withReasoning . withJSON . withTools $ UniversalLLM.Providers.OpenAI.baseComposableProvider
 
 -- Anthropic provider support - subset of capabilities
 instance ModelName Anthropic FullFeaturedModel where
   modelName _ = "full-featured-model"
 
 instance HasTools FullFeaturedModel Anthropic where
-  toolsComposableProvider = UniversalLLM.Providers.Anthropic.toolsComposableProvider
+  withTools = UniversalLLM.Providers.Anthropic.anthropicWithTools
 
 instance ProviderImplementation Anthropic FullFeaturedModel where
-  getComposableProvider =
-    UniversalLLM.Providers.Anthropic.baseComposableProvider
-    <> UniversalLLM.Providers.Anthropic.toolsComposableProvider
+  getComposableProvider = UniversalLLM.Providers.Anthropic.ensureUserFirst . withTools $ UniversalLLM.Providers.Anthropic.baseComposableProvider
 
 -- Note: This is a phantom model for examples and documentation
 -- Real model definitions in external packages should use specific model names

@@ -25,23 +25,23 @@ instance ModelName OpenAI BasicModel where
 instance ModelName OpenAI ToolsModel where
   modelName _ = "tools-model"
 instance HasTools ToolsModel OpenAI where
-  toolsComposableProvider = OpenAIProvider.toolsComposableProvider
+  withTools = OpenAIProvider.openAIWithTools
 
 -- ReasoningModel: text + reasoning
 instance ModelName OpenAI ReasoningModel where
   modelName _ = "reasoning-model"
 instance HasReasoning ReasoningModel OpenAI where
-  reasoningComposableProvider = OpenAIProvider.reasoningComposableProvider
+  withReasoning = OpenAIProvider.openAIWithReasoning
 
 -- FullFeaturedModel: text + tools + reasoning + JSON
 instance ModelName OpenAI FullFeaturedModel where
   modelName _ = "full-featured-model"
 instance HasTools FullFeaturedModel OpenAI where
-  toolsComposableProvider = OpenAIProvider.toolsComposableProvider
+  withTools = OpenAIProvider.openAIWithTools
 instance HasReasoning FullFeaturedModel OpenAI where
-  reasoningComposableProvider = OpenAIProvider.reasoningComposableProvider
+  withReasoning = OpenAIProvider.openAIWithReasoning
 instance HasJSON FullFeaturedModel OpenAI where
-  jsonComposableProvider = OpenAIProvider.jsonComposableProvider
+  withJSON = OpenAIProvider.openAIWithJSON
 
 spec :: Spec
 spec = do
@@ -191,7 +191,7 @@ spec = do
           msg = AssistantReasoning "thinking"
 
           -- Compose base + reasoning
-          cp = baseComposableProvider @OpenAI @ReasoningModel <> OpenAIProvider.reasoningComposableProvider @OpenAI @ReasoningModel
+          cp = OpenAIProvider.openAIWithReasoning @OpenAI @ReasoningModel (baseComposableProvider @OpenAI @ReasoningModel)
           req = cpToRequest cp provider model configs msg mempty
 
       length (messages req) `shouldBe` 1

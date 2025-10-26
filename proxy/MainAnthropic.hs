@@ -40,12 +40,10 @@ instance ModelName Anthropic ClaudeSonnet45 where
   modelName _ = "claude-sonnet-4.5-20250514"
 
 instance HasTools ClaudeSonnet45 Anthropic where
-  toolsComposableProvider = AnthropicProvider.toolsComposableProvider
+  withTools = AnthropicProvider.anthropicWithTools
 
 instance ProviderImplementation Anthropic ClaudeSonnet45 where
-  getComposableProvider =
-    AnthropicProvider.baseComposableProvider
-    <> AnthropicProvider.toolsComposableProvider
+  getComposableProvider = AnthropicProvider.ensureUserFirst . withTools $ AnthropicProvider.baseComposableProvider
 
 -- ============================================================================
 -- Configuration

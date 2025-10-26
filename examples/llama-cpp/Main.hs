@@ -37,13 +37,13 @@ instance ModelName OpenAI MistralModel where
   modelName _ = "mistral-7b-instruct"
 
 instance HasTools MistralModel OpenAI where
-  toolsComposableProvider = UniversalLLM.Providers.OpenAI.toolsComposableProvider
+  withTools = UniversalLLM.Providers.OpenAI.openAIWithTools
 
 instance HasJSON MistralModel OpenAI where
-  jsonComposableProvider = UniversalLLM.Providers.OpenAI.jsonComposableProvider
+  withJSON = UniversalLLM.Providers.OpenAI.openAIWithJSON
 
 instance ProviderImplementation OpenAI MistralModel where
-  getComposableProvider = UniversalLLM.Providers.OpenAI.baseComposableProvider <> UniversalLLM.Providers.OpenAI.toolsComposableProvider <> UniversalLLM.Providers.OpenAI.jsonComposableProvider
+  getComposableProvider = withJSON . withTools $ UniversalLLM.Providers.OpenAI.baseComposableProvider
 
 -- ============================================================================
 -- Tool Definition

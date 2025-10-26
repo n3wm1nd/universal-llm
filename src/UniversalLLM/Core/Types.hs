@@ -35,18 +35,18 @@ class SupportsSystemPrompt a
 -- HasX for capabilities (features that require both model AND provider support)
 -- These take two parameters: model and provider
 -- Instances must be declared explicitly for each model/provider combination
--- Each instance must provide the composable provider implementation as proof it works
+-- Each instance must provide a combinator to augment a base provider with the capability
 class Provider provider model => HasTools model provider where
-  toolsComposableProvider :: ComposableProvider provider model
+  withTools :: ComposableProvider provider model -> ComposableProvider provider model
 
 class Provider provider model => HasVision model provider where
-  visionComposableProvider :: ComposableProvider provider model
+  withVision :: ComposableProvider provider model -> ComposableProvider provider model
 
 class Provider provider model => HasJSON model provider where
-  jsonComposableProvider :: ComposableProvider provider model
+  withJSON :: ComposableProvider provider model -> ComposableProvider provider model
 
 class Provider provider model => HasReasoning model provider where
-  reasoningComposableProvider :: ComposableProvider provider model
+  withReasoning :: ComposableProvider provider model -> ComposableProvider provider model
 
 -- ModelConfig GADT - configuration values with provider and model constraints
 -- Only constructible if the provider supports the parameter and/or model
@@ -216,30 +216,28 @@ data ComposableProvider provider model = ComposableProvider
   , cpFromResponse :: ResponseParser provider model
   }
 
--- ComposableProviders compose via Semigroup/Monoid
-instance Semigroup (ComposableProvider provider model) where
-  cp1 <> cp2 = ComposableProvider
-    { cpToRequest = \provider model configs msg req ->
-        let req' = cpToRequest cp1 provider model configs msg req
-        in cpToRequest cp2 provider model configs msg req'
-    , cpConfigHandler = \provider model configs req ->
-        let req' = cpConfigHandler cp1 provider model configs req
-        in cpConfigHandler cp2 provider model configs req'
-    , cpFromResponse = \provider model configs history acc resp ->
-        let acc' = cpFromResponse cp1 provider model configs history acc resp
-        in cpFromResponse cp2 provider model configs history acc' resp
-    }
-
-instance Monoid (ComposableProvider provider model) where
-  mempty = ComposableProvider
-    { cpToRequest = \_provider _model _configs _msg req -> req
-    , cpConfigHandler = \_provider _model _configs req -> req
-    , cpFromResponse = \_provider _model _configs _history acc _resp -> acc
-    }
+-- Chain two providers together, applying cp1 first then cp2
+-- This replaces the previous Semigroup (<>) instance with explicit naming
+infixl 6 `chainProviders`
+chainProviders :: ComposableProvider provider model
+               -> ComposableProvider provider model
+               -> ComposableProvider provider model
+chainProviders cp1 cp2 = ComposableProvider
+  { cpToRequest = \provider model configs msg req ->
+      let req' = cpToRequest cp1 provider model configs msg req
+      in cpToRequest cp2 provider model configs msg req'
+  , cpConfigHandler = \provider model configs req ->
+      let req' = cpConfigHandler cp1 provider model configs req
+      in cpConfigHandler cp2 provider model configs req'
+  , cpFromResponse = \provider model configs history acc resp ->
+      let acc' = cpFromResponse cp1 provider model configs history acc resp
+      in cpFromResponse cp2 provider model configs history acc' resp
+  }
 
 -- Helper functions for building requests and parsing responses
 
 -- Build a provider request from messages using the model's provider implementation
+-- The base provider is responsible for creating the initial empty request structure
 toProviderRequest :: (ProviderImplementation provider model, Monoid (ProviderRequest provider))
                   => provider
                   -> model
@@ -250,7 +248,7 @@ toProviderRequest provider model configs msgs =
   let composableProvider = getComposableProvider
       messageHandler = cpToRequest composableProvider
       configHandler = cpConfigHandler composableProvider
-      -- First: process all messages
+      -- Start with mempty and fold over messages
       fold acc msg = messageHandler provider model configs msg acc
       reqAfterMessages = foldl fold mempty msgs
       -- Second: apply config handlers

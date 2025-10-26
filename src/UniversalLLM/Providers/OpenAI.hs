@@ -220,15 +220,16 @@ baseComposableProvider = ComposableProvider
             Nothing -> acc
     parseTextResponse _provider _model _configs _history acc _ = acc
 
--- Reasoning composable provider
+-- Reasoning capability combinator
 -- Polymorphic over any provider that uses OpenAI protocol
-reasoningComposableProvider :: forall provider model. (HasReasoning model provider, Provider provider model, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
-reasoningComposableProvider = ComposableProvider
-  { cpToRequest = UniversalLLM.Providers.OpenAI.handleReasoning
-  , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
-  , cpFromResponse = parseReasoningResponse
-  }
+openAIWithReasoning :: forall provider model. (HasReasoning model provider, Provider provider model, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model -> ComposableProvider provider model
+openAIWithReasoning base = base `chainProviders` reasoningProvider
   where
+    reasoningProvider = ComposableProvider
+      { cpToRequest = UniversalLLM.Providers.OpenAI.handleReasoning
+      , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
+      , cpFromResponse = parseReasoningResponse
+      }
     parseReasoningResponse _provider _model _configs _history acc (OpenAISuccess (OpenAISuccessResponse choices)) =
       case choices of
         [] -> acc
@@ -238,15 +239,16 @@ reasoningComposableProvider = ComposableProvider
             Nothing -> acc
     parseReasoningResponse _provider _model _configs _history acc _ = acc
 
--- Tools composable provider
+-- Tools capability combinator
 -- Polymorphic over any provider that uses OpenAI protocol
-toolsComposableProvider :: forall provider model. (HasTools model provider, Provider provider model, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
-toolsComposableProvider = ComposableProvider
-  { cpToRequest = handleTools
-  , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
-  , cpFromResponse = parseToolResponse
-  }
+openAIWithTools :: forall provider model. (HasTools model provider, Provider provider model, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model -> ComposableProvider provider model
+openAIWithTools base = base `chainProviders` toolsProvider
   where
+    toolsProvider = ComposableProvider
+      { cpToRequest = handleTools
+      , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
+      , cpFromResponse = parseToolResponse
+      }
     parseToolResponse _provider _model _configs _history acc (OpenAISuccess (OpenAISuccessResponse choices)) =
       case choices of
         [] -> acc
@@ -256,17 +258,19 @@ toolsComposableProvider = ComposableProvider
             Nothing -> acc
     parseToolResponse _provider _model _configs _history acc _ = acc
 
--- JSON composable provider
+-- JSON capability combinator
 -- Transforms AssistantText messages that contain valid JSON into AssistantJSON
 -- Only transforms if JSON was explicitly requested (checks response format in request)
 -- Polymorphic over any provider that uses OpenAI protocol
-jsonComposableProvider :: forall provider model. (HasJSON model provider, Provider provider model, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
-jsonComposableProvider = ComposableProvider
-  { cpToRequest = handleJSON
-  , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
-  , cpFromResponse = parseJSONResponse
-  }
+openAIWithJSON :: forall provider model. (HasJSON model provider, Provider provider model, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model -> ComposableProvider provider model
+openAIWithJSON base = base `chainProviders` jsonProvider
   where
+    jsonProvider = ComposableProvider
+      { cpToRequest = handleJSON
+      , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
+      , cpFromResponse = parseJSONResponse
+      }
+
     parseJSONResponse _provider _model _configs history acc resp =
       -- Only transform to JSON if:
       -- 1. The last user message explicitly requested JSON mode (UserRequestJSON), AND

@@ -107,6 +107,7 @@ handleTools = \_provider _model configs msg req -> case msg of
 
 -- Composable providers for Anthropic
 
+-- Base provider: handles text messages and basic configuration
 baseComposableProvider :: forall model. ModelName Anthropic model => ComposableProvider Anthropic model
 baseComposableProvider = ComposableProvider
   { cpToRequest = handleBase >>> handleTextMessages
@@ -120,13 +121,15 @@ baseComposableProvider = ComposableProvider
         (txt:_) -> acc <> [AssistantText txt]
         [] -> acc
 
-toolsComposableProvider :: forall model. HasTools model Anthropic => ComposableProvider Anthropic model
-toolsComposableProvider = ComposableProvider
-  { cpToRequest = handleTools
-  , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
-  , cpFromResponse = parseToolResponse
-  }
+-- Tools capability combinator
+anthropicWithTools :: forall model. (HasTools model Anthropic, ModelName Anthropic model) => ComposableProvider Anthropic model -> ComposableProvider Anthropic model
+anthropicWithTools base = base `chainProviders` toolsProvider
   where
+    toolsProvider = ComposableProvider
+      { cpToRequest = handleTools
+      , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
+      , cpFromResponse = parseToolResponse
+      }
     parseToolResponse _provider _model _configs _history acc (AnthropicError _) = acc
     parseToolResponse _provider _model _configs _history acc (AnthropicSuccess resp) =
       acc <> [AssistantTool (ToolCall tid tname tinput) | AnthropicToolUseBlock tid tname tinput <- responseContent resp]
@@ -134,23 +137,25 @@ toolsComposableProvider = ComposableProvider
 -- Ensures Anthropic's API constraint: conversations must start with a user message
 -- If the first message is from assistant, prepends an empty user message
 -- This should be composed at the END of the provider chain
-ensureUserFirstProvider :: ComposableProvider Anthropic model
-ensureUserFirstProvider = ComposableProvider
-  { cpToRequest = \_provider _model _configs _msg req -> req  -- No message handling needed
-  , cpConfigHandler = \_provider _model _configs req ->
-      -- Anthropic API requires first message to be from user
-      case messages req of
-        [] -> req
-        (firstMsg:_) -> if role firstMsg == "user"
-          then req
-          else req { messages = AnthropicMessage "user" [AnthropicTextBlock ""] : messages req }
-  , cpFromResponse = \_provider _model _configs _history acc _resp -> acc  -- No-op for response parsing
-  }
+ensureUserFirst :: ComposableProvider Anthropic model -> ComposableProvider Anthropic model
+ensureUserFirst base = base `chainProviders` ensureUserFirstProvider
+  where
+    ensureUserFirstProvider = ComposableProvider
+      { cpToRequest = \_provider _model _configs _msg req -> req  -- No message handling needed
+      , cpConfigHandler = \_provider _model _configs req ->
+          -- Anthropic API requires first message to be from user
+          case messages req of
+            [] -> req
+            (firstMsg:_) -> if role firstMsg == "user"
+              then req
+              else req { messages = AnthropicMessage "user" [AnthropicTextBlock ""] : messages req }
+      , cpFromResponse = \_provider _model _configs _history acc _resp -> acc  -- No-op for response parsing
+      }
 
 -- Default ProviderImplementation for basic text-only models
 -- Models with capabilities (tools, vision, etc.) should provide their own instances
 instance {-# OVERLAPPABLE #-} ModelName Anthropic model => ProviderImplementation Anthropic model where
-  getComposableProvider = baseComposableProvider <> ensureUserFirstProvider
+  getComposableProvider = ensureUserFirst $ baseComposableProvider
 
 
 -- | Add magic system prompt for OAuth authentication
