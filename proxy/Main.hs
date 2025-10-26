@@ -10,9 +10,8 @@ module Main (main) where
 import UniversalLLM
 import UniversalLLM.Providers.OpenAI (OpenAI(..))
 import qualified UniversalLLM.Providers.OpenAI as OpenAIProvider
-import UniversalLLM.Providers.Anthropic (Anthropic(..), withMagicSystemPrompt, oauthHeaders)
+import UniversalLLM.Providers.Anthropic ()  -- Import instances only
 import UniversalLLM.Protocols.OpenAI
-import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
 import Proxy.OpenAICompat
 
 import Network.Wai

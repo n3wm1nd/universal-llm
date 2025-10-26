@@ -12,9 +12,6 @@ module Proxy.OpenAICompat
 import UniversalLLM
 import UniversalLLM.Protocols.OpenAI
 import Data.Text (Text)
-import qualified Data.Text as T
-import Data.Aeson (Value)
-import qualified Data.Aeson as Aeson
 
 -- | Configuration extracted from an OpenAI request
 -- This is the intermediate universal representation
@@ -30,8 +27,7 @@ data ProxyConfig provider model = ProxyConfig
 -- | Parse an OpenAI request into universal message format
 -- This is the key translation layer: OpenAI wire format -> Universal format
 parseOpenAIRequest :: forall provider model.
-                      (ProviderImplementation provider model,
-                       SupportsTemperature provider,
+                      (SupportsTemperature provider,
                        SupportsMaxTokens provider)
                    => OpenAIRequest
                    -> Either Text (ProxyConfig provider model)

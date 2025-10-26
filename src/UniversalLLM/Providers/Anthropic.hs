@@ -26,7 +26,7 @@ instance SupportsSystemPrompt Anthropic
 -- Anthropic capabilities are now declared per-model (see model files)
 
 -- Provider typeclass implementation (just type associations)
-instance ModelName Anthropic model => Provider Anthropic model where
+instance Provider Anthropic model where
   type ProviderRequest Anthropic = AnthropicRequest
   type ProviderResponse Anthropic = AnthropicResponse
 
@@ -35,8 +35,8 @@ instance ModelName Anthropic model => Provider Anthropic model where
 -- Base handler: model name and basic config
 -- Updates the request with model name and config
 handleBase :: ModelName Anthropic model => MessageHandler Anthropic model
-handleBase _provider model configs _msg req =
-  req { model = modelName @Anthropic model
+handleBase _provider modelType configs _msg req =
+  req { model = modelName @Anthropic modelType
       , max_tokens = case [mt | MaxTokens mt <- configs] of { (mt:_) -> mt; [] -> max_tokens req }
       , temperature = case [t | Temperature t <- configs] of { (t:_) -> Just t; [] -> temperature req }
       }
@@ -122,7 +122,7 @@ baseComposableProvider = ComposableProvider
         [] -> acc
 
 -- Tools capability combinator
-anthropicWithTools :: forall model. (HasTools model Anthropic, ModelName Anthropic model) => ComposableProvider Anthropic model -> ComposableProvider Anthropic model
+anthropicWithTools :: forall model. HasTools model Anthropic => ComposableProvider Anthropic model -> ComposableProvider Anthropic model
 anthropicWithTools base = base `chainProviders` toolsProvider
   where
     toolsProvider = ComposableProvider
