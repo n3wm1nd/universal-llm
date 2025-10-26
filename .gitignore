@@ -1,2 +1,4 @@
 dist-newstyle/
 hie.yaml
+.*
+test-cache/
