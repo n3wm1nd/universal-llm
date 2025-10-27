@@ -36,6 +36,8 @@ library
     UniversalLLM.Protocols.Anthropic
     UniversalLLM.Providers.OpenAI
     UniversalLLM.Providers.Anthropic
+    UniversalLLM.Providers.XMLToolCalls
+    UniversalLLM.ToolCall.XML
 
   hs-source-dirs: src
 
@@ -45,7 +47,8 @@ library
     autodocodec-schema >= 0.2 && < 1,
     text >= 1.2 && < 3,
     aeson,
-    bytestring
+    bytestring,
+    hashable
 
 library examples-helper
   import: shared-properties
