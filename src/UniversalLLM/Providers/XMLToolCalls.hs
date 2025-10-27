@@ -7,28 +7,32 @@
 module UniversalLLM.Providers.XMLToolCalls
   ( -- * Composable Providers for XML Tool Calls
     withXMLToolCalls
+  , withXMLToolCallsTagged
   , withXMLToolCallsAndSystemPrompt
+  , withXMLToolCallsAndSystemPromptTagged
   ) where
 
 import UniversalLLM.Core.Types
 import UniversalLLM.Protocols.OpenAI
 import UniversalLLM.ToolCall.XML
 import Data.Maybe (mapMaybe)
+import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Autodocodec.Aeson.Compat as Compat
 
--- | Add XML tool call support to a provider (response parsing only)
--- This parses XML <tool_call> blocks from AssistantText responses and converts them to AssistantTool messages
--- Also converts ToolResultMsg to UserText when building requests
-withXMLToolCalls :: forall provider model.
-                    (HasTools model provider,
-                     ProviderRequest provider ~ OpenAIRequest,
-                     ProviderResponse provider ~ OpenAIResponse)
-                 => ComposableProvider provider model
-                 -> ComposableProvider provider model
-withXMLToolCalls base = base `chainProviders` xmlProvider
+-- | Add XML tool call support to a provider with custom tag name
+-- This parses XML blocks from AssistantText responses and converts them to AssistantTool messages
+-- Also converts ToolResultMsg and AssistantTool back to XML when building requests
+withXMLToolCallsTagged :: forall provider model.
+                          (HasTools model provider,
+                           ProviderRequest provider ~ OpenAIRequest,
+                           ProviderResponse provider ~ OpenAIResponse)
+                       => Text  -- ^ Tag name to extract (e.g., "tool_call")
+                       -> ComposableProvider provider model
+                       -> ComposableProvider provider model
+withXMLToolCallsTagged toolCallTag base = base `chainProviders` xmlProvider
   where
     xmlProvider = ComposableProvider
       { cpToRequest = handleXMLMessages
@@ -52,10 +56,12 @@ withXMLToolCalls base = base `chainProviders` xmlProvider
                 -- Convert ToolCall to XMLToolCall, then to XML text
                 let args = toolCallParamsToXMLArgs params
                     xmlToolCall = XMLToolCall tcName args
-                in encodeXMLToolCall xmlToolCall
+                in encodeXMLToolCallTagged toolCallTag xmlToolCall
               InvalidToolCall _ tcName rawArgs _ ->
                 -- Best effort: encode invalid call as text
-                "<tool_call>" <> tcName <> "\n" <> rawArgs <> "\n</tool_call>"
+                let openTag = "<" <> toolCallTag <> ">"
+                    closeTag = "</" <> toolCallTag <> ">"
+                in openTag <> tcName <> "\n" <> rawArgs <> "\n" <> closeTag
         in req { messages = messages req <> [OpenAIMessage "assistant" (Just xmlCall) Nothing Nothing Nothing] }
 
       _ -> req
@@ -82,9 +88,9 @@ withXMLToolCalls base = base `chainProviders` xmlProvider
             Nothing -> acc
             Just txt ->
               let -- Extract XML tool calls AND get cleaned text (single pass)
-                  (xmlBlocks, cleanedText) = extractAndRemoveXMLToolCalls txt
+                  (xmlBlocks, cleanedText) = extractAndRemoveXMLToolCalls toolCallTag txt
                   -- Parse each block
-                  parsedCalls = mapMaybe parseXMLToolCall xmlBlocks
+                  parsedCalls = mapMaybe (parseXMLToolCallTagged toolCallTag) xmlBlocks
                   -- Convert to ToolCall messages
                   toolCallMsgs = map (AssistantTool . xmlToolCallToToolCall) parsedCalls
               in if null toolCallMsgs
@@ -103,15 +109,27 @@ withXMLToolCalls base = base `chainProviders` xmlProvider
     isAssistantText (AssistantText _) = True
     isAssistantText _ = False
 
--- | Add XML tool call support with system prompt injection
+-- | Add XML tool call support to a provider (default tag: "tool_call")
+-- This parses XML <tool_call> blocks from AssistantText responses and converts them to AssistantTool messages
+-- Also converts ToolResultMsg and AssistantTool back to XML when building requests
+withXMLToolCalls :: forall provider model.
+                    (HasTools model provider,
+                     ProviderRequest provider ~ OpenAIRequest,
+                     ProviderResponse provider ~ OpenAIResponse)
+                 => ComposableProvider provider model
+                 -> ComposableProvider provider model
+withXMLToolCalls = withXMLToolCallsTagged "tool_call"
+
+-- | Add XML tool call support with system prompt injection (custom tag)
 -- This version also injects tool definitions into the system prompt
-withXMLToolCallsAndSystemPrompt :: forall provider model.
-                                   (HasTools model provider,
-                                    ProviderRequest provider ~ OpenAIRequest,
-                                    ProviderResponse provider ~ OpenAIResponse)
-                                => ComposableProvider provider model
-                                -> ComposableProvider provider model
-withXMLToolCallsAndSystemPrompt base = base `chainProviders` xmlProviderWithPrompt
+withXMLToolCallsAndSystemPromptTagged :: forall provider model.
+                                         (HasTools model provider,
+                                          ProviderRequest provider ~ OpenAIRequest,
+                                          ProviderResponse provider ~ OpenAIResponse)
+                                      => Text  -- ^ Tag name to extract (e.g., "tool_call")
+                                      -> ComposableProvider provider model
+                                      -> ComposableProvider provider model
+withXMLToolCallsAndSystemPromptTagged toolCallTag base = base `chainProviders` xmlProviderWithPrompt
   where
     xmlProviderWithPrompt = ComposableProvider
       { cpToRequest = handleXMLMessages
@@ -135,10 +153,12 @@ withXMLToolCallsAndSystemPrompt base = base `chainProviders` xmlProviderWithProm
                 -- Convert ToolCall to XMLToolCall, then to XML text
                 let args = toolCallParamsToXMLArgs params
                     xmlToolCall = XMLToolCall tcName args
-                in encodeXMLToolCall xmlToolCall
+                in encodeXMLToolCallTagged toolCallTag xmlToolCall
               InvalidToolCall _ tcName rawArgs _ ->
                 -- Best effort: encode invalid call as text
-                "<tool_call>" <> tcName <> "\n" <> rawArgs <> "\n</tool_call>"
+                let openTag = "<" <> toolCallTag <> ">"
+                    closeTag = "</" <> toolCallTag <> ">"
+                in openTag <> tcName <> "\n" <> rawArgs <> "\n" <> closeTag
         in req { messages = messages req <> [OpenAIMessage "assistant" (Just xmlCall) Nothing Nothing Nothing] }
 
       _ -> req
@@ -185,9 +205,9 @@ withXMLToolCallsAndSystemPrompt base = base `chainProviders` xmlProviderWithProm
             Nothing -> acc
             Just txt ->
               let -- Extract XML tool calls AND get cleaned text (single pass)
-                  (xmlBlocks, cleanedText) = extractAndRemoveXMLToolCalls txt
+                  (xmlBlocks, cleanedText) = extractAndRemoveXMLToolCalls toolCallTag txt
                   -- Parse each block
-                  parsedCalls = mapMaybe parseXMLToolCall xmlBlocks
+                  parsedCalls = mapMaybe (parseXMLToolCallTagged toolCallTag) xmlBlocks
                   -- Convert to ToolCall messages
                   toolCallMsgs = map (AssistantTool . xmlToolCallToToolCall) parsedCalls
               in if null toolCallMsgs
@@ -205,3 +225,13 @@ withXMLToolCallsAndSystemPrompt base = base `chainProviders` xmlProviderWithProm
     isAssistantTextMsg :: Message model provider -> Bool
     isAssistantTextMsg (AssistantText _) = True
     isAssistantTextMsg _ = False
+
+-- | Add XML tool call support with system prompt injection (default tag: "tool_call")
+-- This version also injects tool definitions into the system prompt
+withXMLToolCallsAndSystemPrompt :: forall provider model.
+                                   (HasTools model provider,
+                                    ProviderRequest provider ~ OpenAIRequest,
+                                    ProviderResponse provider ~ OpenAIResponse)
+                                => ComposableProvider provider model
+                                -> ComposableProvider provider model
+withXMLToolCallsAndSystemPrompt = withXMLToolCallsAndSystemPromptTagged "tool_call"

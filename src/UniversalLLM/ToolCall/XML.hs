@@ -6,12 +6,17 @@ module UniversalLLM.ToolCall.XML
     XMLToolCall(..)
   , XMLToolResult(..)
   , XMLArgPair(..)
-    -- * Parsing
+    -- * Generic Tag Extraction
+  , extractTags
+  , extractAndRemoveTags
+    -- * Tool Call Parsing
   , parseXMLToolCall
+  , parseXMLToolCallTagged
   , extractXMLToolCalls
   , extractAndRemoveXMLToolCalls
     -- * Encoding
   , encodeXMLToolCall
+  , encodeXMLToolCallTagged
   , encodeXMLToolResult
     -- * Conversion
   , xmlToolCallToToolCall
@@ -99,29 +104,40 @@ extractTags tagName input = go input [] []
                  let remaining = T.drop (T.length closeTag) afterClose
                  in go remaining (before : beforeAcc) (content : contentsAcc)
 
--- | Extract all XML tool call blocks from text
-extractXMLToolCalls :: Text -> [Text]
-extractXMLToolCalls input = fst (extractAndRemoveXMLToolCalls input)
-
--- | Extract XML tool calls AND return cleaned text (single pass)
--- Returns: (list of tool call blocks, text with tool calls removed)
-extractAndRemoveXMLToolCalls :: Text -> ([Text], Text)
-extractAndRemoveXMLToolCalls input =
-  let (cleanedText, toolCallContents) = extractTags "tool_call" input
-      -- Reconstruct full tool_call blocks with tags
-      fullBlocks = map (\content -> "<tool_call>" <> content <> "</tool_call>") toolCallContents
+-- | Extract all blocks for a specific tag from text
+-- Returns: (list of full tag blocks, text with tags removed)
+extractAndRemoveTags :: Text -> Text -> ([Text], Text)
+extractAndRemoveTags tagName input =
+  let (cleanedText, tagContents) = extractTags tagName input
+      openTag = "<" <> tagName <> ">"
+      closeTag = "</" <> tagName <> ">"
+      -- Reconstruct full blocks with tags
+      fullBlocks = map (\content -> openTag <> content <> closeTag) tagContents
   in (fullBlocks, cleanedText)
 
--- | Parse a single XML tool call block
--- Format: <tool_call>name<arg_key>k</arg_key><arg_value>v</arg_value>...</tool_call>
-parseXMLToolCall :: Text -> Maybe XMLToolCall
-parseXMLToolCall block =
-  let -- Extract content between <tool_call> and </tool_call>
-      content = case T.breakOn "<tool_call>" block of
+-- | Extract all XML tool call blocks from text
+extractXMLToolCalls :: Text -> Text -> [Text]
+extractXMLToolCalls tagName input = fst (extractAndRemoveXMLToolCalls tagName input)
+
+-- | Extract XML tool calls AND return cleaned text (single pass)
+-- Takes tag name as parameter to avoid hardcoding "tool_call" everywhere
+-- Returns: (list of tool call blocks, text with tool calls removed)
+extractAndRemoveXMLToolCalls :: Text -> Text -> ([Text], Text)
+extractAndRemoveXMLToolCalls = extractAndRemoveTags
+
+-- | Parse a single XML tool call block with custom tag
+-- Format: <tag>name<arg_key>k</arg_key><arg_value>v</arg_value>...</tag>
+parseXMLToolCallTagged :: Text -> Text -> Maybe XMLToolCall
+parseXMLToolCallTagged tagName block =
+  let openTag = "<" <> tagName <> ">"
+      closeTag = "</" <> tagName <> ">"
+
+      -- Extract content between tags
+      content = case T.breakOn openTag block of
                   (_, "") -> block  -- No opening tag, use as-is
                   (_, rest) ->
-                    let afterOpen = T.drop (T.length "<tool_call>") rest
-                    in case T.breakOn "</tool_call>" afterOpen of
+                    let afterOpen = T.drop (T.length openTag) rest
+                    in case T.breakOn closeTag afterOpen of
                          (inner, _) -> inner
 
       -- Extract tool name: everything before first <
@@ -138,21 +154,31 @@ parseXMLToolCall block =
        then Nothing
        else Just $ XMLToolCall name args
 
+-- | Parse a single XML tool call block (default tag: "tool_call")
+parseXMLToolCall :: Text -> Maybe XMLToolCall
+parseXMLToolCall = parseXMLToolCallTagged "tool_call"
+
 -- ============================================================================
 -- Encoding (Haskell values → XML text)
 -- ============================================================================
 
--- | Encode XMLToolCall to XML text
-encodeXMLToolCall :: XMLToolCall -> Text
-encodeXMLToolCall (XMLToolCall name args) =
-  T.unlines $
-    [ "<tool_call>" <> name ]
-    ++ map encodeArgPair args
-    ++ [ "</tool_call>" ]
+-- | Encode XMLToolCall to XML text with custom tag name
+encodeXMLToolCallTagged :: Text -> XMLToolCall -> Text
+encodeXMLToolCallTagged tagName (XMLToolCall name args) =
+  let openTag = "<" <> tagName <> ">"
+      closeTag = "</" <> tagName <> ">"
+  in T.unlines $
+       [ openTag <> name ]
+       ++ map encodeArgPair args
+       ++ [ closeTag ]
   where
     encodeArgPair (XMLArgPair k v) =
       "<arg_key>" <> k <> "</arg_key>\n" <>
       "<arg_value>" <> v <> "</arg_value>"
+
+-- | Encode XMLToolCall to XML text (default tag: "tool_call")
+encodeXMLToolCall :: XMLToolCall -> Text
+encodeXMLToolCall = encodeXMLToolCallTagged "tool_call"
 
 -- | Encode XMLToolResult to XML text
 encodeXMLToolResult :: XMLToolResult -> Text
