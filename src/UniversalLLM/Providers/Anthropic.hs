@@ -6,6 +6,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 
 module UniversalLLM.Providers.Anthropic where
 
@@ -34,16 +35,16 @@ instance Provider Anthropic model where
 
 -- Base handler: model name and basic config
 -- Updates the request with model name and config
-handleBase :: ModelName Anthropic model => MessageHandler Anthropic model
+handleBase :: forall provider model . (ProviderRequest provider ~ AnthropicRequest, ModelName provider model) => MessageHandler provider model
 handleBase _provider modelType configs _msg req =
-  req { model = modelName @Anthropic modelType
+  req { model = modelName @provider modelType
       , max_tokens = case [mt | MaxTokens mt <- configs] of { (mt:_) -> mt; [] -> max_tokens req }
       , temperature = case [t | Temperature t <- configs] of { (t:_) -> Just t; [] -> temperature req }
       }
 
 -- System prompt config handler (from config)
 -- This is a ConfigHandler, not a MessageHandler - it runs after all messages are processed
-handleSystemPrompt :: ConfigHandler Anthropic model
+handleSystemPrompt :: ProviderRequest provider ~ AnthropicRequest => ConfigHandler provider model
 handleSystemPrompt = \_provider _model configs req ->
   let systemPrompts = [sp | SystemPrompt sp <- configs]
       sysBlocks = [AnthropicSystemBlock sp "text" | sp <- systemPrompts]
@@ -52,7 +53,7 @@ handleSystemPrompt = \_provider _model configs req ->
      else req { system = Just sysBlocks }
 
 -- Text message handler - groups messages incrementally
-handleTextMessages :: MessageHandler Anthropic model
+handleTextMessages :: ProviderRequest provider ~ AnthropicRequest => MessageHandler provider model
 handleTextMessages = \_provider _model _configs msg req -> case msg of
   UserText txt -> req { messages = appendBlock (messages req) "user" (AnthropicTextBlock txt) }
   AssistantText txt -> req { messages = appendBlock (messages req) "assistant" (AnthropicTextBlock txt) }
@@ -70,7 +71,7 @@ handleTextMessages = \_provider _model _configs msg req -> case msg of
          else msgs <> [AnthropicMessage r [b]]
 
 -- Tools handler - groups tool blocks incrementally
-handleTools :: MessageHandler Anthropic model
+handleTools :: ProviderRequest provider ~ AnthropicRequest => MessageHandler provider model
 handleTools = \_provider _model configs msg req -> case msg of
   AssistantTool (ToolCall tcId tcName tcParams) ->
     req { messages = appendToolBlock (messages req) "assistant" (AnthropicToolUseBlock tcId tcName tcParams) }
@@ -108,7 +109,7 @@ handleTools = \_provider _model configs msg req -> case msg of
 -- Composable providers for Anthropic
 
 -- Base provider: handles text messages and basic configuration
-baseComposableProvider :: forall model. ModelName Anthropic model => ComposableProvider Anthropic model
+baseComposableProvider :: forall model provider . (ProviderRequest provider ~ AnthropicRequest, ProviderResponse provider ~ AnthropicResponse, ModelName provider model) => ComposableProvider provider model
 baseComposableProvider = ComposableProvider
   { cpToRequest = handleBase >>> handleTextMessages
   , cpConfigHandler = handleSystemPrompt
@@ -122,7 +123,7 @@ baseComposableProvider = ComposableProvider
         [] -> acc
 
 -- Tools capability combinator
-anthropicWithTools :: forall model. HasTools model Anthropic => ComposableProvider Anthropic model -> ComposableProvider Anthropic model
+anthropicWithTools :: forall model provider . (ProviderRequest provider ~ AnthropicRequest, ProviderResponse provider ~ AnthropicResponse, HasTools model provider) => ComposableProvider provider model -> ComposableProvider provider model
 anthropicWithTools base = base `chainProviders` toolsProvider
   where
     toolsProvider = ComposableProvider
@@ -137,7 +138,7 @@ anthropicWithTools base = base `chainProviders` toolsProvider
 -- Ensures Anthropic's API constraint: conversations must start with a user message
 -- If the first message is from assistant, prepends an empty user message
 -- This should be composed at the END of the provider chain
-ensureUserFirst :: ComposableProvider Anthropic model -> ComposableProvider Anthropic model
+ensureUserFirst :: ProviderRequest provider ~ AnthropicRequest => ComposableProvider provider model -> ComposableProvider provider model
 ensureUserFirst base = base `chainProviders` ensureUserFirstProvider
   where
     ensureUserFirstProvider = ComposableProvider
