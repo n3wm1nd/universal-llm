@@ -18,6 +18,77 @@ import qualified Data.Text as Text
 -- Anthropic provider (phantom type)
 data Anthropic = Anthropic deriving (Show, Eq)
 
+-- ============================================================================
+-- Helper Functions for AnthropicRequest Manipulation
+-- ============================================================================
+
+-- | Modify system blocks in a request
+modifySystemBlocks :: (Maybe [AnthropicSystemBlock] -> Maybe [AnthropicSystemBlock])
+                   -> AnthropicRequest -> AnthropicRequest
+modifySystemBlocks f req = req { system = f (system req) }
+
+-- | Modify messages in a request
+modifyMessages :: ([AnthropicMessage] -> [AnthropicMessage])
+               -> AnthropicRequest -> AnthropicRequest
+modifyMessages f req = req { messages = f (messages req) }
+
+-- | Modify tool definitions in a request
+modifyToolDefinitions :: (Maybe [AnthropicToolDefinition] -> Maybe [AnthropicToolDefinition])
+                      -> AnthropicRequest -> AnthropicRequest
+modifyToolDefinitions f req = req { tools = f (tools req) }
+
+-- | Set system blocks (replaces existing)
+setSystemBlocks :: [AnthropicSystemBlock] -> AnthropicRequest -> AnthropicRequest
+setSystemBlocks blocks = modifySystemBlocks (const (Just blocks))
+
+-- | Set tool definitions (replaces existing)
+setToolDefinitions :: [AnthropicToolDefinition] -> AnthropicRequest -> AnthropicRequest
+setToolDefinitions defs = modifyToolDefinitions (const (Just defs))
+
+-- | Append a content block to messages, grouping with last message if same role
+appendContentBlock :: Text -> AnthropicContentBlock -> AnthropicRequest -> AnthropicRequest
+appendContentBlock msgRole block = modifyMessages (appendBlockToMessages msgRole block)
+  where
+    appendBlockToMessages :: Text -> AnthropicContentBlock -> [AnthropicMessage] -> [AnthropicMessage]
+    appendBlockToMessages r b [] = [AnthropicMessage r [b]]
+    appendBlockToMessages r b msgs =
+      let lastMsg = last msgs
+          initMsgs = init msgs
+      in if role lastMsg == r
+         then initMsgs <> [lastMsg { content = content lastMsg <> [b] }]
+         else msgs <> [AnthropicMessage r [b]]
+
+-- ============================================================================
+-- Data Conversion Functions
+-- ============================================================================
+
+-- | Convert a ToolCall to an AnthropicContentBlock
+fromToolCall :: ToolCall -> AnthropicContentBlock
+fromToolCall (ToolCall tcId tcName tcParams) = AnthropicToolUseBlock tcId tcName tcParams
+fromToolCall (InvalidToolCall tcId tcName rawArgs err) =
+  -- InvalidToolCall cannot be directly converted to Anthropic's tool_use format
+  -- Instead, convert it to a text message describing the error
+  let errorText = "Tool call error for " <> tcName <> " (id: " <> tcId <> "): " <> err
+                  <> "\nRaw arguments: " <> rawArgs
+  in AnthropicTextBlock errorText
+
+-- | Convert a ToolResult to an AnthropicContentBlock
+fromToolResult :: ToolResult -> AnthropicContentBlock
+fromToolResult (ToolResult toolCall output) =
+  let callId = getToolCallId toolCall
+      resultContent = case output of
+        Left errMsg -> errMsg
+        Right jsonVal -> Text.pack $ show jsonVal
+  in AnthropicToolResultBlock callId resultContent
+
+-- | Convert text to a text content block
+fromText :: Text -> AnthropicContentBlock
+fromText = AnthropicTextBlock
+
+-- ============================================================================
+-- Message Handlers
+-- ============================================================================
+
 -- Declare Anthropic parameter support
 instance SupportsTemperature Anthropic
 instance SupportsMaxTokens Anthropic
@@ -49,61 +120,28 @@ handleSystemPrompt = \_provider _model configs req ->
   let systemPrompts = [sp | SystemPrompt sp <- configs]
       sysBlocks = [AnthropicSystemBlock sp "text" | sp <- systemPrompts]
   in if null sysBlocks
-     then req  -- Don't modify if no system prompts
-     else req { system = Just sysBlocks }
+     then req
+     else setSystemBlocks sysBlocks req
 
 -- Text message handler - groups messages incrementally
 handleTextMessages :: ProviderRequest provider ~ AnthropicRequest => MessageHandler provider model
 handleTextMessages = \_provider _model _configs msg req -> case msg of
-  UserText txt -> req { messages = appendBlock (messages req) "user" (AnthropicTextBlock txt) }
-  AssistantText txt -> req { messages = appendBlock (messages req) "assistant" (AnthropicTextBlock txt) }
-  SystemText txt -> req { messages = appendBlock (messages req) "user" (AnthropicTextBlock txt) }
+  UserText txt -> appendContentBlock "user" (fromText txt) req
+  AssistantText txt -> appendContentBlock "assistant" (fromText txt) req
+  SystemText txt -> appendContentBlock "user" (fromText txt) req
   _ -> req
-  where
-    -- Append a block to messages, grouping with last message if same role
-    appendBlock :: [AnthropicMessage] -> Text -> AnthropicContentBlock -> [AnthropicMessage]
-    appendBlock [] r b = [AnthropicMessage r [b]]
-    appendBlock msgs r b =
-      let lastMsg = last msgs
-          initMsgs = init msgs
-      in if role lastMsg == r
-         then initMsgs <> [lastMsg { content = content lastMsg <> [b] }]
-         else msgs <> [AnthropicMessage r [b]]
 
 -- Tools handler - groups tool blocks incrementally
 handleTools :: ProviderRequest provider ~ AnthropicRequest => MessageHandler provider model
 handleTools = \_provider _model configs msg req -> case msg of
-  AssistantTool (ToolCall tcId tcName tcParams) ->
-    req { messages = appendToolBlock (messages req) "assistant" (AnthropicToolUseBlock tcId tcName tcParams) }
-  AssistantTool (InvalidToolCall tcId tcName rawArgs err) ->
-    -- InvalidToolCall cannot be directly converted to Anthropic's tool_use format
-    -- Instead, convert it to a text message describing the error
-    -- This allows the conversation to continue rather than crashing
-    let errorText = "Tool call error for " <> tcName <> " (id: " <> tcId <> "): " <> err
-                    <> "\nRaw arguments: " <> rawArgs
-    in req { messages = appendToolBlock (messages req) "assistant" (AnthropicTextBlock errorText) }
-  ToolResultMsg (ToolResult toolCall output) ->
-    let callId = getToolCallId toolCall
-        resultContent = case output of
-          Left errMsg -> errMsg
-          Right jsonVal -> Text.pack $ show jsonVal
-    in req { messages = appendToolBlock (messages req) "user" (AnthropicToolResultBlock callId resultContent) }
+  AssistantTool toolCall -> appendContentBlock "assistant" (fromToolCall toolCall) req
+  ToolResultMsg result -> appendContentBlock "user" (fromToolResult result) req
   _ ->
     -- Apply tool definitions from config (for any message)
     let toolDefs = [defs | Tools defs <- configs]
     in if null toolDefs
        then req
-       else req { tools = Just (map toAnthropicToolDef (concat toolDefs)) }
-  where
-    -- Append a block to messages, grouping with last message if same role
-    appendToolBlock :: [AnthropicMessage] -> Text -> AnthropicContentBlock -> [AnthropicMessage]
-    appendToolBlock [] r b = [AnthropicMessage r [b]]
-    appendToolBlock msgs r b =
-      let lastMsg = last msgs
-          initMsgs = init msgs
-      in if role lastMsg == r
-         then initMsgs <> [lastMsg { content = content lastMsg <> [b] }]
-         else msgs <> [AnthropicMessage r [b]]
+       else setToolDefinitions (map toAnthropicToolDef (concat toolDefs)) req
 
 
 -- Composable providers for Anthropic

@@ -13,12 +13,88 @@ module UniversalLLM.Providers.OpenAI where
 
 import UniversalLLM.Core.Types
 import UniversalLLM.Protocols.OpenAI
+import Data.Text (Text)
 import qualified Data.Text.Encoding as TE
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as BSL
 
 -- OpenAI provider (official OpenAI API)
 data OpenAI = OpenAI deriving (Show, Eq)
+
+-- ============================================================================
+-- Helper Functions for OpenAIRequest Manipulation
+-- ============================================================================
+
+-- | Modify messages in a request
+modifyMessages :: ([OpenAIMessage] -> [OpenAIMessage]) -> OpenAIRequest -> OpenAIRequest
+modifyMessages f req = req { messages = f (messages req) }
+
+-- | Modify tool definitions in a request
+modifyToolDefinitions :: (Maybe [OpenAIToolDefinition] -> Maybe [OpenAIToolDefinition])
+                      -> OpenAIRequest -> OpenAIRequest
+modifyToolDefinitions f req = req { tools = f (tools req) }
+
+-- | Append a message to the request
+appendMessage :: OpenAIMessage -> OpenAIRequest -> OpenAIRequest
+appendMessage msg = modifyMessages (<> [msg])
+
+-- | Modify the last message in a request (if it exists)
+modifyLastMessage :: (OpenAIMessage -> OpenAIMessage) -> OpenAIRequest -> OpenAIRequest
+modifyLastMessage f req = case messages req of
+  [] -> req
+  msgs -> req { messages = init msgs <> [f (last msgs)] }
+
+-- | Set tool definitions (replaces existing)
+setToolDefinitions :: [OpenAIToolDefinition] -> OpenAIRequest -> OpenAIRequest
+setToolDefinitions defs = modifyToolDefinitions (const (Just defs))
+
+-- | Set response format
+setResponseFormat :: OpenAIResponseFormat -> OpenAIRequest -> OpenAIRequest
+setResponseFormat fmt req = req { response_format = Just fmt }
+
+-- ============================================================================
+-- Data Conversion Functions
+-- ============================================================================
+
+-- | Create a user message with text content
+userMessage :: Text -> OpenAIMessage
+userMessage txt = OpenAIMessage "user" (Just txt) Nothing Nothing Nothing
+
+-- | Create an assistant message with text content
+assistantMessage :: Text -> OpenAIMessage
+assistantMessage txt = OpenAIMessage "assistant" (Just txt) Nothing Nothing Nothing
+
+-- | Create a system message with text content
+systemMessage :: Text -> OpenAIMessage
+systemMessage txt = OpenAIMessage "system" (Just txt) Nothing Nothing Nothing
+
+-- | Create an assistant message with reasoning content
+reasoningMessage :: Text -> OpenAIMessage
+reasoningMessage txt = OpenAIMessage "assistant" Nothing (Just txt) Nothing Nothing
+
+-- | Create an assistant message with tool calls
+toolCallMessage :: [OpenAIToolCall] -> OpenAIMessage
+toolCallMessage calls = OpenAIMessage "assistant" Nothing Nothing (Just calls) Nothing
+
+-- | Create a tool result message
+toolResultMessage :: Text -> Text -> OpenAIMessage
+toolResultMessage tcId contentTxt = OpenAIMessage "tool" (Just contentTxt) Nothing Nothing (Just tcId)
+
+-- | Append text to a message's content (only if roles match and message has text content)
+appendToMessageIfSameRole :: Text -> Text -> OpenAIMessage -> Maybe OpenAIMessage
+appendToMessageIfSameRole targetRole txt (OpenAIMessage msgRole (Just existingContent) Nothing Nothing Nothing)
+  | msgRole == targetRole = Just $ OpenAIMessage msgRole (Just (existingContent <> "\n" <> txt)) Nothing Nothing Nothing
+appendToMessageIfSameRole _ _ _ = Nothing
+
+-- | Append a tool call to a message's tool calls
+appendToolCallToMessage :: OpenAIToolCall -> OpenAIMessage -> Maybe OpenAIMessage
+appendToolCallToMessage tc (OpenAIMessage "assistant" msgContent reasoning (Just existingCalls) tcid) =
+  Just $ OpenAIMessage "assistant" msgContent reasoning (Just (existingCalls <> [tc])) tcid
+appendToolCallToMessage _ _ = Nothing
+
+-- ============================================================================
+-- Message Handlers
+-- ============================================================================
 
 -- OpenAI-compatible providers
 -- These all use OpenAI protocol but may have provider-specific quirks
@@ -103,12 +179,6 @@ lastMessage req = case messages req of
   [] -> Nothing
   msgs -> Just (last msgs)
 
--- Helper: Modify last message in request
-modifyLastMessage :: OpenAIRequest -> (OpenAIMessage -> OpenAIMessage) -> OpenAIRequest
-modifyLastMessage req f = case messages req of
-  [] -> req
-  msgs -> req { messages = init msgs <> [f (last msgs)] }
-
 -- Base handler: model name and basic config
 -- Updates the request with model name and config
 -- Polymorphic over any provider that uses OpenAI protocol
@@ -129,31 +199,23 @@ handleBase _provider modelType configs _msg req =
 configureSystemPrompt :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => ConfigHandler provider model
 configureSystemPrompt = \_provider _model configs req ->
   let systemPrompts = [sp | SystemPrompt sp <- configs]
-      sysMessages = [OpenAIMessage "system" (Just sp) Nothing Nothing Nothing | sp <- systemPrompts]
-  in req { messages = sysMessages <> messages req }
+      sysMessages = map systemMessage systemPrompts
+  in modifyMessages (sysMessages <>) req
 
 -- Basic text message handler
 -- Polymorphic over any provider that uses OpenAI protocol
 handleTextMessages :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageHandler provider model
 handleTextMessages =  \_provider _model _configs msg req -> case msg of
   UserText txt ->
-    case lastMessage req of
-      Just (OpenAIMessage "user" (Just existingContent) Nothing Nothing Nothing) ->
-        -- Append to existing user message (merge consecutive user messages)
-        modifyLastMessage req $ \m -> m { content = Just (existingContent <> "\n" <> txt) }
-      _ ->
-        -- Create new user message
-        req { messages = messages req <> [OpenAIMessage "user" (Just txt) Nothing Nothing Nothing] }
+    case lastMessage req >>= appendToMessageIfSameRole "user" txt of
+      Just updatedMsg -> modifyLastMessage (const updatedMsg) req
+      Nothing -> appendMessage (userMessage txt) req
   AssistantText txt ->
-    case lastMessage req of
-      Just (OpenAIMessage "assistant" (Just existingContent) Nothing Nothing Nothing) ->
-        -- Append to existing assistant message (only if no tool calls)
-        modifyLastMessage req $ \m -> m { content = Just (existingContent <> "\n" <> txt) }
-      _ ->
-        -- Create new assistant message
-        req { messages = messages req <> [OpenAIMessage "assistant" (Just txt) Nothing Nothing Nothing] }
+    case lastMessage req >>= appendToMessageIfSameRole "assistant" txt of
+      Just updatedMsg -> modifyLastMessage (const updatedMsg) req
+      Nothing -> appendMessage (assistantMessage txt) req
   SystemText txt ->
-    req { messages = messages req <> [OpenAIMessage "system" (Just txt) Nothing Nothing Nothing] }
+    appendMessage (systemMessage txt) req
   _ -> req  -- Not a text message
 
 -- Tools handler
@@ -161,44 +223,40 @@ handleTextMessages =  \_provider _model _configs msg req -> case msg of
 handleTools :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageHandler provider model
 handleTools =  \_provider _model configs msg req -> case msg of
   AssistantTool toolCall ->
-    case lastMessage req of
-      Just (OpenAIMessage "assistant" _ _ (Just existingCalls) _) ->
-        -- Append to existing tool calls
-        modifyLastMessage req $ \m ->
-          m { tool_calls = Just (existingCalls <> [convertFromToolCall toolCall]) }
-      _ ->
-        -- Create new assistant message with tool call
-        req { messages = messages req <> [OpenAIMessage "assistant" Nothing Nothing (Just [convertFromToolCall toolCall]) Nothing] }
+    let tc = convertFromToolCall toolCall
+    in case lastMessage req >>= appendToolCallToMessage tc of
+      Just updatedMsg -> modifyLastMessage (const updatedMsg) req
+      Nothing -> appendMessage (toolCallMessage [tc]) req
   ToolResultMsg result ->
     let resultCallId = getToolCallId (toolResultCall result)
         resultContent = either id (TE.decodeUtf8 . BSL.toStrict . Aeson.encode) $ toolResultOutput result
-    in req { messages = messages req <> [OpenAIMessage "tool" (Just resultContent) Nothing Nothing (Just resultCallId)] }
+    in appendMessage (toolResultMessage resultCallId resultContent) req
   _ ->
     -- Apply tool definitions from config (for any message)
     let toolDefs = [defs | Tools defs <- configs]
     in if null toolDefs
        then req
-       else req { tools = Just (map toOpenAIToolDef (concat toolDefs)) }
+       else setToolDefinitions (map toOpenAIToolDef (concat toolDefs)) req
 
 -- JSON handler
 -- Polymorphic over any provider that uses OpenAI protocol
 handleJSON :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageHandler provider model
 handleJSON =  \_provider _model _configs msg req -> case msg of
   UserRequestJSON txt schema ->
-    req { messages = messages req <> [OpenAIMessage "user" (Just txt) Nothing Nothing Nothing]
-        , response_format = Just $ OpenAIResponseFormat "json_schema" (Just schema)
-        }
+    appendMessage (userMessage txt) req
+      & setResponseFormat (OpenAIResponseFormat "json_schema" (Just schema))
   AssistantJSON jsonVal ->
     let jsonText = TE.decodeUtf8 . BSL.toStrict . Aeson.encode $ jsonVal
-    in req { messages = messages req <> [OpenAIMessage "assistant" (Just jsonText) Nothing Nothing Nothing] }
+    in appendMessage (assistantMessage jsonText) req
   _ -> req
+  where
+    (&) = flip ($)
 
 -- Reasoning handler
 -- Polymorphic over any provider that uses OpenAI protocol
 handleReasoning :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageHandler provider model
 handleReasoning =  \_provider _model _configs msg req -> case msg of
-  AssistantReasoning txt ->
-    req { messages = messages req <> [OpenAIMessage "assistant" Nothing (Just txt) Nothing Nothing] }
+  AssistantReasoning txt -> appendMessage (reasoningMessage txt) req
   _ -> req
 
 -- Composable providers (bidirectional handlers)
