@@ -8,6 +8,8 @@ import qualified ComposableHandlersSpec
 import qualified OpenAIComposableSpec
 import qualified AnthropicComposableSpec
 import qualified PropertySpec
+import qualified XMLPropertySpec
+import qualified XMLProvidersSpec
 import qualified TestCache
 import qualified TestHTTP
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
@@ -65,6 +67,10 @@ main = do
 
     -- Property-based tests (QuickCheck)
     describe "Property Tests" PropertySpec.spec
+    describe "XML Tool Call Properties" XMLPropertySpec.spec
+
+    -- XML Providers integration tests
+    XMLProvidersSpec.spec
 
     -- Composable provider integration tests
     describe "OpenAI Composable Provider (cached)" $ OpenAIComposableSpec.spec openaiProvider

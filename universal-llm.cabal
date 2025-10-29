@@ -71,11 +71,14 @@ test-suite universal-llm-tests
   import: shared-properties
   type: exitcode-stdio-1.0
   main-is: Main.hs
+  ghc-options: -Wno-name-shadowing
   other-modules:
     ComposableHandlersSpec
     OpenAIComposableSpec
     AnthropicComposableSpec
     PropertySpec
+    XMLPropertySpec
+    XMLProvidersSpec
     TestModels
     TestCache
     TestHTTP
