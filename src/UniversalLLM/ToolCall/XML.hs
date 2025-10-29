@@ -6,17 +6,16 @@ module UniversalLLM.ToolCall.XML
     XMLToolCall(..)
   , XMLToolResult(..)
   , XMLArgPair(..)
-    -- * Generic Tag Extraction
-  , extractTags
+    -- * General XML Primitives
+  , wrapInTag
+  , extractFirstTag
+  , extractAllTags
   , extractAndRemoveTags
-    -- * Tool Call Parsing
-  , parseXMLToolCall
-  , parseXMLToolCallTagged
+    -- * Our Tool Call Format (tag names baked in)
   , extractXMLToolCalls
   , extractAndRemoveXMLToolCalls
-    -- * Encoding
+  , parseXMLToolCall
   , encodeXMLToolCall
-  , encodeXMLToolCallTagged
   , encodeXMLToolResult
     -- * Conversion
   , xmlToolCallToToolCall
@@ -79,12 +78,50 @@ instance HasCodec XMLToolResult where
       <*> requiredField "result" "Result output" .= resultOutput
 
 -- ============================================================================
--- Parsing (XML text → Haskell values)
+-- Core XML Primitives
 -- ============================================================================
 
--- | Extract tags: finds all <tag>...</tag> pairs and returns (cleaned_text, [contents])
-extractTags :: Text -> Text -> (Text, [Text])
-extractTags tagName input = go input [] []
+-- | Wrap content in a tag: content -> <tag>content</tag>
+wrapInTag :: Text -> Text -> Text
+wrapInTag tagName content = "<" <> tagName <> ">" <> content <> "</" <> tagName <> ">"
+
+-- | Extract first occurrence of a tag's content (without the tags themselves)
+-- Returns Nothing if tag not found or not properly closed
+extractFirstTag :: Text -> Text -> Maybe Text
+extractFirstTag tagName input =
+  let openTag = "<" <> tagName <> ">"
+      closeTag = "</" <> tagName <> ">"
+  in case T.breakOn openTag input of
+       (_, "") -> Nothing  -- No opening tag
+       (_, rest) ->
+         let afterOpen = T.drop (T.length openTag) rest
+         in case T.breakOn closeTag afterOpen of
+              (_, "") -> Nothing  -- No closing tag
+              (content, _) -> Just content
+
+-- | Extract all occurrences of a tag's content (without the tags themselves)
+-- Returns list of tag contents
+extractAllTags :: Text -> Text -> [Text]
+extractAllTags tagName input = go input []
+  where
+    openTag = "<" <> tagName <> ">"
+    closeTag = "</" <> tagName <> ">"
+
+    go txt acc =
+      case T.breakOn openTag txt of
+        (_, "") -> reverse acc  -- No more opening tags
+        (_, rest) ->
+          let afterOpen = T.drop (T.length openTag) rest
+          in case T.breakOn closeTag afterOpen of
+               (_, "") -> reverse acc  -- No closing tag, stop
+               (content, afterClose) ->
+                 let remaining = T.drop (T.length closeTag) afterClose
+                 in go remaining (content : acc)
+
+-- | Extract all tag contents AND remove them from text (single pass)
+-- Returns: (tag contents, cleaned text)
+extractAndRemoveTags :: Text -> Text -> ([Text], Text)
+extractAndRemoveTags tagName input = go input [] []
   where
     openTag = "<" <> tagName <> ">"
     closeTag = "</" <> tagName <> ">"
@@ -92,104 +129,94 @@ extractTags tagName input = go input [] []
     go txt beforeAcc contentsAcc =
       case T.breakOn openTag txt of
         (_, "") ->
-          -- No more opening tags
-          (T.concat (reverse (txt : beforeAcc)), reverse contentsAcc)
+          -- No more opening tags - return accumulated results
+          (reverse contentsAcc, T.concat (reverse (txt : beforeAcc)))
         (before, rest) ->
           let afterOpen = T.drop (T.length openTag) rest
           in case T.breakOn closeTag afterOpen of
                (_, "") ->
-                 -- No closing tag, stop here
-                 (T.concat (reverse (txt : beforeAcc)), reverse contentsAcc)
+                 -- No closing tag, keep remaining text and stop
+                 (reverse contentsAcc, T.concat (reverse (txt : beforeAcc)))
                (content, afterClose) ->
                  let remaining = T.drop (T.length closeTag) afterClose
                  in go remaining (before : beforeAcc) (content : contentsAcc)
 
--- | Extract all blocks for a specific tag from text
--- Returns: (list of full tag blocks, text with tags removed)
-extractAndRemoveTags :: Text -> Text -> ([Text], Text)
-extractAndRemoveTags tagName input =
-  let (cleanedText, tagContents) = extractTags tagName input
-      openTag = "<" <> tagName <> ">"
-      closeTag = "</" <> tagName <> ">"
-      -- Reconstruct full blocks with tags
-      fullBlocks = map (\content -> openTag <> content <> closeTag) tagContents
-  in (fullBlocks, cleanedText)
 
--- | Extract all XML tool call blocks from text
-extractXMLToolCalls :: Text -> Text -> [Text]
-extractXMLToolCalls tagName input = fst (extractAndRemoveXMLToolCalls tagName input)
+-- ============================================================================
+-- Our Tool Call Format (tag names: tool_call, arg_key, arg_value)
+-- ============================================================================
+
+-- | Extract all XML tool call blocks from text (returns full blocks with tags)
+-- Uses our standard format with <tool_call> tags
+extractXMLToolCalls :: Text -> [Text]
+extractXMLToolCalls input =
+  let contents = extractAllTags "tool_call" input
+  in map (wrapInTag "tool_call") contents
 
 -- | Extract XML tool calls AND return cleaned text (single pass)
--- Takes tag name as parameter to avoid hardcoding "tool_call" everywhere
--- Returns: (list of tool call blocks, text with tool calls removed)
-extractAndRemoveXMLToolCalls :: Text -> Text -> ([Text], Text)
-extractAndRemoveXMLToolCalls = extractAndRemoveTags
+-- Returns: (list of full tool call blocks with tags, text with tool calls removed)
+extractAndRemoveXMLToolCalls :: Text -> ([Text], Text)
+extractAndRemoveXMLToolCalls input =
+  let (contents, cleaned) = extractAndRemoveTags "tool_call" input
+      fullBlocks = map (wrapInTag "tool_call") contents
+  in (fullBlocks, cleaned)
 
--- | Parse a single XML tool call block with custom tag
--- Format: <tag>name<arg_key>k</arg_key><arg_value>v</arg_value>...</tag>
-parseXMLToolCallTagged :: Text -> Text -> Maybe XMLToolCall
-parseXMLToolCallTagged tagName block =
-  let openTag = "<" <> tagName <> ">"
-      closeTag = "</" <> tagName <> ">"
+-- ============================================================================
+-- Tool Call Parsing (XML → Haskell)
+-- ============================================================================
 
-      -- Extract content between tags
-      content = case T.breakOn openTag block of
-                  (_, "") -> block  -- No opening tag, use as-is
-                  (_, rest) ->
-                    let afterOpen = T.drop (T.length openTag) rest
-                    in case T.breakOn closeTag afterOpen of
-                         (inner, _) -> inner
+-- | Parse a single XML tool call block
+-- Format: <tool_call>tool_name<arg_key>k</arg_key><arg_value>v</arg_value>...</tool_call>
+-- Uses primitives to build the parser compositionally
+parseXMLToolCall :: Text -> Maybe XMLToolCall
+parseXMLToolCall block = do
+  -- Extract content from the <tool_call> tag
+  content <- extractFirstTag "tool_call" block
 
-      -- Extract tool name: everything before first <
-      (namePart, rest) = T.break (== '<') content
+  -- Tool name is everything before the first <
+  let (namePart, rest) = T.break (== '<') content
       name = T.strip namePart
 
-      -- Extract arg_key and arg_value pairs
-      (_, keys) = extractTags "arg_key" rest
-      (_, values) = extractTags "arg_value" rest
+  guard (not $ T.null name)
 
+  -- Extract argument key-value pairs using <arg_key> and <arg_value> tags
+  let keys = extractAllTags "arg_key" rest
+      values = extractAllTags "arg_value" rest
       args = zipWith XMLArgPair keys values
 
-  in if T.null name
-       then Nothing
-       else Just $ XMLToolCall name args
-
--- | Parse a single XML tool call block (default tag: "tool_call")
-parseXMLToolCall :: Text -> Maybe XMLToolCall
-parseXMLToolCall = parseXMLToolCallTagged "tool_call"
-
--- ============================================================================
--- Encoding (Haskell values → XML text)
--- ============================================================================
-
--- | Encode XMLToolCall to XML text with custom tag name
-encodeXMLToolCallTagged :: Text -> XMLToolCall -> Text
-encodeXMLToolCallTagged tagName (XMLToolCall name args) =
-  let openTag = "<" <> tagName <> ">"
-      closeTag = "</" <> tagName <> ">"
-  in T.unlines $
-       [ openTag <> name ]
-       ++ map encodeArgPair args
-       ++ [ closeTag ]
+  return $ XMLToolCall name args
   where
-    encodeArgPair (XMLArgPair k v) =
-      "<arg_key>" <> k <> "</arg_key>\n" <>
-      "<arg_value>" <> v <> "</arg_value>"
+    guard True = Just ()
+    guard False = Nothing
 
--- | Encode XMLToolCall to XML text (default tag: "tool_call")
+-- ============================================================================
+-- Tool Call Encoding (Haskell → XML)
+-- ============================================================================
+
+-- | Encode a single argument pair to XML using <arg_key> and <arg_value> tags
+encodeArgPair :: XMLArgPair -> Text
+encodeArgPair (XMLArgPair k v) =
+  wrapInTag "arg_key" k <> "\n" <> wrapInTag "arg_value" v
+
+-- | Encode XMLToolCall to XML text
+-- Format: <tool_call>name<arg_key>k</arg_key><arg_value>v</arg_value>...</tool_call>
+-- Uses primitives for composable serialization
 encodeXMLToolCall :: XMLToolCall -> Text
-encodeXMLToolCall = encodeXMLToolCallTagged "tool_call"
+encodeXMLToolCall (XMLToolCall name args) =
+  let argsText = T.intercalate "\n" (map encodeArgPair args)
+      content = if null args
+                then name
+                else name <> "\n" <> argsText
+  in wrapInTag "tool_call" content
 
 -- | Encode XMLToolResult to XML text
+-- Format: <tool_result><tool_call_id>...</tool_call_id>...</tool_result>
 encodeXMLToolResult :: XMLToolResult -> Text
 encodeXMLToolResult (XMLToolResult callId name output) =
-  T.unlines
-    [ "<tool_result>"
-    , "<tool_call_id>" <> callId <> "</tool_call_id>"
-    , "<tool_name>" <> name <> "</tool_name>"
-    , "<result>" <> output <> "</result>"
-    , "</tool_result>"
-    ]
+  wrapInTag "tool_result" $
+    wrapInTag "tool_call_id" callId <> "\n" <>
+    wrapInTag "tool_name" name <> "\n" <>
+    wrapInTag "result" output
 
 -- ============================================================================
 -- Conversion Helpers
