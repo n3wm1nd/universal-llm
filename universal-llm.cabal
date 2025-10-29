@@ -79,6 +79,8 @@ test-suite universal-llm-tests
     PropertySpec
     XMLPropertySpec
     XMLProvidersSpec
+    CoreTypesSpec
+    ToolDefinitionIntegrationSpec
     TestModels
     TestCache
     TestHTTP
@@ -100,7 +102,8 @@ test-suite universal-llm-tests
     filepath,
     temporary,
     http-conduit,
-    case-insensitive
+    case-insensitive,
+    vector
 
 executable simple-example
   import: shared-properties

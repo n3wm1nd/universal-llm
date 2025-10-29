@@ -10,6 +10,8 @@ import qualified AnthropicComposableSpec
 import qualified PropertySpec
 import qualified XMLPropertySpec
 import qualified XMLProvidersSpec
+import qualified CoreTypesSpec
+import qualified ToolDefinitionIntegrationSpec
 import qualified TestCache
 import qualified TestHTTP
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
@@ -68,6 +70,10 @@ main = do
     -- Property-based tests (QuickCheck)
     describe "Property Tests" PropertySpec.spec
     describe "XML Tool Call Properties" XMLPropertySpec.spec
+    describe "Core Types Properties" CoreTypesSpec.spec
+
+    -- Tool definition integration tests
+    ToolDefinitionIntegrationSpec.spec
 
     -- XML Providers integration tests
     XMLProvidersSpec.spec
