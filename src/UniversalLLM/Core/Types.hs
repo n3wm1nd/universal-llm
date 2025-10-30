@@ -31,6 +31,7 @@ class SupportsTemperature a
 class SupportsMaxTokens a
 class SupportsSeed a
 class SupportsSystemPrompt a
+class SupportsStop a
 
 -- HasX for capabilities (features that require both model AND provider support)
 -- These take two parameters: model and provider
@@ -55,6 +56,7 @@ data ModelConfig provider model where
   MaxTokens :: SupportsMaxTokens provider => Int -> ModelConfig provider model
   Seed :: SupportsSeed provider => Int -> ModelConfig provider model
   SystemPrompt :: SupportsSystemPrompt provider => Text -> ModelConfig provider model
+  Stop :: SupportsStop provider => [Text] -> ModelConfig provider model
   Tools :: HasTools model provider => [ToolDefinition] -> ModelConfig provider model
   Reasoning :: HasReasoning model provider => Bool -> ModelConfig provider model
 
@@ -162,6 +164,12 @@ class Provider provider model where
 -- Each model declares how to build requests and parse responses for each provider it supports
 class Provider provider model => ProviderImplementation provider model where
   getComposableProvider :: ComposableProvider provider model
+
+-- CompletionProvider: Type families for completion requests/responses
+-- Separate from chat to allow different wire formats if needed
+class Provider provider model => CompletionProvider provider model where
+  type CompletionRequest provider
+  type CompletionResponse provider
 
 
 -- ============================================================================
@@ -304,3 +312,90 @@ messageDirection (AssistantText _) = Assistant
 messageDirection (AssistantReasoning _) = Assistant
 messageDirection (AssistantTool _) = Assistant
 messageDirection (AssistantJSON _) = Assistant
+
+-- ============================================================================
+-- Completion Interface (Simpler than Chat - Just Prompt In, Text Out)
+-- ============================================================================
+
+-- Completion-specific handler types (no messages, just prompts)
+-- Note: CompletionProvider constraint needed for access to CompletionRequest/CompletionResponse
+type PromptHandler provider model =
+  provider
+  -> model
+  -> [ModelConfig provider model]
+  -> Text  -- The prompt
+  -> CompletionRequest provider
+  -> CompletionRequest provider
+
+-- Config handler for completions (reuse pattern, but different request type)
+type CompletionConfigHandler provider model =
+  provider
+  -> model
+  -> [ModelConfig provider model]
+  -> CompletionRequest provider
+  -> CompletionRequest provider
+
+-- Completion parser extracts text from response
+type CompletionParser provider model =
+  provider
+  -> model
+  -> [ModelConfig provider model]
+  -> Text  -- Original prompt (for context)
+  -> CompletionResponse provider
+  -> Text  -- Completed text
+
+-- Composable completion provider (simpler than chat)
+data ComposableCompletionProvider provider model = ComposableCompletionProvider
+  { ccpToRequest :: PromptHandler provider model
+  , ccpConfigHandler :: CompletionConfigHandler provider model
+  , ccpFromResponse :: CompletionParser provider model
+  }
+
+-- Provider implementation for completions
+class Provider provider model => CompletionProviderImplementation provider model where
+  getComposableCompletionProvider :: ComposableCompletionProvider provider model
+
+-- Chain two completion providers together
+infixl 6 `chainCompletionProviders`
+chainCompletionProviders :: ComposableCompletionProvider provider model
+                         -> ComposableCompletionProvider provider model
+                         -> ComposableCompletionProvider provider model
+chainCompletionProviders cp1 cp2 = ComposableCompletionProvider
+  { ccpToRequest = \provider model configs prompt req ->
+      let req' = ccpToRequest cp1 provider model configs prompt req
+      in ccpToRequest cp2 provider model configs prompt req'
+  , ccpConfigHandler = \provider model configs req ->
+      let req' = ccpConfigHandler cp1 provider model configs req
+      in ccpConfigHandler cp2 provider model configs req'
+  , ccpFromResponse = \provider model configs prompt resp ->
+      ccpFromResponse cp2 provider model configs prompt resp  -- Note: only cp2 sees the response (cp1 ignored)
+  }
+
+-- Build a completion request from a prompt
+toCompletionRequest :: (CompletionProviderImplementation provider model, Monoid (CompletionRequest provider))
+                    => provider
+                    -> model
+                    -> [ModelConfig provider model]
+                    -> Text  -- The prompt
+                    -> CompletionRequest provider
+toCompletionRequest provider model configs prompt =
+  let composableProvider = getComposableCompletionProvider
+      promptHandler = ccpToRequest composableProvider
+      configHandler = ccpConfigHandler composableProvider
+      -- Apply prompt handler
+      reqAfterPrompt = promptHandler provider model configs prompt mempty
+      -- Apply config handlers
+  in configHandler provider model configs reqAfterPrompt
+
+-- Parse a completion response
+fromCompletionResponse :: CompletionProviderImplementation provider model
+                       => provider
+                       -> model
+                       -> [ModelConfig provider model]
+                       -> Text  -- Original prompt
+                       -> CompletionResponse provider
+                       -> Text  -- Completed text
+fromCompletionResponse provider model configs prompt resp =
+  let composableProvider = getComposableCompletionProvider
+      parser = ccpFromResponse composableProvider
+  in parser provider model configs prompt resp

@@ -242,3 +242,78 @@ convertFromToolCall (InvalidToolCall tcId tcName tcArgs _err) = OpenAIToolCall
       , toolFunctionArguments = tcArgs  -- Return original invalid arguments unchanged
       }
   }
+
+-- ============================================================================
+-- OpenAI Completion API (Legacy /v1/completions endpoint)
+-- ============================================================================
+
+data OpenAICompletionRequest = OpenAICompletionRequest
+  { completionModel :: Text
+  , prompt :: Text
+  , completionTemperature :: Maybe Double
+  , completionMaxTokens :: Maybe Int
+  , stop :: Maybe [Text]
+  } deriving (Generic, Show, Eq)
+
+instance Semigroup OpenAICompletionRequest where
+  r1 <> r2 = OpenAICompletionRequest
+    { completionModel = completionModel r2  -- Right-biased for scalar fields
+    , prompt = prompt r2  -- Right-biased (last prompt wins)
+    , completionTemperature = completionTemperature r2 <|> completionTemperature r1
+    , completionMaxTokens = completionMaxTokens r2 <|> completionMaxTokens r1
+    , stop = stop r1 <> stop r2  -- Concatenate stop sequences
+    }
+
+instance Monoid OpenAICompletionRequest where
+  mempty = OpenAICompletionRequest
+    { completionModel = ""
+    , prompt = ""
+    , completionTemperature = Nothing
+    , completionMaxTokens = Nothing
+    , stop = Nothing
+    }
+
+data OpenAICompletionChoice = OpenAICompletionChoice
+  { completionText :: Text
+  , completionIndex :: Int
+  , completionFinishReason :: Maybe Text
+  } deriving (Generic, Show, Eq)
+
+data OpenAICompletionResponse
+  = OpenAICompletionSuccess OpenAICompletionSuccessResponse
+  | OpenAICompletionError OpenAIErrorResponse  -- Reuse error type from chat
+  deriving (Show, Eq)
+
+data OpenAICompletionSuccessResponse = OpenAICompletionSuccessResponse
+  { completionChoices :: [OpenAICompletionChoice]
+  } deriving (Generic, Show, Eq)
+
+instance HasCodec OpenAICompletionRequest where
+  codec = object "OpenAICompletionRequest" $
+    OpenAICompletionRequest
+      <$> requiredField "model" "Model name" .= completionModel
+      <*> requiredField "prompt" "Prompt text" .= prompt
+      <*> optionalFieldWith "temperature" (dimapCodec realToFrac realToFrac scientificCodec) "Temperature" .= completionTemperature
+      <*> optionalFieldWith "max_tokens" (dimapCodec fromIntegral fromIntegral integerCodec) "Max tokens" .= completionMaxTokens
+      <*> optionalField "stop" "Stop sequences" .= stop
+
+instance HasCodec OpenAICompletionChoice where
+  codec = object "OpenAICompletionChoice" $
+    OpenAICompletionChoice
+      <$> requiredField "text" "Completion text" .= completionText
+      <*> requiredField "index" "Choice index" .= completionIndex
+      <*> optionalField "finish_reason" "Finish reason" .= completionFinishReason
+
+instance HasCodec OpenAICompletionResponse where
+  codec = dimapCodec fromEither toEither $ eitherCodec (codec @OpenAICompletionSuccessResponse) (codec @OpenAIErrorResponse)
+    where
+      fromEither (Left success) = OpenAICompletionSuccess success
+      fromEither (Right err) = OpenAICompletionError err
+
+      toEither (OpenAICompletionSuccess success) = Left success
+      toEither (OpenAICompletionError err) = Right err
+
+instance HasCodec OpenAICompletionSuccessResponse where
+  codec = object "OpenAICompletionSuccessResponse" $
+    OpenAICompletionSuccessResponse
+      <$> requiredField "choices" "Completion choices" .= completionChoices

@@ -12,10 +12,11 @@ import qualified XMLPropertySpec
 import qualified XMLProvidersSpec
 import qualified CoreTypesSpec
 import qualified ToolDefinitionIntegrationSpec
+import qualified CompletionSpec
 import qualified TestCache
 import qualified TestHTTP
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
-import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
+import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse, OpenAICompletionRequest, OpenAICompletionResponse)
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
 import System.Environment (lookupEnv)
 import qualified Data.Text as T
@@ -64,6 +65,20 @@ main = do
           in wrappedCall
         _ -> \req -> TestCache.playbackMode cachePath (AnthropicProvider.withMagicSystemPrompt req)
 
+  -- Build Completion response provider (for /v1/completions endpoint)
+  let completionProvider :: TestCache.ResponseProvider OpenAICompletionRequest OpenAICompletionResponse
+      completionProvider = case mode of
+        Just "record" | Just url <- openaiUrl ->
+          TestCache.recordMode cachePath $
+            TestHTTP.httpCall (url ++ "/v1/completions") [("Content-Type", "application/json")]
+        Just "update" | Just url <- openaiUrl ->
+          TestCache.updateMode cachePath $
+            TestHTTP.httpCall (url ++ "/v1/completions") [("Content-Type", "application/json")]
+        Just "live" | Just url <- openaiUrl ->
+          TestCache.liveMode $
+            TestHTTP.httpCall (url ++ "/v1/completions") [("Content-Type", "application/json")]
+        _ -> TestCache.playbackMode cachePath
+
   hspec $ do
     describe "Composable Handlers" ComposableHandlersSpec.spec
 
@@ -81,6 +96,9 @@ main = do
     -- Composable provider integration tests
     describe "OpenAI Composable Provider (cached)" $ OpenAIComposableSpec.spec openaiProvider
     describe "Anthropic Composable Provider (cached)" $ AnthropicComposableSpec.spec anthropicProvider
+
+    -- Completion interface tests
+    describe "OpenAI Completion Interface (cached)" $ CompletionSpec.spec completionProvider
 
     -- Cache infrastructure tests
     describe "Test Cache" CachedIntegrationSpec.spec
