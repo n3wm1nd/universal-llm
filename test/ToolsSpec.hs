@@ -9,6 +9,8 @@ import Test.Hspec
 import Test.QuickCheck
 import Data.Proxy (Proxy(..))
 import Autodocodec (HasCodec(..))
+
+
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Aeson (Value, Object)
@@ -23,7 +25,7 @@ spec = describe "Tools" $ do
 
   describe "TupleSchema" $ do
     it "generates empty schema for ()" $ do
-      let schema = tupleToSchema (Proxy @())
+      let schema = tupleToDefaultSchema (Proxy @())
       case Aeson.fromJSON schema of
         Aeson.Success (obj :: Object) -> do
           KM.lookup "type" obj `shouldBe` Just (Aeson.String "object")
@@ -36,7 +38,7 @@ spec = describe "Tools" $ do
         _ -> expectationFailure "Schema should decode to Object"
 
     it "generates schema for single parameter (Text, ())" $ do
-      let schema = tupleToSchema (Proxy @(Text, ()))
+      let schema = tupleToDefaultSchema (Proxy @(Text, ()))
       case Aeson.fromJSON schema of
         Aeson.Success (obj :: Object) -> do
           KM.lookup "type" obj `shouldBe` Just (Aeson.String "object")
@@ -51,7 +53,7 @@ spec = describe "Tools" $ do
         _ -> expectationFailure "Schema should decode to Object"
 
     it "generates schema for two parameters (Text, (Int, ()))" $ do
-      let schema = tupleToSchema (Proxy @(Text, (Int, ())))
+      let schema = tupleToDefaultSchema (Proxy @(Text, (Int, ())))
       case Aeson.fromJSON schema of
         Aeson.Success (obj :: Object) -> do
           case KM.lookup "properties" obj of
@@ -66,7 +68,7 @@ spec = describe "Tools" $ do
         _ -> expectationFailure "Schema should decode to Object"
 
     it "generates schema for three parameters (Text, (Int, (Bool, ())))" $ do
-      let schema = tupleToSchema (Proxy @(Text, (Int, (Bool, ()))))
+      let schema = tupleToDefaultSchema (Proxy @(Text, (Int, (Bool, ()))))
       case Aeson.fromJSON schema of
         Aeson.Success (obj :: Object) -> do
           case KM.lookup "properties" obj of
@@ -99,20 +101,62 @@ spec = describe "Tools" $ do
       result <- call tool (5, ())
       result `shouldBe` 6
 
+  describe "mkToolWithMeta (vary-adic parameter naming)" $ do
+    it "works with 0-arity function" $ do
+      let tool = mkToolWithMeta "get_number" "returns 42" (return 42 :: IO Int)
+      toolName tool `shouldBe` "get_number"
+      toolWrapParamMetas tool `shouldBe` []
+
+    it "works with 1-arity function" $ do
+      let greet :: Text -> IO Text
+          greet name = return $ "Hello, " <> name
+          tool = mkToolWithMeta "greet" "greets someone"
+                   (\x -> return $ "Hello, " <> x :: IO Text)
+                   "name" "person's name"
+      toolWrapParamMetas tool `shouldBe` [("name", "person's name")]
+
+    it "works with 2-arity function" $ do
+      let add :: Int -> Int -> IO Int
+          add x y = return (x + y)
+          tool = mkToolWithMeta "add" "adds two numbers" add
+                   "x" "first number"
+                   "y" "second number"
+      toolWrapParamMetas tool `shouldBe` [("x", "first number"), ("y", "second number")]
+
+    it "works with 3-arity function" $ do
+      let formatInfo :: Text -> Int -> Bool -> IO Text
+          formatInfo name age isStudent =
+            return $ name <> " is " <> T.pack (show age) <> " years old"
+          tool = mkToolWithMeta "format_info" "formats person info" formatInfo
+                   "name" "person's name"
+                   "age" "person's age"
+                   "isStudent" "whether they are a student"
+      toolWrapParamMetas tool `shouldBe`
+        [("name", "person's name"), ("age", "person's age"), ("isStudent", "whether they are a student")]
+
+    it "can call vary-adically defined tool" $ do
+      let add :: Int -> Int -> IO Int
+          add x y = return (x + y)
+          tool = mkToolWithMeta "add" "adds two numbers" add
+                   "first" "first number"
+                   "second" "second number"
+      result <- call tool (10, (32, ()))
+      result `shouldBe` 42
+
   describe "TupleParser" $ do
     it "parses empty JSON object to ()" $ do
       let obj = KM.empty
-          result = parseJsonToTuple (Proxy @()) 0 obj
+          result = parseJsonToDefaultTuple (Proxy @()) obj
       result `shouldBe` Right ()
 
     it "parses single parameter from JSON object" $ do
       let obj = KM.fromList [("text_0", Aeson.String "hello")]
-          result = parseJsonToTuple (Proxy @(Text, ())) 0 obj
+          result = parseJsonToDefaultTuple (Proxy @(Text, ())) obj
       result `shouldBe` Right ("hello", ())
 
     it "parses two parameters from JSON object" $ do
       let obj = KM.fromList [("text_0", Aeson.String "hello"), ("number_1", Aeson.Number 42)]
-          result = parseJsonToTuple (Proxy @(Text, (Int, ()))) 0 obj
+          result = parseJsonToDefaultTuple (Proxy @(Text, (Int, ()))) obj
       result `shouldBe` Right ("hello", (42, ()))
 
     it "parses three parameters from JSON object" $ do
@@ -121,19 +165,19 @@ spec = describe "Tools" $ do
             , ("number_1", Aeson.Number 42)
             , ("bool_2", Aeson.Bool True)
             ]
-          result = parseJsonToTuple (Proxy @(Text, (Int, (Bool, ())))) 0 obj
+          result = parseJsonToDefaultTuple (Proxy @(Text, (Int, (Bool, ())))) obj
       result `shouldBe` Right ("hello", (42, (True, ())))
 
     it "fails when parameter is missing" $ do
       let obj = KM.fromList [("text_0", Aeson.String "hello")]
-          result = parseJsonToTuple (Proxy @(Text, (Int, ()))) 0 obj
+          result = parseJsonToDefaultTuple (Proxy @(Text, (Int, ()))) obj
       case result of
         Left err -> T.unpack err `shouldContain` "Missing parameter"
         Right _ -> expectationFailure "Should have failed with missing parameter"
 
     it "fails when parameter has wrong type" $ do
       let obj = KM.fromList [("text_0", Aeson.Number 42)]  -- Number instead of String
-          result = parseJsonToTuple (Proxy @(Text, ())) 0 obj
+          result = parseJsonToDefaultTuple (Proxy @(Text, ())) obj
       case result of
         Left err -> T.unpack err `shouldContain` "Failed to parse parameter"
         Right _ -> expectationFailure "Should have failed with type error"
