@@ -13,6 +13,7 @@ import qualified XMLProvidersSpec
 import qualified CoreTypesSpec
 import qualified ToolDefinitionIntegrationSpec
 import qualified CompletionSpec
+import qualified ToolsSpec
 import qualified TestCache
 import qualified TestHTTP
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
@@ -86,6 +87,9 @@ main = do
     describe "Property Tests" PropertySpec.spec
     describe "XML Tool Call Properties" XMLPropertySpec.spec
     describe "Core Types Properties" CoreTypesSpec.spec
+
+    -- Tools tests
+    ToolsSpec.spec
 
     -- Tool definition integration tests
     ToolDefinitionIntegrationSpec.spec

@@ -30,6 +30,7 @@ library
   exposed-modules:
     UniversalLLM
     UniversalLLM.Core.Types
+    UniversalLLM.Core.Tools
     UniversalLLM.Models.SimpleModel
     UniversalLLM.Models.FullFeaturedModel
     UniversalLLM.Protocols.OpenAI
@@ -82,6 +83,7 @@ test-suite universal-llm-tests
     CoreTypesSpec
     ToolDefinitionIntegrationSpec
     CompletionSpec
+    ToolsSpec
     TestModels
     TestCache
     TestHTTP
