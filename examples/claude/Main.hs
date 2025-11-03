@@ -13,6 +13,7 @@
 module Main (main) where
 
 import UniversalLLM
+import UniversalLLM.Core.Tools
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
 import UniversalLLM.Providers.Anthropic (Anthropic(..), withMagicSystemPrompt, oauthHeaders)
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
@@ -48,15 +49,6 @@ instance ProviderImplementation Anthropic ClaudeSonnet45 where
 -- Tool Definition
 -- ============================================================================
 
--- Tool parameters type
-data GetTimeParams = GetTimeParams
-  { timezone :: Maybe Text
-  } deriving (Show, Eq)
-
-instance Autodocodec.HasCodec GetTimeParams where
-  codec = object "GetTimeParams" $
-    GetTimeParams <$> optionalField "timezone" "Timezone" .= timezone
-
 -- Tool result type
 data TimeResponse = TimeResponse
   { currentTime :: Text
@@ -66,19 +58,18 @@ instance Autodocodec.HasCodec TimeResponse where
   codec = object "TimeResponse" $
     TimeResponse <$> Autodocodec.requiredField "current_time" "Current time" .= currentTime
 
--- Tool type that carries its implementation
-data GetTime m = GetTime (GetTimeParams -> m TimeResponse)
+instance ToolParameter TimeResponse where
+  paramName _ n = "time_response_" <> T.pack (show n)
+  paramDescription _ = "time response"
 
-instance Tool (GetTime m) m where
-  type ToolParams (GetTime m) = GetTimeParams
-  type ToolOutput (GetTime m) = TimeResponse
-  toolName _ = "get_time"
-  toolDescription _ = "Get the current time"
-  call (GetTime impl) params = impl params
+-- Make TimeResponse a ToolFunction so functions returning it become tools automatically
+instance ToolFunction TimeResponse where
+  toolFunctionName _ = "get_time"
+  toolFunctionDescription _ = "Get the current time"
 
--- Tool value with actual implementation
-getTimeTool :: MonadIO m => GetTime m
-getTimeTool = GetTime $ \_params -> do
+-- Tool implementation as a bare 0-arity function - no wrapper needed!
+getTimeTool :: IO TimeResponse
+getTimeTool = do
   now <- liftIO getCurrentTime
   let timeStr = T.pack $ formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S UTC" now
   liftIO $ putStrLn $ "    ⏰ " <> T.unpack timeStr
@@ -160,7 +151,7 @@ handleResponse _ _ = return []
 executeCall :: [LLMTool IO] -> ToolCall -> IO ToolResult
 executeCall tools callTool = do
   putStrLn $ "  → " <> T.unpack (getToolCallName callTool)
-  result <- executeToolCall tools callTool
+  result <- executeToolCallFromList tools callTool
   case toolResultOutput result of
     Left errMsg -> putStrLn $ "    ❌ " <> T.unpack errMsg
     Right _ -> return ()
@@ -184,7 +175,7 @@ main = do
 
   -- Available tools (for execution)
   let tools :: [LLMTool IO]
-      tools = [LLMTool (getTimeTool @IO)]
+      tools = [LLMTool getTimeTool]
 
   -- Concrete provider and model selection (only place where specific types matter)
   let provider = Anthropic

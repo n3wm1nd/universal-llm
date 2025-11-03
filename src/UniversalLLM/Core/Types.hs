@@ -16,14 +16,8 @@
 module UniversalLLM.Core.Types where
 
 import Data.Text (Text)
-import qualified Data.Text as Text
-import Data.Aeson (Value, Result (..))
-import Data.Aeson.Types (parse)
-import qualified Data.Aeson as Aeson
-import Autodocodec (HasCodec, toJSONViaCodec, parseJSONViaCodec)
-import Autodocodec.Schema (jsonSchemaViaCodec)
-import Data.Kind (Type)
-import Data.List (find)
+import Data.Aeson (Value)
+
 
 -- Unified capability classes
 -- SupportsX for parameters (things providers accept)

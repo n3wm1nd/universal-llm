@@ -1,218 +1,28 @@
-# Tool Calling Patterns in Universal-LLM
+# Tool Calling in Universal-LLM
 
-This library supports four different patterns for implementing tool calls, each suited to different use cases. All patterns use the same underlying type system, but differ in how you structure your tool types and implementations.
+This library supports three different approaches for implementing tool calls, each suited to different use cases. The library is designed to make tools from ordinary Haskell functions with minimal boilerplate.
 
 ## Overview
 
 Tool calling in this library involves:
-1. **Tool Type** - A Haskell type representing the tool
-2. **Tool Instance** - Implementation of the `Tool` typeclass
-3. **Tool Definition** - Pure metadata (`ToolDefinition`) sent to the LLM
-4. **Tool Execution** - Running tools on `ToolCall` messages from the LLM
+1. **Tool Functions** - Regular Haskell functions that become tools
+2. **Tool Definitions** - Pure metadata (`ToolDefinition`) sent to the LLM
+3. **Tool Execution** - Running tools on `ToolCall` messages from the LLM
 
-The four patterns differ in what the tool type contains and when you provide the implementation.
+The three approaches differ in how you attach metadata (name, description, parameter names) to your functions.
 
 ---
 
-## Pattern A: Static Tool Functions
+## Approach A: ToolFunction Instance (Preferred)
 
-**Use when:** Your tool implementation is fixed and has no configuration or external dependencies.
+**Use when:** You have a unique return type for your tool (or can create a newtype wrapper).
+
+This is the cleanest approach - just implement `ToolFunction` on the return type and any function returning it automatically becomes a tool.
 
 ### Structure
 
 ```haskell
--- Tool type is empty - just a marker
-data GetTime = GetTime deriving (Eq)
-
--- Tool implementation is in the typeclass instance
-instance Tool GetTime IO where
-  type ToolParams GetTime = GetTimeParams
-  type ToolOutput GetTime = TimeResponse
-
-  toolName _ = "get_time"
-  toolDescription _ = "Get the current system time"
-
-  -- Implementation directly in 'call'
-  call _ params = do
-    now <- getCurrentTime
-    return $ TimeResponse (formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S" now)
-```
-
-### Advantages
-- Simplest pattern
-- No state to manage
-- Easy to understand
-
-### Example Use Case
-- System utilities (time, random numbers)
-- Pure functions
-- Stateless operations
-
----
-
-## Pattern B: Configured Tools
-
-**Use when:** Tool behavior needs configuration that the LLM cannot change (like API keys, base URLs, preferences).
-
-### Structure
-
-```haskell
--- Tool type holds configuration
-data WebSearch = WebSearch
-  { searchEngine :: Text  -- "google", "bing", etc.
-  , maxResults :: Int
-  } deriving (Eq)
-
-instance Tool WebSearch IO where
-  type ToolParams WebSearch = SearchParams
-  type ToolOutput WebSearch = SearchResults
-
-  -- Configuration affects metadata
-  toolName (WebSearch engine _) = "search_" <> engine
-  toolDescription (WebSearch engine _) =
-    "Search the web using " <> engine
-
-  -- Configuration affects behavior
-  call (WebSearch engine maxResults) params = do
-    results <- searchAPI engine (query params) maxResults
-    return $ SearchResults results
-```
-
-### Advantages
-- Configuration is type-safe
-- Same tool type, different configurations
-- Configuration influences both description and behavior
-
-### Example Use Cases
-- API clients with different endpoints
-- Tools with user preferences
-- Multi-tenant scenarios
-
----
-
-## Pattern C: Dependency Injection
-
-**Use when:** You want to inject implementations (for testing, mocking, or partial application).
-
-### Structure
-
-```haskell
--- Tool type holds the implementation function
-data DatabaseQuery m = DatabaseQuery (QueryParams -> m QueryResult)
-
--- Equality ignores the function (just check type)
-instance Eq (DatabaseQuery m) where
-  _ == _ = True
-
-instance Tool (DatabaseQuery m) m where
-  type ToolParams (DatabaseQuery m) = QueryParams
-  type ToolOutput (DatabaseQuery m) = QueryResult
-
-  toolName _ = "query_database"
-  toolDescription _ = "Query the application database"
-
-  -- Just call the injected function
-  call (DatabaseQuery impl) params = impl params
-```
-
-### Usage
-
-```haskell
--- Production: real database connection
-productionQuery :: QueryParams -> IO QueryResult
-productionQuery params = runQuery dbConnection params
-
-let prodTool = DatabaseQuery productionQuery
-
--- Testing: mock implementation
-mockQuery :: QueryParams -> IO QueryResult
-mockQuery params = return $ MockResult [...]
-
-let testTool = DatabaseQuery mockQuery
-
--- Both work with the same tool type!
-tools = [LLMTool prodTool]  -- or [LLMTool testTool]
-```
-
-### Advantages
-- Perfect for testing (inject mocks)
-- Enables partial application
-- Separates interface from implementation
-
-### Example Use Cases
-- Database access
-- External API calls
-- Any operation you want to mock in tests
-
----
-
-## Pattern D: Manual Handling
-
-**Use when:** You need complete control or want to avoid the `Tool` typeclass entirely.
-
-### Structure
-
-```haskell
--- Skip the Tool typeclass entirely
--- Manually create ToolDefinitions
-let toolDef = ToolDefinition
-      { toolDefName = "custom_tool"
-      , toolDefDescription = "Does something custom"
-      , toolDefParameters = customJsonSchema
-      }
-
--- Manually handle ToolCall messages
-handleToolCall :: ToolCall -> IO Value
-handleToolCall tc = case toolCallName tc of
-  "custom_tool" -> do
-    -- Manually decode parameters
-    let params = decode (toolCallParameters tc)
-    -- Execute custom logic
-    result <- customImplementation params
-    -- Manually encode result
-    return $ toJSON result
-  _ -> error "Unknown tool"
-```
-
-### Advantages
-- Maximum flexibility
-- Straightforward and easy to understand
-- No typeclass magic
-- Full control over encoding/decoding
-
-### Disadvantages
-- No type safety for parameters/results
-- Manual encoding/decoding boilerplate
-- Runtime errors instead of compile-time checks
-
-### Example Use Cases
-- Quick prototyping
-- One-off custom tools
-- When tool structure doesn't fit the typeclass
-- Gradual migration from dynamic to typed tools
-- Coming from dynamic languages
-
----
-
-## Complete Example: Pattern C (Dependency Injection)
-
-Here's a full example from the library's test suite:
-
-```haskell
-{-# LANGUAGE OverloadedStrings #-}
-
-import UniversalLLM
-import Data.Time
-
--- 1. Define parameter and result types
-data GetTimeParams = GetTimeParams
-  { timezone :: Maybe Text
-  } deriving (Show, Eq)
-
-instance HasCodec GetTimeParams where
-  codec = object "GetTimeParams" $
-    GetTimeParams <$> optionalField "timezone" "Timezone" .= timezone
-
+-- 1. Define a unique result type
 data TimeResponse = TimeResponse
   { currentTime :: Text
   } deriving (Show, Eq)
@@ -221,105 +31,333 @@ instance HasCodec TimeResponse where
   codec = object "TimeResponse" $
     TimeResponse <$> requiredField "current_time" "Current time" .= currentTime
 
--- 2. Define tool type (holds implementation)
-data GetTime m = GetTime (GetTimeParams -> m TimeResponse)
+-- 2. Make it a ToolFunction - this is where the tool metadata lives
+instance ToolFunction TimeResponse where
+  toolFunctionName _ = "get_time"
+  toolFunctionDescription _ = "Get the current system time"
 
-instance Eq (GetTime m) where
-  _ == _ = True
-
--- 3. Implement Tool typeclass
-instance Tool (GetTime m) m where
-  type ToolParams (GetTime m) = GetTimeParams
-  type ToolOutput (GetTime m) = TimeResponse
-
-  toolName _ = "get_time"
-  toolDescription _ = "Get the current time"
-
-  call (GetTime impl) params = impl params
-
--- 4. Create tool value with implementation
-getTimeTool :: MonadIO m => GetTime m
-getTimeTool = GetTime $ \params -> do
-  now <- liftIO getCurrentTime
-  let timeStr = formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S UTC" now
+-- 3. Implement your function normally - it's automatically a tool!
+getTime :: IO TimeResponse
+getTime = do
+  now <- getCurrentTime
+  let timeStr = T.pack $ formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S UTC" now
   return $ TimeResponse timeStr
 
--- 5. Use in conversation
-main :: IO ()
+-- 4. Use it directly
 main = do
-  let tools = [LLMTool (getTimeTool @IO)]
-      toolDefs = map llmToolToDefinition tools
+  let tools = [LLMTool getTime]  -- That's it!
+```
 
-      configs = [ Temperature 0.7
-                , MaxTokens 100
-                , Tools toolDefs
-                ]
+### Multi-parameter Functions
 
-      messages = [UserText "What time is it?"]
+The library automatically handles curried functions:
 
-  -- Send request with configs
-  let request = toRequest OpenAI GPT4o configs messages
+```haskell
+-- Tool function with multiple parameters
+searchWeb :: Text -> Int -> IO SearchResults
+searchWeb query maxResults = do
+  results <- callSearchAPI query maxResults
+  return $ SearchResults results
 
-  -- ... get response from API ...
+-- Just wrap it
+let tools = [LLMTool searchWeb]
+```
 
-  -- Execute tool calls (single tool call per message)
-  case response of
-    AssistantTool call -> do
-      result <- executeToolCall tools call
-      -- Continue conversation with ToolResultMsg result...
-    AssistantText text ->
-      putStrLn text
+Parameters get default names (`param_0`, `param_1`, etc.) unless you use Approach B.
+
+### Advantages
+- Cleanest code - no wrapper types
+- Type-safe
+- Return type documents what the tool does
+- Works great with newtypes for unique tool results
+
+### When to Use
+- Tools with unique return types (e.g., `TimeResponse`, `WeatherData`, `SearchResults`)
+- When you can newtype-wrap a common return type (e.g., `newtype TranslatedText = TranslatedText Text`)
+- Pure functions or simple IO operations
+- When you want minimal boilerplate
+
+### Example: Newtype Wrapper
+
+```haskell
+-- Wrap a common type to make it unique
+newtype TranslatedText = TranslatedText Text
+
+instance HasCodec TranslatedText where
+  codec = named "TranslatedText" $
+    dimapCodec TranslatedText (\(TranslatedText t) -> t) codec
+
+instance ToolFunction TranslatedText where
+  toolFunctionName _ = "translate"
+  toolFunctionDescription _ = "Translate text to English"
+
+-- Function is now automatically a tool
+translateToEnglish :: Text -> IO TranslatedText
+translateToEnglish text = do
+  result <- callTranslationAPI text "en"
+  return $ TranslatedText result
 ```
 
 ---
 
-## Choosing a Pattern
+## Approach B: mkTool / mkToolWithMeta
 
-| Pattern | Use When | Type Safety | Boilerplate |
-|---------|----------|-------------|-------------|
-| **A: Static** | Simple, stateless tools | ✓ Full | Low |
-| **B: Configured** | Need user preferences or API endpoints | ✓ Full | Medium |
-| **C: Dependency Injection** | Want testability or partial application | ✓ Full | Medium |
-| **D: Manual** | Quick prototyping or custom cases | ✗ Runtime | Low* |
+**Use when:** You want to give custom names to parameters, or the return type is shared across multiple tools.
 
-*Low cognitive complexity but manual encoding/decoding work
+Use `mkTool` or `mkToolWithMeta` to wrap a function with metadata.
 
-**Recommendation:**
-- Start with **Pattern A** for simple stateless tools
-- Use **Pattern C** when you need testing or flexibility
-- Use **Pattern D** for quick prototyping or when learning the library
-- Use **Pattern B** for tools with configuration
+### Structure with mkTool
+
+```haskell
+-- Basic tool with default parameter names
+calculatorTool :: ToolWrapped (Text -> Int -> Int -> IO CalculatorResult) (Text, (Int, (Int, ())))
+calculatorTool = mkTool "calculator" "Performs arithmetic operations" calculator
+
+calculator :: Text -> Int -> Int -> IO CalculatorResult
+calculator op a b = return $ CalculatorResult $ case op of
+  "add" -> a + b
+  "subtract" -> a - b
+  "multiply" -> a * b
+  "divide" -> a `div` b
+```
+
+### Structure with mkToolWithMeta
+
+```haskell
+-- Tool with custom parameter names and descriptions
+searchTool :: ToolWrapped (Text -> Int -> IO SearchResults) (Text, (Int, ()))
+searchTool = mkToolWithMeta "web_search" "Search the web" webSearch
+               "query" "The search query"
+               "max_results" "Maximum number of results to return"
+
+webSearch :: Text -> Int -> IO SearchResults
+webSearch query maxResults = do
+  results <- callSearchAPI query maxResults
+  return $ SearchResults results
+
+-- Use it
+let tools = [LLMTool searchTool]
+```
+
+### Vary-adic Syntax
+
+`mkToolWithMeta` takes alternating name/description pairs for each parameter:
+
+```haskell
+-- 2 parameters = 4 extra arguments (2 pairs)
+mkToolWithMeta "name" "description" function
+  "param1" "description1"
+  "param2" "description2"
+
+-- 3 parameters = 6 extra arguments (3 pairs)
+mkToolWithMeta "name" "description" function
+  "param1" "description1"
+  "param2" "description2"
+  "param3" "description3"
+```
+
+All arguments must be on the same logical line (can wrap with proper indentation).
+
+### Advantages
+- Custom parameter names and descriptions
+- Works with any function, any return type
+- Good for tools where parameter names matter to the LLM
+
+### When to Use
+- Multiple tools share the same return type
+- Parameter names need to be descriptive for the LLM
+- You want fine-grained control over tool metadata
+
+---
+
+## Approach C: Manual ToolDefinition
+
+**Use when:** You need complete control or want to avoid the type system entirely.
+
+Skip the `Tool` typeclass and manually create everything.
+
+### Structure
+
+```haskell
+-- 1. Manually create ToolDefinition
+let toolDef = ToolDefinition
+      { toolDefName = "custom_tool"
+      , toolDefDescription = "Does something custom"
+      , toolDefParameters = customJsonSchema  -- Hand-written JSON Schema
+      }
+
+-- 2. Manually handle ToolCall messages
+handleToolCall :: ToolCall -> IO ToolResult
+handleToolCall tc = case getToolCallName tc of
+  "custom_tool" -> do
+    -- Manually decode parameters from JSON
+    case fromJSON (toolCallParameters tc) of
+      Success params -> do
+        result <- customImplementation params
+        return $ ToolResult tc (Right $ toJSON result)
+      Error err ->
+        return $ ToolResult tc (Left $ T.pack err)
+  _ -> return $ ToolResult tc (Left "Unknown tool")
+
+-- 3. Use it
+let configs = [Tools [toolDef], Temperature 0.7]
+response <- queryLLM configs messages
+
+-- 4. Handle responses manually
+case response of
+  [AssistantTool call] -> do
+    result <- handleToolCall call
+    -- Continue with ToolResultMsg result
+```
+
+### Advantages
+- Maximum flexibility
+- No typeclass magic
+- Easy to understand
+- Full control over JSON encoding/decoding
+
+### Disadvantages
+- No type safety for parameters/results
+- Manual encoding/decoding boilerplate
+- Runtime errors instead of compile-time checks
+
+### When to Use
+- Quick prototyping
+- One-off custom tools
+- When tool structure doesn't fit the typeclass model
+- Gradual migration to typed tools
+- Coming from dynamic languages
+
+---
+
+## Complete Example: Multi-Parameter Tool (Approach A + B)
+
+```haskell
+{-# LANGUAGE OverloadedStrings #-}
+
+import UniversalLLM
+import UniversalLLM.Core.Tools
+import Data.Time
+
+-- 1. Define result type with ToolFunction instance
+data SearchResults = SearchResults
+  { results :: [Text]
+  , count :: Int
+  } deriving (Show, Eq)
+
+instance HasCodec SearchResults where
+  codec = object "SearchResults" $
+    SearchResults
+      <$> requiredField "results" "Search results" .= results
+      <*> requiredField "count" "Number of results" .= count
+
+instance ToolFunction SearchResults where
+  toolFunctionName _ = "search_web"
+  toolFunctionDescription _ = "Search the web"
+
+-- 2. Implement the function
+searchWeb :: Text -> Int -> IO SearchResults
+searchWeb query maxResults = do
+  -- Call search API
+  apiResults <- callSearchAPI query maxResults
+  return $ SearchResults apiResults (length apiResults)
+
+-- 3. Wrap with custom parameter names (Approach B)
+searchTool :: ToolWrapped (Text -> Int -> IO SearchResults) (Text, (Int, ()))
+searchTool = mkToolWithMeta "search_web" "Search the web" searchWeb
+               "query" "The search query string"
+               "max_results" "Maximum number of results"
+
+-- 4. Use in conversation
+main :: IO ()
+main = do
+  let tools = [LLMTool searchTool]
+      toolDefs = map llmToolToDefinition tools
+
+      configs = [ Temperature 0.7
+                , MaxTokens 500
+                , Tools toolDefs
+                ]
+
+      messages = [UserText "Search for Haskell tutorials"]
+
+  -- Send request
+  response <- queryLLM @MyProvider @MyModel configs messages
+
+  -- Handle tool calls
+  case response of
+    [AssistantTool call] -> do
+      result <- executeToolCallFromList tools call
+      -- Continue conversation with ToolResultMsg result
+    [AssistantText text] ->
+      putStrLn $ T.unpack text
+```
+
+---
+
+## Choosing an Approach
+
+| Approach | Use When | Type Safety | Boilerplate | Parameter Names |
+|----------|----------|-------------|-------------|-----------------|
+| **A: ToolFunction** | Unique return type | ✓ Full | Minimal | Default |
+| **B: mkTool/Meta** | Custom param names | ✓ Full | Low | Custom |
+| **C: Manual** | Need full control | ✗ Runtime | Medium* | Custom |
+
+*Manual encoding/decoding work
+
+**Recommendations:**
+1. **Start with Approach A** (ToolFunction) - cleanest for most tools
+2. **Use Approach B** (mkToolWithMeta) when parameter names matter to the LLM
+3. **Use Approach C** (Manual) for quick prototyping or when you need full control
 
 ---
 
 ## Tool Execution Flow
 
-Regardless of pattern, the execution flow is:
+Regardless of approach, the execution flow is:
 
 1. **Define tools** → Create `[LLMTool m]` with implementations
 2. **Extract definitions** → `map llmToolToDefinition tools` gives `[ToolDefinition]`
 3. **Add to config** → `Tools toolDefs` as part of `[ModelConfig provider model]`
-4. **Send request** → `toRequest provider model configs messages`
-5. **Receive tool calls** → LLM responds with `AssistantTool ToolCall` (one tool call per message)
-6. **Execute tools** → `executeToolCall tools call` dispatches to correct tool
+4. **Send request** → `toProviderRequest provider model configs messages`
+5. **Receive tool calls** → LLM responds with `AssistantTool ToolCall` messages
+6. **Execute tools** → `executeToolCallFromList tools call` dispatches to correct tool
 7. **Return results** → Send `ToolResultMsg result` back to LLM
-
-The separation of `[LLMTool m]` (executable, monad-specific) and `[ToolDefinition]` (pure metadata) allows the model to be monad-agnostic while tools can perform IO or other effects.
-
-**Note:** Multiple tool calls from the LLM result in multiple `AssistantTool` messages, one per tool call. You handle each separately and return multiple `ToolResultMsg` messages back.
 
 ---
 
-## Advanced: Combining Patterns
+## Advanced: Polysemy Support
 
-You can mix patterns in the same application:
+For Polysemy users, import `Runix.LLM.ToolInstances` to get orphan instances for `Sem r`:
 
 ```haskell
-let tools =
-      [ LLMTool GetTime                          -- Pattern A
-      , LLMTool (WebSearch "google" 10)          -- Pattern B
-      , LLMTool (DatabaseQuery prodQueryImpl)    -- Pattern C
-      ]
+import Runix.LLM.ToolInstances ()  -- Enables Sem r support
+
+-- Now Sem actions work as tools
+loggingTool :: Members '[Logging] r => Text -> Text -> Sem r LogResult
+loggingTool message level = do
+  logMessage level message
+  return $ LogResult True
+
+-- Use directly with type application
+let tools = [LLMTool (loggingTool @r)]
 ```
 
-All patterns work together because they all implement the same `Tool` typeclass!
+This allows Polysemy effects to integrate seamlessly with the tool system.
+
+---
+
+## Type System Details
+
+The tool system uses:
+- **Nested tuple encoding** for parameters: `(a, (b, (c, ())))`
+- **Callable typeclass** for recursive function unwrapping
+- **Tool typeclass** for tool metadata
+- **ToolFunction typeclass** for return type metadata
+- **ToolParameter typeclass** for parameter type information
+
+You don't need to understand these internals to use the library, but they enable:
+- Type-safe parameter passing
+- Automatic JSON schema generation
+- Compile-time verification of tool structure
+- Support for arbitrary arity functions

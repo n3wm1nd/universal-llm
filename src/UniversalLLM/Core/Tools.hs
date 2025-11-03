@@ -41,7 +41,6 @@ module UniversalLLM.Core.Tools
   , executeToolCallFromList
   , tupleToSchema
   , tupleToDefaultSchema
-  , parseJsonToTuple
   , parseJsonToDefaultTuple
   , checkMetaLength
   , defaultParamMeta
@@ -59,12 +58,11 @@ import qualified Data.Text as T
 import Data.Proxy (Proxy(..))
 import Autodocodec (HasCodec, toJSONViaCodec, parseJSONViaCodec)
 import Autodocodec.Schema (jsonSchemaViaCodec)
-import Data.Kind (Type)
 import Data.Aeson (Value, Object)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
-import Data.Aeson.Types (Parser, parseEither)
+import Data.Aeson.Types (parseEither)
 import Data.List (find)
 import Data.Functor.Identity (Identity(..))
 
@@ -120,11 +118,11 @@ instance ToolParameter Bool where
 
 instance ToolParameter a => ToolParameter [a] where
   paramName _ n = "list_" <> T.pack (show n)
-  paramDescription p = "a list of " <> paramDescription (Proxy @a)
+  paramDescription _p = "a list of " <> paramDescription (Proxy @a)
 
 instance ToolParameter a => ToolParameter (Maybe a) where
   paramName _ n = "optional_" <> T.pack (show n)
-  paramDescription p = "an optional " <> paramDescription (Proxy @a)
+  paramDescription _p = "an optional " <> paramDescription (Proxy @a)
 
 -- | Type class to extract parameter schemas from nested tuple types
 -- Takes a list of (name, description) metadata and uses it for schema generation
@@ -264,9 +262,10 @@ checkMetaLength p metas =
 
 -- | Simple constructor for tool with automatic parameter names
 -- Uses default names (text_0, number_1, etc.) from ToolParameter instances
-mkTool :: forall tool r params result.
-          (Callable tool r params result, DefaultParamMeta params)
-       => Text -> Text -> tool -> ToolWrapped tool params
+mkTool :: forall tool params r result.
+          ( Callable tool r params result  -- Note: needed for type inference in tests, despite warning
+          , DefaultParamMeta params)
+       =>Text -> Text -> tool -> ToolWrapped tool params
 mkTool name desc fn = ToolWrapped name desc (defaultParamMeta (Proxy @params)) fn
 
 -- | Unsafe constructor that doesn't check metadata length
@@ -302,9 +301,11 @@ instance BuildParamMeta rest => BuildParamMeta (a, rest) where
 --   mkToolWithMeta "add" "adds numbers" add
 --     "x" "first number"
 --     "y" "second number"
-mkToolWithMeta :: forall tool r params result.
-                  (Callable tool r params result, BuildParamMeta params, DefaultParamMeta params)
-               => Text  -- ^ Tool name
+mkToolWithMeta :: forall tool params r result.
+                  ( Callable tool r params result  -- Note: needed for type inference in tests, despite warning
+                  , BuildParamMeta params
+                  , DefaultParamMeta params)
+               =>Text  -- ^ Tool name
                -> Text  -- ^ Tool description
                -> tool  -- ^ The function
                -> ParamMetaBuilder params (ToolWrapped tool params)
@@ -334,20 +335,20 @@ instance Callable f r params result => Tool (ToolWrapped f params) r params resu
 --
 -- Note: This works for all function arities. The base case (0-arity monadic actions)
 -- requires specific instances for each monad type to avoid fundep conflicts.
-instance (ToolParameter a, Callable rest m params_rest result)
+instance (Callable rest m params_rest result)
       => Callable (a -> rest) m (a, params_rest) result where
   call f (param, restParams) = call (f param) restParams
 
 -- | Tool instance for multi-parameter functions with ToolFunction result
 -- Allows functions like (Text -> Int -> IO MyResult) to be tools directly
-instance (ToolParameter a, Tool rest m params_rest result)
+instance (Tool rest m params_rest result)
       => Tool (a -> rest) m (a, params_rest) result where
   toolName _ = toolName (undefined :: rest)
   toolDescription _ = toolDescription (undefined :: rest)
 
 -- | Base case instance for IO monad
 -- Allows 0-arity IO actions to be used as tools
-instance ToolParameter a => Callable (IO a) IO () a where
+instance Callable (IO a) IO () a where
   call action () = action
 
 -- | Tool instance for IO actions with ToolFunction result
@@ -358,7 +359,7 @@ instance ToolFunction a => Tool (IO a) IO () a where
 
 -- | Base case instance for Identity monad
 -- Allows 0-arity Identity actions to be used as tools
-instance ToolParameter a => Callable (Identity a) Identity () a where
+instance Callable (Identity a) Identity () a where
   call action () = action
 
 -- | Tool instance for Identity actions with ToolFunction result
