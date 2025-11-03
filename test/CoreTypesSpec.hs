@@ -19,6 +19,7 @@ import Data.Functor.Identity (Identity(..))
 import Autodocodec (HasCodec(..), named, requiredField')
 import qualified Autodocodec as AC
 import UniversalLLM.Core.Types
+import UniversalLLM.Core.Tools
 
 -- ============================================================================
 -- Test Data Types and Tools
@@ -46,19 +47,19 @@ instance HasCodec SimpleOutput where
     SimpleOutput
       <$> requiredField' "result" AC..= outputResult
 
--- Tool type for echo
-data EchoTool = EchoTool
+instance ToolParameter SimpleOutput where
+  paramName _ n = "output_" <> T.pack (show n)
+  paramDescription _ = "an output value"
 
-instance Monad m => Tool EchoTool m where
-  type ToolParams EchoTool = SimpleInput
-  type ToolOutput EchoTool = SimpleOutput
-  toolName _ = "echo"
-  toolDescription _ = "Echoes the input text"
-  call _ input = return $ SimpleOutput $ inputText input <> " (number: " <> T.pack (show $ inputNumber input) <> ")"
+-- Tool function for echo
+echoTool :: Text -> Int -> Identity SimpleOutput
+echoTool text number = return $ SimpleOutput $ text <> " (number: " <> T.pack (show number) <> ")"
 
--- Tool value
-echoTool :: EchoTool
-echoTool = EchoTool
+-- Wrapped version with metadata
+echoToolWrapped :: ToolWrapped (Text -> Int -> Identity SimpleOutput) (Text, (Int, ()))
+echoToolWrapped = mkToolWithMeta "echo" "Echoes the input text" echoTool
+                    "text" "the text to echo"
+                    "number" "a number to include"
 
 -- ============================================================================
 -- Generators
@@ -94,7 +95,7 @@ genInvalidToolCall = do
 -- | Property: InvalidToolCall should always return an error
 prop_invalidToolCallReturnsError :: Property
 prop_invalidToolCallReturnsError = forAll genInvalidToolCall $ \invalidCall ->
-  let Identity result = executeToolCall @Identity [] invalidCall
+  let Identity result = executeToolCallFromList @Identity [] invalidCall
   in case toolResultOutput result of
        Left err -> property $ not (T.null err)  -- Should have an error message
        Right _ -> property False  -- Should never succeed
@@ -102,8 +103,8 @@ prop_invalidToolCallReturnsError = forAll genInvalidToolCall $ \invalidCall ->
 -- | Property: Calling a non-existent tool should return "Tool not found" error
 prop_nonExistentToolReturnsError :: Property
 prop_nonExistentToolReturnsError = forAll (genValidToolCall "nonexistent") $ \toolCall ->
-  let tools = [LLMTool echoTool]  -- Available tools don't include "nonexistent"
-      Identity result = executeToolCall tools toolCall
+  let tools = [LLMTool echoToolWrapped]  -- Available tools don't include "nonexistent"
+      Identity result = executeToolCallFromList tools toolCall
   in case toolResultOutput result of
        Left err -> property $ T.isInfixOf "Tool not found" err
        Right _ -> property False
@@ -112,10 +113,10 @@ prop_nonExistentToolReturnsError = forAll (genValidToolCall "nonexistent") $ \to
 prop_invalidParametersReturnError :: Property
 prop_invalidParametersReturnError = property $
   let toolCall = ToolCall "call_123" "echo" (Aeson.object ["wrong_field" .= ("test" :: Text)])
-      tools = [LLMTool echoTool]
-      Identity result = executeToolCall tools toolCall
+      tools = [LLMTool echoToolWrapped]
+      Identity result = executeToolCallFromList tools toolCall
   in case toolResultOutput result of
-       Left err -> property $ T.isInfixOf "Invalid parameters" err
+       Left err -> property $ T.isInfixOf "parameter" err || T.isInfixOf "Parameter" err
        Right _ -> property False
 
 -- | Property: Valid tool call with valid parameters should succeed
@@ -126,8 +127,8 @@ prop_validToolCallSucceeds = forAll genSimpleInput $ \input ->
         , "number" .= inputNumber input
         ]
       toolCall = ToolCall "call_456" "echo" params
-      tools = [LLMTool echoTool]
-      Identity result = executeToolCall tools toolCall
+      tools = [LLMTool echoToolWrapped]
+      Identity result = executeToolCallFromList tools toolCall
   in case toolResultOutput result of
        Left _ -> property False
        Right output ->
@@ -143,8 +144,8 @@ prop_validToolCallSucceeds = forAll genSimpleInput $ \input ->
 -- | Property: Tool result should preserve the original tool call
 prop_toolResultPreservesCall :: Property
 prop_toolResultPreservesCall = forAll (genValidToolCall "echo") $ \toolCall ->
-  let tools = [LLMTool echoTool]
-      Identity result = executeToolCall tools toolCall
+  let tools = [LLMTool echoToolWrapped]
+      Identity result = executeToolCallFromList tools toolCall
   in toolResultCall result === toolCall
 
 -- | Property: getToolCallName should extract the correct name
@@ -163,7 +164,7 @@ prop_getToolCallNameWorksForInvalid = forAll genInvalidToolCall $ \invalidCall -
 -- | Property: toToolDefinition extracts correct metadata
 prop_toToolDefinitionCorrect :: Property
 prop_toToolDefinitionCorrect = property $
-  let toolDef = toToolDefinition @EchoTool @Identity echoTool
+  let toolDef = toToolDefinition echoToolWrapped
   in toolDefName toolDef === "echo"
      .&&. toolDefDescription toolDef === "Echoes the input text"
      .&&. (toolDefParameters toolDef /= Aeson.Null)  -- Should have schema
@@ -171,7 +172,7 @@ prop_toToolDefinitionCorrect = property $
 -- | Property: Tool definition parameters should be valid JSON schema
 prop_toolDefinitionHasValidSchema :: Property
 prop_toolDefinitionHasValidSchema = property $
-  let toolDef = toToolDefinition @EchoTool @Identity echoTool
+  let toolDef = toToolDefinition echoToolWrapped
   in case toolDefParameters toolDef of
        Aeson.Object _ -> property True  -- Valid schema object
        _ -> property False
@@ -218,8 +219,8 @@ spec = do
       let input = SimpleInput "hello" 42
           params = Aeson.object ["text" .= ("hello" :: Text), "number" .= (42 :: Int)]
           toolCall = ToolCall "test_call" "echo" params
-          tools = [LLMTool echoTool]
-          Identity result = executeToolCall tools toolCall
+          tools = [LLMTool echoToolWrapped]
+          Identity result = executeToolCallFromList tools toolCall
 
       case toolResultOutput result of
         Left err -> expectationFailure $ "Expected success, got error: " ++ T.unpack err
@@ -236,11 +237,11 @@ spec = do
     it "handles missing required field" $ do
       let params = Aeson.object ["text" .= ("hello" :: Text)]  -- Missing "number"
           toolCall = ToolCall "test_call" "echo" params
-          tools = [LLMTool echoTool]
-          Identity result = executeToolCall tools toolCall
+          tools = [LLMTool echoToolWrapped]
+          Identity result = executeToolCallFromList tools toolCall
 
       case toolResultOutput result of
-        Left err -> T.isInfixOf "Invalid parameters" err `shouldBe` True
+        Left err -> T.isInfixOf "Missing parameter" err `shouldBe` True
         Right _ -> expectationFailure "Expected parameter parsing error"
 
     it "handles extra unexpected fields gracefully" $ do
@@ -250,8 +251,8 @@ spec = do
             , "extra_field" .= ("ignored" :: Text)
             ]
           toolCall = ToolCall "test_call" "echo" params
-          tools = [LLMTool echoTool]
-          Identity result = executeToolCall tools toolCall
+          tools = [LLMTool echoToolWrapped]
+          Identity result = executeToolCallFromList tools toolCall
 
       -- Extra fields should be ignored, tool should still work
       case toolResultOutput result of

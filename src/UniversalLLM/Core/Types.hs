@@ -72,30 +72,6 @@ data ToolDefinition = ToolDefinition
   , toolDefParameters :: Value  -- JSON schema for parameters
   } deriving (Show, Eq)
 
--- The Tool class connects a tool type (which can hold config) to its parameters type
-class (HasCodec (ToolParams tool), HasCodec (ToolOutput tool)) => Tool tool m where
-  type ToolParams tool :: Type
-  type ToolOutput tool :: Type
-  toolName :: tool -> Text
-  toolDescription :: tool -> Text
-  call :: tool -> ToolParams tool -> m (ToolOutput tool)
-
--- Existential wrapper for heterogeneous tool lists
-data LLMTool m where
-  LLMTool :: Tool tool m => tool -> LLMTool m
-
--- Extract tool definition from any Tool instance
-toToolDefinition :: forall tool m. Tool tool m => tool -> ToolDefinition
-toToolDefinition tool = ToolDefinition
-  { toolDefName = toolName @tool @m tool
-  , toolDefDescription = toolDescription @tool @m tool
-  , toolDefParameters = Aeson.toJSON $ jsonSchemaViaCodec @(ToolParams tool)
-  }
-
--- Extract tool definition from existential wrapper
-llmToolToDefinition :: forall m. LLMTool m -> ToolDefinition
-llmToolToDefinition (LLMTool (tool :: t)) = toToolDefinition @t @m tool
-
 -- Type aliases for ToolCall parameters (for documentation)
 type ToolCallId = Text
 type ToolCallName = Text
@@ -123,28 +99,6 @@ data ToolResult = ToolResult
   { toolResultCall :: ToolCall  -- The call we're responding to
   , toolResultOutput :: Either Text Value  -- Left = error message, Right = success value
   } deriving (Show, Eq)
-
--- | Execute a tool call by matching and dispatching
--- Takes available tools and the tool call from the LLM
--- Returns a ToolResult with either success value or error message
-executeToolCall :: forall m. Monad m => [LLMTool m] -> ToolCall -> m ToolResult
-executeToolCall _ invalid@(InvalidToolCall _ _ _ err) =
-  return $ ToolResult invalid (Left err)
-
-executeToolCall tools tc@(ToolCall _ name params) =
-  case find matchesTool tools of
-    Nothing ->
-      return $ ToolResult tc (Left $ "Tool not found: " <> name)
-    Just (LLMTool tool) ->
-      case parse parseJSONViaCodec params of
-        Error err ->
-          return $ ToolResult tc (Left $ "Invalid parameters: " <> Text.pack err)
-        Success typedParams -> do
-          result <- call tool typedParams
-          return $ ToolResult tc (Right $ toJSONViaCodec result)
-  where
-    matchesTool :: LLMTool m -> Bool
-    matchesTool (LLMTool tool) = toolName @_ @m tool == name
 
 -- | LLM operation errors
 data LLMError

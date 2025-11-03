@@ -18,6 +18,7 @@ import qualified Data.Vector as V
 import Autodocodec (HasCodec(..), named, requiredField')
 import qualified Autodocodec as AC
 import UniversalLLM.Core.Types
+import UniversalLLM.Core.Tools
 import qualified UniversalLLM.Protocols.OpenAI as OpenAIProt
 import qualified UniversalLLM.Protocols.Anthropic as AnthropicProt
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
@@ -50,22 +51,22 @@ instance HasCodec CalculatorOutput where
     CalculatorOutput
       <$> requiredField' "result" AC..= result
 
-data CalculatorTool = CalculatorTool
+instance ToolParameter CalculatorOutput where
+  paramName _ n = "calc_result_" <> T.pack (show n)
+  paramDescription _ = "a calculation result"
 
-instance Monad m => Tool CalculatorTool m where
-  type ToolParams CalculatorTool = CalculatorInput
-  type ToolOutput CalculatorTool = CalculatorOutput
-  toolName _ = "calculator"
-  toolDescription _ = "Performs basic arithmetic operations (add, subtract, multiply, divide)"
-  call _ input = return $ CalculatorOutput $ case operation input of
-    "add" -> operandA input + operandB input
-    "subtract" -> operandA input - operandB input
-    "multiply" -> operandA input * operandB input
-    "divide" -> operandA input `div` operandB input
-    _ -> 0
+-- Calculator tool as a function
+calculatorTool :: Text -> Int -> Int -> IO CalculatorOutput
+calculatorTool op a b = return $ CalculatorOutput $ case op of
+  "add" -> a + b
+  "subtract" -> a - b
+  "multiply" -> a * b
+  "divide" -> a `div` b
+  _ -> 0
 
-calculatorTool :: CalculatorTool
-calculatorTool = CalculatorTool
+-- Wrapped with metadata
+calculatorToolWrapped :: ToolWrapped (Text -> Int -> Int -> IO CalculatorOutput) (Text, (Int, (Int, ())))
+calculatorToolWrapped = mkTool "calculator" "Performs basic arithmetic operations (add, subtract, multiply, divide)" calculatorTool
 
 -- ============================================================================
 -- Tests
@@ -76,7 +77,7 @@ spec = do
   describe "ToolDefinition Integration Tests" $ do
     describe "toToolDefinition -> OpenAI Protocol" $ do
       it "generates valid OpenAI tool structure from Tool instance" $ do
-        let toolDef = toToolDefinition @CalculatorTool @IO calculatorTool
+        let toolDef = toToolDefinition calculatorToolWrapped
             model = GLM45
             configs = [Tools [toolDef]]
             msgs = [UserText "Calculate 5 + 3" :: Message GLM45 OpenAI.OpenAI]
@@ -108,7 +109,7 @@ spec = do
           _ -> expectationFailure $ "Expected exactly one tool, got: " ++ show (OpenAIProt.tools req)
 
       it "tool definition name and description are preserved" $ do
-        let toolDef = toToolDefinition @CalculatorTool @IO calculatorTool
+        let toolDef = toToolDefinition calculatorToolWrapped
 
         toolDefName toolDef `shouldBe` "calculator"
         T.isInfixOf "arithmetic" (toolDefDescription toolDef) `shouldBe` True
@@ -116,7 +117,7 @@ spec = do
 
     describe "toToolDefinition -> Anthropic Protocol" $ do
       it "generates valid Anthropic tool structure from Tool instance" $ do
-        let toolDef = toToolDefinition @CalculatorTool @IO calculatorTool
+        let toolDef = toToolDefinition calculatorToolWrapped
             model = ClaudeSonnet45
             configs = [Tools [toolDef]]
             msgs = [UserText "Calculate 10 * 7" :: Message ClaudeSonnet45 Anthropic.Anthropic]
@@ -148,7 +149,7 @@ spec = do
     describe "Multiple tools from instances" $ do
       it "handles multiple Tool instances in one request (OpenAI)" $ do
         -- Create two different tool definitions from instances
-        let calcDef = toToolDefinition @CalculatorTool @IO calculatorTool
+        let calcDef = toToolDefinition calculatorToolWrapped
             -- We only have one tool type defined, so just use it twice with different configs
             -- In a real scenario, you'd have multiple different Tool types
             model = GLM45
@@ -163,7 +164,7 @@ spec = do
 
     describe "Schema validation" $ do
       it "generated schema has valid JSON Schema structure" $ do
-        let toolDef = toToolDefinition @CalculatorTool @IO calculatorTool
+        let toolDef = toToolDefinition calculatorToolWrapped
 
         -- Check that the schema is a valid JSON Schema
         case toolDefParameters toolDef of
@@ -181,7 +182,7 @@ spec = do
           _ -> expectationFailure "Expected schema object"
 
       it "schema properties have valid types" $ do
-        let toolDef = toToolDefinition @CalculatorTool @IO calculatorTool
+        let toolDef = toToolDefinition calculatorToolWrapped
 
         case toolDefParameters toolDef of
           Aeson.Object obj -> do

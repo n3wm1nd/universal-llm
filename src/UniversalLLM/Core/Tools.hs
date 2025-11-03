@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -25,8 +26,9 @@ module UniversalLLM.Core.Tools
   , DefaultParamMeta(..)
   , BuildParamMeta(..)
 
-    -- * Tool wrapper with metadata
+    -- * Tool wrappers
   , ToolWrapped(..)
+  , LLMTool(..)
   , mkTool
   , mkToolWithMeta
   , mkToolUnsafe
@@ -35,6 +37,8 @@ module UniversalLLM.Core.Tools
     -- * Helper functions
   , toToolDefinition
   , executeToolCall
+  , llmToolToDefinition
+  , executeToolCallFromList
   , tupleToSchema
   , tupleToDefaultSchema
   , parseJsonToTuple
@@ -61,6 +65,8 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Types (Parser, parseEither)
+import Data.List (find)
+import Data.Functor.Identity (Identity(..))
 
 -- Re-export from Core.Types
 import UniversalLLM.Core.Types
@@ -350,6 +356,16 @@ instance ToolFunction a => Tool (IO a) IO () a where
   toolName _ = toolFunctionName (Proxy @a)
   toolDescription _ = toolFunctionDescription (Proxy @a)
 
+-- | Base case instance for Identity monad
+-- Allows 0-arity Identity actions to be used as tools
+instance ToolParameter a => Callable (Identity a) Identity () a where
+  call action () = action
+
+-- | Tool instance for Identity actions with ToolFunction result
+instance ToolFunction a => Tool (Identity a) Identity () a where
+  toolName _ = toolFunctionName (Proxy @a)
+  toolDescription _ = toolFunctionDescription (Proxy @a)
+
 -- Note: Users can add Callable instances for their own monads following the same pattern.
 -- The key is to use a concrete monad type (not a type variable) to avoid conflicts.
 --
@@ -416,4 +432,35 @@ executeToolCall tool tc@(ToolCall _ _ params) = do
           result <- call tool parsedParams
           return $ ToolResult tc (Right $ toJSONViaCodec result)
     _ -> return $ ToolResult tc (Left "Expected parameters to be a JSON object")
+
+-- ============================================================================
+-- Heterogeneous Tool Lists and Dispatch
+-- ============================================================================
+
+-- | Existential wrapper for heterogeneous tool lists
+-- Allows storing tools with different parameter/result types in the same list
+data LLMTool m where
+  LLMTool :: (Tool tool m params result, TupleSchema params, TupleParser params, GetParamMeta tool params, HasCodec result)
+          => tool -> LLMTool m
+
+-- | Extract tool definition from existential wrapper
+llmToolToDefinition :: forall m. LLMTool m -> ToolDefinition
+llmToolToDefinition (LLMTool (tool :: t)) = toToolDefinition tool
+
+-- | Execute a tool call by matching and dispatching from a heterogeneous list
+-- Takes available tools and the tool call from the LLM
+-- Returns a ToolResult with either success value or error message
+executeToolCallFromList :: forall m. Monad m => [LLMTool m] -> ToolCall -> m ToolResult
+executeToolCallFromList _ invalid@(InvalidToolCall _ _ _ err) =
+  return $ ToolResult invalid (Left err)
+
+executeToolCallFromList tools tc@(ToolCall _ name _) =
+  case find matchesTool tools of
+    Nothing ->
+      return $ ToolResult tc (Left $ "Tool not found: " <> name)
+    Just (LLMTool tool) ->
+      executeToolCall tool tc
+  where
+    matchesTool :: LLMTool m -> Bool
+    matchesTool (LLMTool tool) = toolName tool == name
 
