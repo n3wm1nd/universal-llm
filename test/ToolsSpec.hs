@@ -2,13 +2,17 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module ToolsSpec (spec) where
 
 import Test.Hspec
 import Test.QuickCheck
 import Data.Proxy (Proxy(..))
-import Autodocodec (HasCodec(..))
+import GHC.Generics (Generic)
+import Autodocodec (HasCodec(..), object, requiredField, (.=))
+import qualified Autodocodec
 
 
 import Data.Text (Text)
@@ -18,6 +22,33 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
 
 import UniversalLLM.Core.Tools
+
+-- Test types for ToolFunction demonstrations
+data SearchResult = SearchResult
+  { srTitle :: Text
+  , srUrl :: Text
+  } deriving (Show, Eq, Generic)
+
+instance HasCodec SearchResult where
+  codec = object "SearchResult" $
+    SearchResult
+      <$> requiredField "title" "title" .= srTitle
+      <*> requiredField "url" "url" .= srUrl
+
+instance Aeson.FromJSON SearchResult where
+  parseJSON = Autodocodec.parseJSONViaCodec
+
+instance Aeson.ToJSON SearchResult where
+  toJSON = Autodocodec.toJSONViaCodec
+
+instance ToolParameter SearchResult where
+  paramName _ n = "search_result_" <> T.pack (show n)
+  paramDescription _ = "a search result"
+
+-- Make [SearchResult] a ToolFunction so functions returning it can be tools
+instance ToolFunction [SearchResult] where
+  toolFunctionName _ = "web_search"
+  toolFunctionDescription _ = "Search the web and return a list of results"
 
 -- Test the TupleSchema instances
 spec :: Spec
@@ -349,3 +380,78 @@ spec = describe "Tools" $ do
       case result of
         ToolResult _ (Left err) -> T.unpack err `shouldContain` "Failed to parse parameter"
         ToolResult _ (Right _) -> expectationFailure "Should have failed with type error"
+
+  describe "Bare functions with ToolFunction (no mkTool wrapper)" $ do
+    it "works with partially applied function returning ToolFunction type" $ do
+      -- Define a search function with multiple parameters
+      let searchFunc :: Text -> Int -> Text -> IO [SearchResult]
+          searchFunc engine maxResults query = do
+            -- Mock implementation
+            return [ SearchResult (query <> " - Result from " <> engine)
+                                  ("https://example.com?q=" <> query)
+                   ]
+
+          -- Partially apply first two parameters (engine and maxResults)
+          partialSearch = searchFunc "Google" 20
+          -- Type: Text -> IO [SearchResult]
+
+      -- Use directly without mkTool!
+      -- Tool name/description come from ToolFunction [SearchResult] instance
+      -- Parameter name comes from ToolParameter Text instance
+      let toolDef = toToolDefinition partialSearch
+
+      toolDefName toolDef `shouldBe` "web_search"
+      toolDefDescription toolDef `shouldBe` "Search the web and return a list of results"
+
+      -- Verify schema has the text parameter
+      case Aeson.fromJSON (toolDefParameters toolDef) of
+        Aeson.Success (obj :: Object) -> do
+          case KM.lookup "properties" obj of
+            Just (Aeson.Object props) -> do
+              KM.size props `shouldBe` 1
+              KM.member "text_0" props `shouldBe` True
+            _ -> expectationFailure "properties should have one field"
+        _ -> expectationFailure "Schema should decode to Object"
+
+      -- Execute the tool
+      let toolCall = ToolCall "call-1" "web_search"
+                       (Aeson.object [("text_0", Aeson.String "Haskell")])
+
+      result <- executeToolCall partialSearch toolCall
+
+      case result of
+        ToolResult _ (Right jsonResult) -> do
+          case Aeson.fromJSON jsonResult of
+            Aeson.Success (results :: [SearchResult]) -> do
+              length results `shouldBe` 1
+              srTitle (head results) `shouldBe` "Haskell - Result from Google"
+            _ -> expectationFailure "Failed to parse results"
+        ToolResult _ (Left err) -> expectationFailure $ "Tool call failed: " <> T.unpack err
+
+    it "allows fully applied function (0-arity) with ToolFunction result" $ do
+      -- A 0-arity function (just an IO action) with ToolFunction result
+      let getTrendingSearches :: IO [SearchResult]
+          getTrendingSearches = return
+            [ SearchResult "Trending Topic 1" "https://example.com/1"
+            , SearchResult "Trending Topic 2" "https://example.com/2"
+            ]
+
+      -- Use directly without mkTool!
+      let toolDef = toToolDefinition getTrendingSearches
+
+      toolDefName toolDef `shouldBe` "web_search"
+      toolDefDescription toolDef `shouldBe` "Search the web and return a list of results"
+
+      -- Execute with empty parameters
+      let toolCall = ToolCall "call-1" "web_search" (Aeson.object [])
+
+      result <- executeToolCall getTrendingSearches toolCall
+
+      case result of
+        ToolResult _ (Right jsonResult) -> do
+          case Aeson.fromJSON jsonResult of
+            Aeson.Success (results :: [SearchResult]) -> do
+              length results `shouldBe` 2
+              srTitle (head results) `shouldBe` "Trending Topic 1"
+            _ -> expectationFailure "Failed to parse results"
+        ToolResult _ (Left err) -> expectationFailure $ "Tool call failed: " <> T.unpack err

@@ -15,7 +15,9 @@
 
 module UniversalLLM.Core.Tools
   ( -- * Core type classes
-    ToolParameter(..)
+    ToolFunction(..)
+  , GetParamMeta(..)
+  , ToolParameter(..)
   , Callable(..)
   , Tool(..)
   , TupleSchema(..)
@@ -68,6 +70,16 @@ import UniversalLLM.Core.Types
   , getToolCallId
   , getToolCallName
   )
+
+-- | Type class for tool result types
+-- Provides tool name and description based on the return type
+-- This allows functions to become tools just by having the right return type
+class ToolParameter a => ToolFunction a where
+  -- | Get tool name from result type
+  toolFunctionName :: Proxy a -> Text
+
+  -- | Get tool description from result type
+  toolFunctionDescription :: Proxy a -> Text
 
 -- | Type class for tool parameters
 -- Provides parameter naming and description for JSON schema generation
@@ -320,10 +332,23 @@ instance (ToolParameter a, Callable rest m params_rest result)
       => Callable (a -> rest) m (a, params_rest) result where
   call f (param, restParams) = call (f param) restParams
 
+-- | Tool instance for multi-parameter functions with ToolFunction result
+-- Allows functions like (Text -> Int -> IO MyResult) to be tools directly
+instance (ToolParameter a, Tool rest m params_rest result)
+      => Tool (a -> rest) m (a, params_rest) result where
+  toolName _ = toolName (undefined :: rest)
+  toolDescription _ = toolDescription (undefined :: rest)
+
 -- | Base case instance for IO monad
 -- Allows 0-arity IO actions to be used as tools
 instance ToolParameter a => Callable (IO a) IO () a where
   call action () = action
+
+-- | Tool instance for IO actions with ToolFunction result
+-- Allows 0-arity IO actions to be tools directly (no ToolWrapped needed)
+instance ToolFunction a => Tool (IO a) IO () a where
+  toolName _ = toolFunctionName (Proxy @a)
+  toolDescription _ = toolFunctionDescription (Proxy @a)
 
 -- Note: Users can add Callable instances for their own monads following the same pattern.
 -- The key is to use a concrete monad type (not a type variable) to avoid conflicts.
@@ -332,30 +357,51 @@ instance ToolParameter a => Callable (IO a) IO () a where
 --   instance ToolParameter a => Callable (Sem r a) (Sem r) () a where
 --     call action () = action
 --
+--   instance ToolFunction a => Tool (Sem r a) (Sem r) () a where
+--     toolName _ = toolFunctionName (Proxy @a)
+--     toolDescription _ = toolFunctionDescription (Proxy @a)
+--
 -- For custom monads:
 --   instance ToolParameter a => Callable (MyMonad a) MyMonad () a where
 --     call action () = action
+--
+--   instance ToolFunction a => Tool (MyMonad a) MyMonad () a where
+--     toolName _ = toolFunctionName (Proxy @a)
+--     toolDescription _ = toolFunctionDescription (Proxy @a)
 
 -- ============================================================================
 -- Helper Functions
 -- ============================================================================
 
+-- | Type class to get parameter metadata from a tool
+-- ToolWrapped provides custom metadata, bare tools use ToolParameter instances
+class GetParamMeta tool params where
+  getParamMeta :: tool -> Proxy params -> [(Text, Text)]
+
+-- ToolWrapped stores custom metadata (higher priority)
+instance {-# OVERLAPPING #-} GetParamMeta (ToolWrapped f params) params where
+  getParamMeta tool _ = toolWrapParamMetas tool
+
+-- Bare tools use their ToolParameter instances for metadata (lower priority fallback)
+instance {-# OVERLAPPABLE #-} DefaultParamMeta params => GetParamMeta tool params where
+  getParamMeta _ p = defaultParamMeta p
+
 -- | Convert a Tool to a ToolDefinition (metadata for LLM)
--- For ToolWrapped, uses the stored parameter metadata
+-- Works with both ToolWrapped (uses custom metadata) and bare tools (uses ToolParameter instances)
 toToolDefinition :: forall tool params m result.
-                    (Tool (ToolWrapped tool params) m params result, TupleSchema params)
-                 => ToolWrapped tool params -> ToolDefinition
+                    (Tool tool m params result, TupleSchema params, GetParamMeta tool params)
+                 => tool -> ToolDefinition
 toToolDefinition tool = ToolDefinition
   { toolDefName = toolName tool
   , toolDefDescription = toolDescription tool
-  , toolDefParameters = tupleToSchema (Proxy @params) (toolWrapParamMetas tool)
+  , toolDefParameters = tupleToSchema (Proxy @params) (getParamMeta tool (Proxy @params))
   }
 
 -- | Execute a tool call by parsing JSON parameters and calling the tool
--- Uses the parameter metadata stored in ToolWrapped for parsing
+-- Works with both ToolWrapped (uses custom metadata) and bare tools (uses ToolParameter instances)
 executeToolCall :: forall tool params m result.
-                   (Tool (ToolWrapped tool params) m params result, TupleParser params, HasCodec result, Monad m)
-                => ToolWrapped tool params
+                   (Tool tool m params result, TupleParser params, GetParamMeta tool params, HasCodec result, Monad m)
+                => tool
                 -> ToolCall
                 -> m ToolResult
 executeToolCall _ invalid@(InvalidToolCall _ _ _ err) =
@@ -364,7 +410,7 @@ executeToolCall _ invalid@(InvalidToolCall _ _ _ err) =
 executeToolCall tool tc@(ToolCall _ _ params) = do
   case params of
     Aeson.Object obj -> do
-      case parseJsonToTuple (Proxy @params) (toolWrapParamMetas tool) obj of
+      case parseJsonToTuple (Proxy @params) (getParamMeta tool (Proxy @params)) obj of
         Left err -> return $ ToolResult tc (Left $ "Parameter parsing failed: " <> err)
         Right parsedParams -> do
           result <- call tool parsedParams
