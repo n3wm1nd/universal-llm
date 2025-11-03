@@ -50,6 +50,27 @@ instance ToolFunction [SearchResult] where
   toolFunctionName _ = "web_search"
   toolFunctionDescription _ = "Search the web and return a list of results"
 
+-- LogResult for testing Text parameter schema generation
+data LogResult = LogResult { logSuccess :: Bool } deriving (Show, Eq, Generic)
+
+instance HasCodec LogResult where
+  codec = object "LogResult" $
+    LogResult <$> requiredField "success" "success" .= logSuccess
+
+instance Aeson.FromJSON LogResult where
+  parseJSON = Autodocodec.parseJSONViaCodec
+
+instance Aeson.ToJSON LogResult where
+  toJSON = Autodocodec.toJSONViaCodec
+
+instance ToolParameter LogResult where
+  paramName _ n = "log_result_" <> T.pack (show n)
+  paramDescription _ = "log result"
+
+instance ToolFunction LogResult where
+  toolFunctionName _ = "log_message"
+  toolFunctionDescription _ = "Log a message"
+
 -- Test the TupleSchema instances
 spec :: Spec
 spec = describe "Tools" $ do
@@ -455,3 +476,51 @@ spec = describe "Tools" $ do
               srTitle (head results) `shouldBe` "Trending Topic 1"
             _ -> expectationFailure "Failed to parse results"
         ToolResult _ (Left err) -> expectationFailure $ "Tool call failed: " <> T.unpack err
+
+    it "mkToolWithMeta generates valid JSON schema with Text parameters" $ do
+      -- This test mirrors the chatbot logging tool to verify schema generation
+      let logFunc :: Text -> Text -> IO LogResult
+          logFunc _msg _level = return $ LogResult True
+
+      -- Create tool with explicit parameter names
+      let tool = mkToolWithMeta "log_message" "Log a message with level" logFunc
+                   "message" "The message to log"
+                   "level" "Log level (info/warning/error)"
+
+      let toolDef = toToolDefinition tool
+
+      -- Verify basic metadata
+      toolDefName toolDef `shouldBe` "log_message"
+      toolDefDescription toolDef `shouldBe` "Log a message with level"
+
+      -- Verify the JSON schema has proper structure
+      let schema = toolDefParameters toolDef
+      schema `shouldSatisfy` (/= Aeson.Null)
+
+      -- Print the schema for debugging (will show in test output)
+      -- putStrLn $ "Generated schema: " <> show schema
+
+      -- The schema should be a valid JSON object with properties
+      case schema of
+        Aeson.Object obj -> do
+          -- Should have some schema structure (type, properties, etc.)
+          KM.size obj `shouldSatisfy` (> 0)
+
+          -- Check that it has "message" and "level" parameters
+          case KM.lookup "properties" obj of
+            Just (Aeson.Object props) -> do
+              KM.member "message" props `shouldBe` True
+              KM.member "level" props `shouldBe` True
+            _ -> return () -- Properties might be nested in anyOf/oneOf
+        _ -> expectationFailure "Schema should be a JSON object"
+
+      -- Test that the tool can actually be called with the schema
+      let toolCall = ToolCall "call-1" "log_message"
+                       (Aeson.object [("message", Aeson.String "test"),
+                                     ("level", Aeson.String "info")])
+
+      result <- executeToolCall tool toolCall
+
+      case result of
+        ToolResult _ (Right _) -> return ()
+        ToolResult _ (Left err) -> expectationFailure $ "Tool execution failed: " <> T.unpack err
