@@ -31,6 +31,7 @@ library
     UniversalLLM
     UniversalLLM.Core.Types
     UniversalLLM.Core.Tools
+    UniversalLLM.Core.Serialization
     UniversalLLM.Models.SimpleModel
     UniversalLLM.Models.FullFeaturedModel
     UniversalLLM.Protocols.OpenAI

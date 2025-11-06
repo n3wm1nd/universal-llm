@@ -16,7 +16,11 @@
 module UniversalLLM.Core.Types where
 
 import Data.Text (Text)
-import Data.Aeson (Value)
+import qualified Data.Text as T
+import Data.Aeson (Value, Object, (.=), (.:))
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Types as Aeson
+import Control.Applicative ((<|>))
 
 
 -- Unified capability classes
@@ -170,6 +174,8 @@ data ComposableProvider provider model = ComposableProvider
   { cpToRequest :: MessageHandler provider model
   , cpConfigHandler :: ConfigHandler provider model  -- Applied after message processing
   , cpFromResponse :: ResponseParser provider model
+  , cpSerializeMessage :: Message model provider -> Maybe Value
+  , cpDeserializeMessage :: Value -> Maybe (Message model provider)
   }
 
 -- Chain two providers together, applying cp1 first then cp2
@@ -188,6 +194,12 @@ chainProviders cp1 cp2 = ComposableProvider
   , cpFromResponse = \provider model configs history acc resp ->
       let acc' = cpFromResponse cp1 provider model configs history acc resp
       in cpFromResponse cp2 provider model configs history acc' resp
+  -- Serialization: try cp1 first, then cp2 (Alternative composition)
+  , cpSerializeMessage = \msg ->
+      cpSerializeMessage cp1 msg <|> cpSerializeMessage cp2 msg
+  -- Deserialization: try cp1 first, then cp2 (Alternative composition)
+  , cpDeserializeMessage = \val ->
+      cpDeserializeMessage cp1 val <|> cpDeserializeMessage cp2 val
   }
 
 -- Helper functions for building requests and parsing responses

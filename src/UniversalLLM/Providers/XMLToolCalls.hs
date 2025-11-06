@@ -84,6 +84,8 @@ withXMLResponseParsing base = base `chainProviders` xmlResponseParser
       { cpToRequest = \_provider _model _configs _msg req -> req  -- No request modification
       , cpConfigHandler = \_provider _model _configs req -> req   -- Tool defs use native format
       , cpFromResponse = parseResponse
+      , cpSerializeMessage = \_ -> Nothing     -- Let base handle serialization
+      , cpDeserializeMessage = \_ -> Nothing   -- Let base handle deserialization
       }
 
     parseResponse :: ResponseParser provider model
@@ -126,6 +128,8 @@ withFullXMLToolSupport base = base `chainProviders` xmlFullSupport
       { cpToRequest = handleMessages
       , cpConfigHandler = injectToolDefinitions
       , cpFromResponse = parseResponse
+      , cpSerializeMessage = \_ -> Nothing     -- Let base handle serialization
+      , cpDeserializeMessage = \_ -> Nothing   -- Let base handle deserialization
       }
 
     -- Convert tool calls and results to XML text in messages

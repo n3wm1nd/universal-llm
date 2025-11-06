@@ -12,6 +12,7 @@
 module UniversalLLM.Providers.OpenAI where
 
 import UniversalLLM.Core.Types
+import UniversalLLM.Core.Serialization
 import UniversalLLM.Protocols.OpenAI
 import Data.Text (Text)
 import qualified Data.Text.Encoding as TE
@@ -275,6 +276,8 @@ baseComposableProvider = ComposableProvider
   { cpToRequest = handleBase >>> handleTextMessages
   , cpConfigHandler = configureSystemPrompt
   , cpFromResponse = parseTextResponse
+  , cpSerializeMessage = serializeBaseMessage
+  , cpDeserializeMessage = deserializeBaseMessage
   }
   where
     parseTextResponse _provider _model _configs _history acc (OpenAISuccess (OpenAISuccessResponse respChoices)) =
@@ -295,6 +298,8 @@ openAIWithReasoning base = base `chainProviders` reasoningProvider
       { cpToRequest = UniversalLLM.Providers.OpenAI.handleReasoning
       , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
       , cpFromResponse = parseReasoningResponse
+      , cpSerializeMessage = serializeReasoningMessages
+      , cpDeserializeMessage = deserializeReasoningMessages
       }
     parseReasoningResponse _provider _model _configs _history acc (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
@@ -314,6 +319,8 @@ openAIWithTools base = base `chainProviders` toolsProvider
       { cpToRequest = handleTools
       , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
       , cpFromResponse = parseToolResponse
+      , cpSerializeMessage = serializeToolMessages
+      , cpDeserializeMessage = deserializeToolMessages
       }
     parseToolResponse _provider _model _configs _history acc (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
@@ -335,6 +342,8 @@ openAIWithJSON base = base `chainProviders` jsonProvider
       { cpToRequest = handleJSON
       , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
       , cpFromResponse = parseJSONResponse
+      , cpSerializeMessage = serializeJSONMessages
+      , cpDeserializeMessage = deserializeJSONMessages
       }
 
     parseJSONResponse _provider _model _configs history acc resp =

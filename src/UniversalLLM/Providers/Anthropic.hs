@@ -11,6 +11,7 @@
 module UniversalLLM.Providers.Anthropic where
 
 import UniversalLLM.Core.Types
+import UniversalLLM.Core.Serialization
 import UniversalLLM.Protocols.Anthropic
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -152,6 +153,8 @@ baseComposableProvider = ComposableProvider
   { cpToRequest = handleBase >>> handleTextMessages
   , cpConfigHandler = handleSystemPrompt
   , cpFromResponse = parseTextResponse
+  , cpSerializeMessage = serializeBaseMessage
+  , cpDeserializeMessage = deserializeBaseMessage
   }
   where
     parseTextResponse _provider _model _configs _history acc (AnthropicError _err) = acc
@@ -168,6 +171,8 @@ anthropicWithTools base = base `chainProviders` toolsProvider
       { cpToRequest = handleTools
       , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
       , cpFromResponse = parseToolResponse
+      , cpSerializeMessage = serializeToolMessages
+      , cpDeserializeMessage = deserializeToolMessages
       }
     parseToolResponse _provider _model _configs _history acc (AnthropicError _) = acc
     parseToolResponse _provider _model _configs _history acc (AnthropicSuccess resp) =
@@ -189,6 +194,8 @@ ensureUserFirst base = base `chainProviders` ensureUserFirstProvider
               then req
               else req { messages = AnthropicMessage "user" [AnthropicTextBlock ""] : messages req }
       , cpFromResponse = \_provider _model _configs _history acc _resp -> acc  -- No-op for response parsing
+      , cpSerializeMessage = \_ -> Nothing  -- Let base handle serialization
+      , cpDeserializeMessage = \_ -> Nothing  -- Let base handle deserialization
       }
 
 -- Default ProviderImplementation for basic text-only models
