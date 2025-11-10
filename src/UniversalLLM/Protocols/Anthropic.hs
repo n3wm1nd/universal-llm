@@ -13,8 +13,11 @@ module UniversalLLM.Protocols.Anthropic where
 import Autodocodec
 import Data.Text (Text)
 import Data.Aeson (Value)
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KM
 import GHC.Generics (Generic)
 import Control.Applicative ((<|>))
+import Data.Maybe (listToMaybe)
 import UniversalLLM.Core.Types
 
 -- Request structure
@@ -25,6 +28,7 @@ data AnthropicRequest = AnthropicRequest
   , temperature :: Maybe Double
   , system :: Maybe [AnthropicSystemBlock]
   , tools :: Maybe [AnthropicToolDefinition]
+  , stream :: Maybe Bool
   } deriving (Generic, Show, Eq)
 
 instance Semigroup AnthropicRequest where
@@ -35,6 +39,7 @@ instance Semigroup AnthropicRequest where
     , temperature = temperature r2 <|> temperature r1  -- Right-biased with fallback
     , system = system r2 <|> system r1
     , tools = tools r2 <|> tools r1
+    , stream = stream r2 <|> stream r1
     }
 
 instance Monoid AnthropicRequest where
@@ -45,6 +50,7 @@ instance Monoid AnthropicRequest where
     , temperature = Nothing
     , system = Nothing
     , tools = Nothing
+    , stream = Nothing
     }
 
 data AnthropicMessage = AnthropicMessage
@@ -124,6 +130,7 @@ instance HasCodec AnthropicRequest where
       <*> optionalFieldWith "temperature" (dimapCodec realToFrac realToFrac scientificCodec) "Temperature" .= temperature
       <*> optionalField "system" "System prompt" .= system
       <*> optionalField "tools" "Tool definitions" .= tools
+      <*> optionalField "stream" "Enable streaming" .= stream
 
 instance HasCodec AnthropicContentBlock where
   codec = object "AnthropicContentBlock" $
@@ -225,3 +232,63 @@ toAnthropicToolDef toolDef = AnthropicToolDefinition
 -- This allows models without tool support to still parse text responses
 
 -- NOTE: ProtocolHandleTools was removed - tool handling is now done inline in the provider
+
+-- ============================================================================
+-- Streaming Support - Delta Merger for SSE
+-- ============================================================================
+
+-- | Merge Anthropic streaming delta into accumulated response
+-- Anthropic streaming sends events like:
+-- - message_start: initial metadata
+-- - content_block_delta: incremental text in delta.text
+-- - message_delta: final stop_reason
+mergeAnthropicDelta :: AnthropicResponse -> Value -> AnthropicResponse
+mergeAnthropicDelta acc chunk =
+    case (acc, extractEventType chunk) of
+        (_, Just "message_start") -> initializeFromMessageStart chunk
+        (AnthropicSuccess resp, Just "content_block_delta") ->
+            case extractTextDelta chunk of
+                Just text -> AnthropicSuccess $ appendText resp text
+                Nothing -> acc
+        (AnthropicSuccess resp, Just "message_delta") ->
+            case extractStopReason chunk of
+                Just reason -> AnthropicSuccess $ setStopReason resp reason
+                Nothing -> acc
+        _ -> acc
+  where
+    extractEventType :: Value -> Maybe Text
+    extractEventType (Aeson.Object obj) = do
+        Aeson.String eventType <- KM.lookup "type" obj
+        return eventType
+    extractEventType _ = Nothing
+
+    extractTextDelta :: Value -> Maybe Text
+    extractTextDelta (Aeson.Object obj) = do
+        Aeson.Object delta <- KM.lookup "delta" obj
+        Aeson.String text <- KM.lookup "text" delta
+        return text
+    extractTextDelta _ = Nothing
+
+    extractStopReason :: Value -> Maybe Text
+    extractStopReason (Aeson.Object obj) = do
+        Aeson.Object delta <- KM.lookup "delta" obj
+        Aeson.String reason <- KM.lookup "stop_reason" delta
+        return reason
+    extractStopReason _ = Nothing
+
+    initializeFromMessageStart :: Value -> AnthropicResponse
+    initializeFromMessageStart (Aeson.Object obj) =
+        -- Extract initial message metadata if present
+        let emptyResp = AnthropicSuccessResponse "" "" "assistant" [] Nothing (AnthropicUsage 0 0)
+        in AnthropicSuccess emptyResp
+    initializeFromMessageStart _ = AnthropicError (AnthropicErrorResponse "unknown" "Failed to initialize")
+
+    appendText :: AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
+    appendText resp text =
+        case responseContent resp of
+            [] -> resp { responseContent = [AnthropicTextBlock text] }
+            [AnthropicTextBlock existing] -> resp { responseContent = [AnthropicTextBlock (existing <> text)] }
+            xs -> resp  -- Preserve if more complex content
+
+    setStopReason :: AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
+    setStopReason resp reason = resp { responseStopReason = Just reason }

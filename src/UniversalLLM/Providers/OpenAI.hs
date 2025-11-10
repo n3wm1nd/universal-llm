@@ -113,42 +113,49 @@ instance SupportsMaxTokens OpenAI
 instance SupportsSeed OpenAI
 instance SupportsSystemPrompt OpenAI
 instance SupportsStop OpenAI
+instance SupportsStreaming OpenAI
 
 instance SupportsTemperature OpenAICompatible
 instance SupportsMaxTokens OpenAICompatible
 instance SupportsSeed OpenAICompatible
 instance SupportsSystemPrompt OpenAICompatible
 instance SupportsStop OpenAICompatible
+instance SupportsStreaming OpenAICompatible
 
 instance SupportsTemperature OpenRouter
 instance SupportsMaxTokens OpenRouter
 instance SupportsSeed OpenRouter
 instance SupportsSystemPrompt OpenRouter
 instance SupportsStop OpenRouter
+instance SupportsStreaming OpenRouter
 
 instance SupportsTemperature LlamaCpp
 instance SupportsMaxTokens LlamaCpp
 instance SupportsSeed LlamaCpp
 instance SupportsSystemPrompt LlamaCpp
 instance SupportsStop LlamaCpp
+instance SupportsStreaming LlamaCpp
 
 instance SupportsTemperature Ollama
 instance SupportsMaxTokens Ollama
 instance SupportsSeed Ollama
 instance SupportsSystemPrompt Ollama
 instance SupportsStop Ollama
+instance SupportsStreaming Ollama
 
 instance SupportsTemperature VLLM
 instance SupportsMaxTokens VLLM
 instance SupportsSeed VLLM
 instance SupportsSystemPrompt VLLM
 instance SupportsStop VLLM
+instance SupportsStreaming VLLM
 
 instance SupportsTemperature LiteLLM
 instance SupportsMaxTokens LiteLLM
 instance SupportsSeed LiteLLM
 instance SupportsSystemPrompt LiteLLM
 instance SupportsStop LiteLLM
+instance SupportsStreaming LiteLLM
 
 -- OpenAI capabilities are now declared per-model (see model files)
 
@@ -209,6 +216,14 @@ configureSystemPrompt = \_provider _model configs req ->
   let systemPrompts = [sp | SystemPrompt sp <- configs]
       sysMessages = map systemMessage systemPrompts
   in modifyMessages (sysMessages <>) req
+
+-- Streaming config handler
+configureStreaming :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => ConfigHandler provider model
+configureStreaming = \_provider _model configs req ->
+  let streamEnabled = case [s | Streaming s <- configs] of
+        (s:_) -> Just s
+        [] -> stream req
+  in req { stream = streamEnabled }
 
 -- Basic text message handler
 -- Polymorphic over any provider that uses OpenAI protocol
@@ -274,7 +289,7 @@ handleReasoning =  \_provider _model _configs msg req -> case msg of
 baseComposableProvider :: forall provider model. (ModelName provider model, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
 baseComposableProvider = ComposableProvider
   { cpToRequest = handleBase >>> handleTextMessages
-  , cpConfigHandler = configureSystemPrompt
+  , cpConfigHandler = \p m cs -> configureStreaming p m cs . configureSystemPrompt p m cs
   , cpFromResponse = parseTextResponse
   , cpSerializeMessage = serializeBaseMessage
   , cpDeserializeMessage = deserializeBaseMessage

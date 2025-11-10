@@ -94,6 +94,7 @@ fromText = AnthropicTextBlock
 instance SupportsTemperature Anthropic
 instance SupportsMaxTokens Anthropic
 instance SupportsSystemPrompt Anthropic
+instance SupportsStreaming Anthropic
 -- Note: Anthropic does NOT support Seed or JSON mode
 
 -- Anthropic capabilities are now declared per-model (see model files)
@@ -124,6 +125,14 @@ handleSystemPrompt = \_provider _model configs req ->
      then req
      else setSystemBlocks sysBlocks req
 
+-- Streaming config handler
+handleStreaming :: ProviderRequest provider ~ AnthropicRequest => ConfigHandler provider model
+handleStreaming = \_provider _model configs req ->
+  let streamEnabled = case [s | Streaming s <- configs] of
+        (s:_) -> Just s
+        [] -> stream req
+  in req { stream = streamEnabled }
+
 -- Text message handler - groups messages incrementally
 handleTextMessages :: ProviderRequest provider ~ AnthropicRequest => MessageHandler provider model
 handleTextMessages = \_provider _model _configs msg req -> case msg of
@@ -151,7 +160,7 @@ handleTools = \_provider _model configs msg req -> case msg of
 baseComposableProvider :: forall model provider . (ProviderRequest provider ~ AnthropicRequest, ProviderResponse provider ~ AnthropicResponse, ModelName provider model) => ComposableProvider provider model
 baseComposableProvider = ComposableProvider
   { cpToRequest = handleBase >>> handleTextMessages
-  , cpConfigHandler = handleSystemPrompt
+  , cpConfigHandler = \p m cs -> handleStreaming p m cs . handleSystemPrompt p m cs
   , cpFromResponse = parseTextResponse
   , cpSerializeMessage = serializeBaseMessage
   , cpDeserializeMessage = deserializeBaseMessage

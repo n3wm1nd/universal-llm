@@ -50,7 +50,8 @@ library
     text >= 1.2 && < 3,
     aeson,
     bytestring,
-    hashable
+    hashable,
+    vector
 
 library examples-helper
   import: shared-properties

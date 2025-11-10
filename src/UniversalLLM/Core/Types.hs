@@ -30,6 +30,7 @@ class SupportsMaxTokens a
 class SupportsSeed a
 class SupportsSystemPrompt a
 class SupportsStop a
+class SupportsStreaming a
 
 -- HasX for capabilities (features that require both model AND provider support)
 -- These take two parameters: model and provider
@@ -57,6 +58,7 @@ data ModelConfig provider model where
   Stop :: SupportsStop provider => [Text] -> ModelConfig provider model
   Tools :: HasTools model provider => [ToolDefinition] -> ModelConfig provider model
   Reasoning :: HasReasoning model provider => Bool -> ModelConfig provider model
+  Streaming :: SupportsStreaming provider => Bool -> ModelConfig provider model
 
 -- Provider-specific model names
 class ModelName provider model where

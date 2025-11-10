@@ -22,6 +22,7 @@ spec = do
               , seed = Nothing
               , tools = Nothing
               , response_format = Nothing
+              , stream = Nothing
               }
             response = OpenAISuccess $ OpenAISuccessResponse
               [ OpenAIChoice $ OpenAIMessage "assistant" (Just "test response") Nothing Nothing Nothing ]
@@ -43,6 +44,7 @@ spec = do
               , seed = Nothing
               , tools = Nothing
               , response_format = Nothing
+              , stream = Nothing
               }
 
         (result :: Maybe OpenAIResponse) <- lookupResponse cachePath request
@@ -58,6 +60,7 @@ spec = do
             , seed = Nothing
             , tools = Nothing
             , response_format = Nothing
+            , stream = Nothing
             }
           response = OpenAISuccess $ OpenAISuccessResponse []
 
