@@ -187,6 +187,32 @@ anthropicWithTools base = base `chainProviders` toolsProvider
     parseToolResponse _provider _model _configs _history acc (AnthropicSuccess resp) =
       acc <> [AssistantTool (ToolCall tid tname tinput) | AnthropicToolUseBlock tid tname tinput <- responseContent resp]
 
+-- Reasoning capability combinator
+anthropicWithReasoning :: forall model provider . (ProviderRequest provider ~ AnthropicRequest, ProviderResponse provider ~ AnthropicResponse, HasReasoning model provider) => ComposableProvider provider model -> ComposableProvider provider model
+anthropicWithReasoning base = base `chainProviders` reasoningProvider
+  where
+    reasoningProvider = ComposableProvider
+      { cpToRequest = \_provider _model _configs _msg req -> req  -- No request handling needed
+      , cpConfigHandler = \_provider _model configs req -> handleReasoningConfig configs req
+      , cpFromResponse = parseReasoningResponse
+      , cpSerializeMessage = UniversalLLM.Core.Serialization.serializeReasoningMessages
+      , cpDeserializeMessage = UniversalLLM.Core.Serialization.deserializeReasoningMessages
+      }
+
+    -- Enable extended thinking if reasoning is enabled (default) or explicitly configured
+    handleReasoningConfig configs req =
+      let reasoningEnabled = not $ any isReasoningFalse configs
+      in if reasoningEnabled
+         then req { thinking = Just $ AnthropicThinkingConfig "enabled" Nothing }
+         else req
+
+    isReasoningFalse (Reasoning False) = True
+    isReasoningFalse _ = False
+
+    parseReasoningResponse _provider _model _configs _history acc (AnthropicError _) = acc
+    parseReasoningResponse _provider _model _configs _history acc (AnthropicSuccess resp) =
+      acc <> [AssistantReasoning thinking | AnthropicThinkingBlock thinking <- responseContent resp]
+
 -- Ensures Anthropic's API constraint: conversations must start with a user message
 -- If the first message is from assistant, prepends an empty user message
 -- This should be composed at the END of the provider chain

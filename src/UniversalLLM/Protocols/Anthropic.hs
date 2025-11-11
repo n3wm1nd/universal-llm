@@ -21,6 +21,12 @@ import Data.Maybe (listToMaybe)
 import UniversalLLM.Core.Types
 
 -- Request structure
+-- Extended thinking configuration
+data AnthropicThinkingConfig = AnthropicThinkingConfig
+  { thinkingType :: Text  -- "enabled" to enable extended thinking
+  , thinkingBudgetTokens :: Maybe Int  -- Optional token budget for thinking
+  } deriving (Generic, Show, Eq)
+
 data AnthropicRequest = AnthropicRequest
   { model :: Text
   , messages :: [AnthropicMessage]
@@ -29,6 +35,7 @@ data AnthropicRequest = AnthropicRequest
   , system :: Maybe [AnthropicSystemBlock]
   , tools :: Maybe [AnthropicToolDefinition]
   , stream :: Maybe Bool
+  , thinking :: Maybe AnthropicThinkingConfig
   } deriving (Generic, Show, Eq)
 
 instance Semigroup AnthropicRequest where
@@ -40,6 +47,7 @@ instance Semigroup AnthropicRequest where
     , system = system r2 <|> system r1
     , tools = tools r2 <|> tools r1
     , stream = stream r2 <|> stream r1
+    , thinking = thinking r2 <|> thinking r1
     }
 
 instance Monoid AnthropicRequest where
@@ -51,6 +59,7 @@ instance Monoid AnthropicRequest where
     , system = Nothing
     , tools = Nothing
     , stream = Nothing
+    , thinking = Nothing
     }
 
 data AnthropicMessage = AnthropicMessage
@@ -76,6 +85,7 @@ data AnthropicContentBlock
   = AnthropicTextBlock TextContent
   | AnthropicToolUseBlock ToolUseId ToolUseName ToolUseInput
   | AnthropicToolResultBlock ToolResultId ToolResultContent
+  | AnthropicThinkingBlock Text
   deriving (Generic, Show, Eq)
 
 data AnthropicToolDefinition = AnthropicToolDefinition
@@ -121,6 +131,12 @@ instance HasCodec AnthropicSystemBlock where
       <$> requiredField "text" "System prompt text" .= systemText
       <*> requiredField "type" "Block type (always 'text')" .= systemType
 
+instance HasCodec AnthropicThinkingConfig where
+  codec = object "AnthropicThinkingConfig" $
+    AnthropicThinkingConfig
+      <$> requiredField "type" "Thinking type (enabled/disabled)" .= thinkingType
+      <*> optionalField "budget_tokens" "Token budget for thinking" .= thinkingBudgetTokens
+
 instance HasCodec AnthropicRequest where
   codec = object "AnthropicRequest" $
     AnthropicRequest
@@ -131,19 +147,24 @@ instance HasCodec AnthropicRequest where
       <*> optionalField "system" "System prompt" .= system
       <*> optionalField "tools" "Tool definitions" .= tools
       <*> optionalField "stream" "Enable streaming" .= stream
+      <*> optionalField "thinking" "Extended thinking configuration" .= thinking
 
 instance HasCodec AnthropicContentBlock where
   codec = object "AnthropicContentBlock" $
     dimapCodec fromEither toEither $
-      possiblyJointEitherCodec textBlockCodec (possiblyJointEitherCodec toolUseBlockCodec toolResultBlockCodec)
+      possiblyJointEitherCodec textBlockCodec
+        (possiblyJointEitherCodec toolUseBlockCodec
+          (possiblyJointEitherCodec toolResultBlockCodec thinkingBlockCodec))
     where
       fromEither (Left txt) = AnthropicTextBlock txt
       fromEither (Right (Left (tid, tname, tinput))) = AnthropicToolUseBlock tid tname tinput
-      fromEither (Right (Right (rid, rcontent))) = AnthropicToolResultBlock rid rcontent
+      fromEither (Right (Right (Left (rid, rcontent)))) = AnthropicToolResultBlock rid rcontent
+      fromEither (Right (Right (Right thinking))) = AnthropicThinkingBlock thinking
 
       toEither (AnthropicTextBlock txt) = Left txt
       toEither (AnthropicToolUseBlock tid tname tinput) = Right (Left (tid, tname, tinput))
-      toEither (AnthropicToolResultBlock rid rcontent) = Right (Right (rid, rcontent))
+      toEither (AnthropicToolResultBlock rid rcontent) = Right (Right (Left (rid, rcontent)))
+      toEither (AnthropicThinkingBlock thinking) = Right (Right (Right thinking))
 
       textBlockCodec =
         requiredField "type" "Block type" .= const ("text" :: Text)
@@ -161,6 +182,10 @@ instance HasCodec AnthropicContentBlock where
         *> ((,)
           <$> requiredField "tool_use_id" "Tool use ID" .= fst
           <*> requiredField "content" "Result content" .= snd)
+
+      thinkingBlockCodec =
+        requiredField "type" "Block type" .= const ("thinking" :: Text)
+        *> requiredField "thinking" "Thinking content" .= id
 
 instance HasCodec AnthropicMessage where
   codec = object "AnthropicMessage" $
