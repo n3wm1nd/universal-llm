@@ -242,12 +242,13 @@ convertFromToolCall (ToolCall tcId tcName tcParams) = OpenAIToolCall
       , toolFunctionArguments = TE.decodeUtf8 . BSL.toStrict . Aeson.encode $ tcParams
       }
   }
-convertFromToolCall (InvalidToolCall tcId tcName tcArgs _err) = OpenAIToolCall
+convertFromToolCall (InvalidToolCall tcId tcName _tcArgs _err) = OpenAIToolCall
   { callId = tcId
   , toolCallType = "function"
   , toolFunction = OpenAIToolFunction
       { toolFunctionName = tcName
-      , toolFunctionArguments = tcArgs  -- Return original invalid arguments unchanged
+      -- Use empty JSON object instead of malformed string to avoid breaking chat templates
+      , toolFunctionArguments = "{}"
       }
   }
 
