@@ -166,7 +166,8 @@ baseComposableProvider = ComposableProvider
   , cpDeserializeMessage = deserializeBaseMessage
   }
   where
-    parseTextResponse _provider _model _configs _history acc (AnthropicError _err) = acc
+    parseTextResponse _provider _model _configs _history _acc (AnthropicError err) =
+      error $ "Anthropic API error: " ++ show (errorType err) ++ ": " ++ show (errorMessage err)
     parseTextResponse _provider _model _configs _history acc (AnthropicSuccess resp) =
       case [txt | AnthropicTextBlock txt <- responseContent resp] of
         (txt:_) -> acc <> [AssistantText txt]
@@ -183,7 +184,8 @@ anthropicWithTools base = base `chainProviders` toolsProvider
       , cpSerializeMessage = serializeToolMessages
       , cpDeserializeMessage = deserializeToolMessages
       }
-    parseToolResponse _provider _model _configs _history acc (AnthropicError _) = acc
+    parseToolResponse _provider _model _configs _history _acc (AnthropicError err) =
+      error $ "Anthropic API error: " ++ show (errorType err) ++ ": " ++ show (errorMessage err)
     parseToolResponse _provider _model _configs _history acc (AnthropicSuccess resp) =
       acc <> [AssistantTool (ToolCall tid tname tinput) | AnthropicToolUseBlock tid tname tinput <- responseContent resp]
 
@@ -200,10 +202,21 @@ anthropicWithReasoning base = base `chainProviders` reasoningProvider
       }
 
     -- Enable extended thinking if reasoning is enabled (default) or explicitly configured
+    -- Note: budget_tokens is required by the Anthropic API when thinking is enabled
+    -- The budget is set to max(1024, min(5000, max_tokens / 2)) to respect:
+    --   - API minimum: 1024 tokens
+    --   - Reasonable default: 5000 tokens
+    --   - User's max_tokens setting: half of their max_tokens
     handleReasoningConfig configs req =
       let reasoningEnabled = not $ any isReasoningFalse configs
+          -- Extract max_tokens from configs if present, otherwise use current req value
+          maxTokensFromConfig = case [t | MaxTokens t <- configs] of
+            (t:_) -> t
+            [] -> max_tokens req
+          -- Set budget respecting all constraints: at least 1024, at most 5000, at most half of max_tokens
+          thinkingBudget = max 1024 (min 5000 (maxTokensFromConfig `div` 2))
       in if reasoningEnabled
-         then req { thinking = Just $ AnthropicThinkingConfig "enabled" Nothing }
+         then req { thinking = Just $ AnthropicThinkingConfig "enabled" (Just thinkingBudget) }
          else req
 
     isReasoningFalse (Reasoning False) = True

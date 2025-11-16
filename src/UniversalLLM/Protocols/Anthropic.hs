@@ -54,7 +54,7 @@ instance Monoid AnthropicRequest where
   mempty = AnthropicRequest
     { model = ""
     , messages = []
-    , max_tokens = 1000  -- Anthropic default
+    , max_tokens = 2048  -- Must be > thinking.budget_tokens when reasoning is enabled
     , temperature = Nothing
     , system = Nothing
     , tools = Nothing

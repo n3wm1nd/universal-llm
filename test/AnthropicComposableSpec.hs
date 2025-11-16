@@ -290,3 +290,90 @@ spec getResponse = do
           req = buildRequest model configs msgs
       return ()
     -}
+
+  describe "Anthropic Composable Provider - Reasoning/Thinking" $ do
+    it "includes thinking config with budget_tokens when reasoning is enabled" $ do
+      let model = ClaudeSonnet45WithReasoning
+          configs = [MaxTokens 4000]  -- Use 4000 so we get 2000 budget (within bounds)
+          msgs = [UserText "Think about this problem"]
+          req = buildRequest model configs msgs
+
+      -- Check that thinking config is present
+      case Proto.thinking req of
+        Just thinkingConfig -> do
+          Proto.thinkingType thinkingConfig `shouldBe` "enabled"
+          -- Check that budget_tokens is set and respects max(1024, min(5000, max_tokens/2))
+          case Proto.thinkingBudgetTokens thinkingConfig of
+            Just budget -> budget `shouldBe` 2000  -- max(1024, min(5000, 4000/2)) = 2000
+            Nothing -> expectationFailure "budget_tokens should be set"
+        Nothing ->
+          expectationFailure "thinking config should be set when HasReasoning is enabled"
+
+    it "enforces minimum thinking budget of 1024" $ do
+      let model = ClaudeSonnet45WithReasoning
+          configs = [MaxTokens 1000]  -- Small max_tokens would give budget < 1024
+          msgs = [UserText "Think about this"]
+          req = buildRequest model configs msgs
+
+      -- Check that budget respects API minimum
+      case Proto.thinking req of
+        Just thinkingConfig ->
+          -- Should be max(1024, min(5000, 1000/2)) = 1024
+          Proto.thinkingBudgetTokens thinkingConfig `shouldBe` Just 1024
+        Nothing ->
+          expectationFailure "thinking config should be set"
+
+    it "respects max_tokens when setting thinking budget" $ do
+      let model = ClaudeSonnet45WithReasoning
+          configs = [MaxTokens 4000]
+          msgs = [UserText "Think about this"]
+          req = buildRequest model configs msgs
+
+      -- Check that thinking config respects the user's max_tokens
+      case Proto.thinking req of
+        Just thinkingConfig ->
+          -- Should be min(5000, 4000/2) = 2000
+          Proto.thinkingBudgetTokens thinkingConfig `shouldBe` Just 2000
+        Nothing ->
+          expectationFailure "thinking config should be set"
+
+    it "caps thinking budget at 5000" $ do
+      let model = ClaudeSonnet45WithReasoning
+          configs = [MaxTokens 20000]
+          msgs = [UserText "Think about this"]
+          req = buildRequest model configs msgs
+
+      -- Check that thinking budget doesn't exceed 5000
+      case Proto.thinking req of
+        Just thinkingConfig ->
+          -- Should be min(5000, 20000/2) = 5000
+          Proto.thinkingBudgetTokens thinkingConfig `shouldBe` Just 5000
+        Nothing ->
+          expectationFailure "thinking config should be set"
+
+    it "does not include thinking config when reasoning is disabled" $ do
+      let model = ClaudeSonnet45
+          configs = [MaxTokens 200]
+          msgs = [UserText "Simple question"]
+          req = buildRequest model configs msgs
+
+      -- Check that thinking config is not present
+      Proto.thinking req `shouldBe` Nothing
+
+    it "sends reasoning request to API and gets response" $ do
+      let model = ClaudeSonnet45WithReasoning
+          -- max_tokens must be greater than budget_tokens
+          configs = [MaxTokens 12000]
+          msgs = [UserText "What is 2+2?"]
+          req = Provider.withMagicSystemPrompt $
+                 buildRequest model configs msgs
+
+      resp <- getResponse req
+
+      -- Verify we got a successful response from the API
+      case resp of
+        AnthropicSuccess respData ->
+          -- Should have content (thinking and/or text)
+          length (Proto.responseContent respData) `shouldSatisfy` (> 0)
+        AnthropicError errResp ->
+          expectationFailure $ "API returned error: " ++ show errResp
