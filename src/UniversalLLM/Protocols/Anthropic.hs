@@ -12,11 +12,13 @@ module UniversalLLM.Protocols.Anthropic where
 
 import Autodocodec
 import Data.Text (Text)
+import Data.Text.Encoding (encodeUtf8)
 import Data.Aeson (Value)
+import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
 import GHC.Generics (Generic)
-import Control.Applicative ((<|>))
+import Control.Applicative ((<|>), asum)
 import Data.Maybe (listToMaybe)
 import UniversalLLM.Core.Types
 
@@ -271,9 +273,13 @@ mergeAnthropicDelta :: AnthropicResponse -> Value -> AnthropicResponse
 mergeAnthropicDelta acc chunk =
     case (acc, extractEventType chunk) of
         (_, Just "message_start") -> initializeFromMessageStart chunk
+        (AnthropicSuccess resp, Just "content_block_start") ->
+            case extractContentBlock chunk of
+                Just block -> AnthropicSuccess $ addContentBlock resp block
+                Nothing -> acc
         (AnthropicSuccess resp, Just "content_block_delta") ->
-            case extractTextDelta chunk of
-                Just text -> AnthropicSuccess $ appendText resp text
+            case asum [fmap (appendText resp) (extractTextDelta chunk), fmap (appendToolInput resp) (extractInputJsonDelta chunk), fmap (appendThinking resp) (extractThinkingDelta chunk)] of
+                Just updated -> AnthropicSuccess updated
                 Nothing -> acc
         (AnthropicSuccess resp, Just "message_delta") ->
             case extractStopReason chunk of
@@ -317,3 +323,74 @@ mergeAnthropicDelta acc chunk =
 
     setStopReason :: AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
     setStopReason resp reason = resp { responseStopReason = Just reason }
+
+    extractContentBlock :: Value -> Maybe AnthropicContentBlock
+    extractContentBlock (Aeson.Object obj) = do
+        Aeson.Object contentBlock <- KM.lookup "content_block" obj
+        Aeson.String blockType <- KM.lookup "type" contentBlock
+        case blockType of
+            "tool_use" -> do
+                Aeson.String toolId <- KM.lookup "id" contentBlock
+                Aeson.String toolName <- KM.lookup "name" contentBlock
+                -- Initial tool input is empty object at block start
+                return $ AnthropicToolUseBlock toolId toolName (Aeson.Object KM.empty)
+            "text" -> do
+                Aeson.String text <- KM.lookup "text" contentBlock
+                return $ AnthropicTextBlock text
+            "thinking" -> do
+                -- Thinking blocks may have "thinking" field but start empty
+                let thinkingText = case KM.lookup "thinking" contentBlock of
+                      Just (Aeson.String t) -> t
+                      _ -> ""
+                return $ AnthropicThinkingBlock thinkingText
+            _ -> Nothing
+    extractContentBlock _ = Nothing
+
+    extractInputJsonDelta :: Value -> Maybe Text
+    extractInputJsonDelta (Aeson.Object obj) = do
+        Aeson.Object delta <- KM.lookup "delta" obj
+        Aeson.String partialJson <- KM.lookup "partial_json" delta
+        return partialJson
+    extractInputJsonDelta _ = Nothing
+
+    addContentBlock :: AnthropicSuccessResponse -> AnthropicContentBlock -> AnthropicSuccessResponse
+    addContentBlock resp block =
+        resp { responseContent = responseContent resp ++ [block] }
+
+    appendToolInput :: AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
+    appendToolInput resp jsonDelta =
+        case responseContent resp of
+            [] -> resp  -- No tool block to append to
+            blocks -> case last blocks of
+                AnthropicToolUseBlock toolId toolName currentInput ->
+                    -- Accumulate the JSON delta string
+                    let accumulatedJson = case currentInput of
+                            Aeson.String s -> s <> jsonDelta
+                            _ -> jsonDelta
+                        -- Try to parse the accumulated JSON as an object
+                        -- If it's still incomplete, keep as string; once complete, it will parse
+                        parsedInput = case Aeson.decode (BSL.fromStrict (encodeUtf8 accumulatedJson)) of
+                            Just val -> val
+                            Nothing -> Aeson.String accumulatedJson  -- Keep as string if not yet valid JSON
+                        updatedBlocks = init blocks ++ [AnthropicToolUseBlock toolId toolName parsedInput]
+                    in resp { responseContent = updatedBlocks }
+                _ -> resp  -- Not a tool use block
+
+    extractThinkingDelta :: Value -> Maybe Text
+    extractThinkingDelta (Aeson.Object obj) = do
+        Aeson.Object delta <- KM.lookup "delta" obj
+        Aeson.String thinking <- KM.lookup "thinking" delta
+        return thinking
+    extractThinkingDelta _ = Nothing
+
+    appendThinking :: AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
+    appendThinking resp thinkingDelta =
+        case responseContent resp of
+            [] -> resp  -- No thinking block to append to
+            blocks -> case last blocks of
+                AnthropicThinkingBlock currentThinking ->
+                    -- Accumulate the thinking deltas
+                    let accumulatedThinking = currentThinking <> thinkingDelta
+                        updatedBlocks = init blocks ++ [AnthropicThinkingBlock accumulatedThinking]
+                    in resp { responseContent = updatedBlocks }
+                _ -> resp  -- Not a thinking block

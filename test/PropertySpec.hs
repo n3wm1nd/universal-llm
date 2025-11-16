@@ -325,6 +325,28 @@ prop_openaiSerializationSucceeds = forAll genMessages $ \msgs ->
   where
     genMessages = listOf genMessageOpenAIFull
 
+-- | Property: Anthropic requests always have valid content blocks
+-- - No empty text blocks
+-- - No empty tool results
+-- - Properly structured thinking blocks
+prop_anthropicRequestIsValid :: Property
+prop_anthropicRequestIsValid = forAll genMessages $ \msgs ->
+  let configs = []
+      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45 configs msgs
+      msgs_list = AP.messages req
+      -- Check all content blocks are valid
+      validBlocks = all isValidContentBlock (concatMap AP.content msgs_list)
+      emptyBlocks = [(i, block) | (i, msg) <- zip [0..] msgs_list, (block) <- AP.content msg, not (isValidContentBlock block)]
+  in counterexample ("Empty blocks: " ++ show emptyBlocks) validBlocks
+  where
+    genMessages = listOf genMessageAnthropicTools
+
+    isValidContentBlock :: AP.AnthropicContentBlock -> Bool
+    isValidContentBlock (AP.AnthropicTextBlock txt) = not (T.null txt)
+    isValidContentBlock (AP.AnthropicToolResultBlock _ _) = True  -- Tool results can be empty
+    isValidContentBlock (AP.AnthropicThinkingBlock txt) = not (T.null txt)
+    isValidContentBlock _ = True  -- Tool use blocks don't have the same constraint
+
 -- ============================================================================
 -- HSpec test suite
 -- ============================================================================
@@ -358,6 +380,9 @@ spec = do
 
     it "serialization always succeeds" $
       withMaxSuccess 100 prop_anthropicSerializationSucceeds
+
+    it "generated requests are always valid (no empty text blocks)" $
+      withMaxSuccess 100 prop_anthropicRequestIsValid
 
   describe "OpenAI Provider Properties" $ do
     it "request building always terminates (no infinite loops)" $

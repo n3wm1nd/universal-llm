@@ -11,6 +11,12 @@ module TestCache
   , updateMode
   , playbackMode
   , liveMode
+  , recordRawResponse
+  , lookupRawResponse
+  , cachedRawRequest
+  , recordModeRaw
+  , updateModeRaw
+  , playbackModeRaw
   ) where
 
 import qualified Data.ByteString as BS
@@ -111,3 +117,65 @@ playbackMode cachePath req = do
 -- Live mode: always make real request, ignore cache
 liveMode :: (req -> IO resp) -> ResponseProvider req resp
 liveMode apiCall req = apiCall req
+
+-- Cache raw ByteString responses (e.g., SSE streams) without JSON encoding
+-- Stores as .sse file instead of .json
+recordRawResponse :: HasCodec req => CachePath -> req -> BSL.ByteString -> IO ()
+recordRawResponse cachePath req responseBody = do
+  dirExists <- doesDirectoryExist cachePath
+  unless dirExists $ error $ "Cache directory does not exist: " ++ cachePath
+  let cacheKey = hashRequest req
+      cachePath' = cachePath </> cacheKey <> ".sse"
+  BSL.writeFile cachePath' responseBody
+
+-- Look up a cached raw ByteString response
+lookupRawResponse :: HasCodec req => CachePath -> req -> IO (Maybe BSL.ByteString)
+lookupRawResponse cachePath req = do
+  let cacheKey = hashRequest req
+      cachePath' = cachePath </> cacheKey <> ".sse"
+  exists <- doesFileExist cachePath'
+  if exists
+    then Just <$> BSL.readFile cachePath'
+    else return Nothing
+
+-- Cached raw request: check cache first, fall back to real request and cache the result
+cachedRawRequest :: HasCodec req
+                 => CachePath
+                 -> req
+                 -> IO BSL.ByteString
+                 -> IO BSL.ByteString
+cachedRawRequest cachePath req makeRequest = do
+  cached <- lookupRawResponse cachePath req
+  case cached of
+    Just response -> return response
+    Nothing -> do
+      response <- makeRequest
+      recordRawResponse cachePath req response
+      return response
+
+-- Raw record mode: check cache first, fall back to live API and record response
+recordModeRaw :: HasCodec req
+              => CachePath
+              -> (req -> IO BSL.ByteString)
+              -> ResponseProvider req BSL.ByteString
+recordModeRaw cachePath apiCall req = cachedRawRequest cachePath req (apiCall req)
+
+-- Raw update mode: always make live API call and overwrite cache
+updateModeRaw :: HasCodec req
+              => CachePath
+              -> (req -> IO BSL.ByteString)
+              -> ResponseProvider req BSL.ByteString
+updateModeRaw cachePath apiCall req = do
+  response <- apiCall req
+  recordRawResponse cachePath req response
+  return response
+
+-- Raw playback mode: only use cache, error if not found
+playbackModeRaw :: HasCodec req
+                => CachePath
+                -> ResponseProvider req BSL.ByteString
+playbackModeRaw cachePath req = do
+  cached <- lookupRawResponse cachePath req
+  case cached of
+    Just response -> return response
+    Nothing -> error $ "Playback mode: no cached response found for request hash: " ++ hashRequest req

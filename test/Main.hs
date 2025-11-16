@@ -7,6 +7,7 @@ import qualified CachedIntegrationSpec
 import qualified ComposableHandlersSpec
 import qualified OpenAIComposableSpec
 import qualified AnthropicComposableSpec
+import qualified AnthropicStreamingSpec
 import qualified PropertySpec
 import qualified XMLPropertySpec
 import qualified XMLProvidersSpec
@@ -21,6 +22,7 @@ import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse, OpenAICompl
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
 import System.Environment (lookupEnv)
 import qualified Data.Text as T
+import qualified Data.ByteString.Lazy as BSL
 
 main :: IO ()
 main = do
@@ -66,6 +68,26 @@ main = do
           in wrappedCall
         _ -> \req -> TestCache.playbackMode cachePath (AnthropicProvider.withMagicSystemPrompt req)
 
+  -- Build Anthropic streaming response provider (for SSE responses)
+  let anthropicStreamingProvider :: TestCache.ResponseProvider AnthropicRequest BSL.ByteString
+      anthropicStreamingProvider = case mode of
+        Just "record" | Just token <- anthropicToken ->
+          let headers = AnthropicProvider.oauthHeaders token
+              baseCall req = TestHTTP.httpCallStreaming "https://api.anthropic.com/v1/messages" headers req
+              wrappedCall req = TestCache.recordModeRaw cachePath baseCall (AnthropicProvider.withMagicSystemPrompt req)
+          in wrappedCall
+        Just "update" | Just token <- anthropicToken ->
+          let headers = AnthropicProvider.oauthHeaders token
+              baseCall req = TestHTTP.httpCallStreaming "https://api.anthropic.com/v1/messages" headers req
+              wrappedCall req = TestCache.updateModeRaw cachePath baseCall (AnthropicProvider.withMagicSystemPrompt req)
+          in wrappedCall
+        Just "live" | Just token <- anthropicToken ->
+          let headers = AnthropicProvider.oauthHeaders token
+              baseCall req = TestHTTP.httpCallStreaming "https://api.anthropic.com/v1/messages" headers req
+              wrappedCall req = TestCache.liveMode baseCall (AnthropicProvider.withMagicSystemPrompt req)
+          in wrappedCall
+        _ -> \req -> TestCache.playbackModeRaw cachePath (AnthropicProvider.withMagicSystemPrompt req)
+
   -- Build Completion response provider (for /v1/completions endpoint)
   let completionProvider :: TestCache.ResponseProvider OpenAICompletionRequest OpenAICompletionResponse
       completionProvider = case mode of
@@ -100,6 +122,7 @@ main = do
     -- Composable provider integration tests
     describe "OpenAI Composable Provider (cached)" $ OpenAIComposableSpec.spec openaiProvider
     describe "Anthropic Composable Provider (cached)" $ AnthropicComposableSpec.spec anthropicProvider
+    describe "Anthropic Streaming Provider (cached)" $ AnthropicStreamingSpec.spec anthropicStreamingProvider
 
     -- Completion interface tests
     describe "OpenAI Completion Interface (cached)" $ CompletionSpec.spec completionProvider

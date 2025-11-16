@@ -136,9 +136,9 @@ handleStreaming = \_provider _model configs req ->
 -- Text message handler - groups messages incrementally
 handleTextMessages :: ProviderRequest provider ~ AnthropicRequest => MessageHandler provider model
 handleTextMessages = \_provider _model _configs msg req -> case msg of
-  UserText txt -> appendContentBlock "user" (fromText txt) req
-  AssistantText txt -> appendContentBlock "assistant" (fromText txt) req
-  SystemText txt -> appendContentBlock "user" (fromText txt) req
+  UserText txt -> if Text.null txt then req else appendContentBlock "user" (fromText txt) req
+  AssistantText txt -> if Text.null txt then req else appendContentBlock "assistant" (fromText txt) req
+  SystemText txt -> if Text.null txt then req else appendContentBlock "user" (fromText txt) req
   _ -> req
 
 -- Tools handler - groups tool blocks incrementally
@@ -194,12 +194,17 @@ anthropicWithReasoning :: forall model provider . (ProviderRequest provider ~ An
 anthropicWithReasoning base = base `chainProviders` reasoningProvider
   where
     reasoningProvider = ComposableProvider
-      { cpToRequest = \_provider _model _configs _msg req -> req  -- No request handling needed
+      { cpToRequest = handleReasoning
       , cpConfigHandler = \_provider _model configs req -> handleReasoningConfig configs req
       , cpFromResponse = parseReasoningResponse
       , cpSerializeMessage = UniversalLLM.Core.Serialization.serializeReasoningMessages
       , cpDeserializeMessage = UniversalLLM.Core.Serialization.deserializeReasoningMessages
       }
+
+    handleReasoning :: ProviderRequest provider ~ AnthropicRequest => MessageHandler provider model
+    handleReasoning = \_provider _model _configs msg req -> case msg of
+      AssistantReasoning thinking -> appendContentBlock "assistant" (AnthropicThinkingBlock thinking) req
+      _ -> req
 
     -- Enable extended thinking if reasoning is enabled (default) or explicitly configured
     -- Note: budget_tokens is required by the Anthropic API when thinking is enabled
@@ -240,7 +245,7 @@ ensureUserFirst base = base `chainProviders` ensureUserFirstProvider
             [] -> req
             (firstMsg:_) -> if role firstMsg == "user"
               then req
-              else req { messages = AnthropicMessage "user" [AnthropicTextBlock ""] : messages req }
+              else req { messages = AnthropicMessage "user" [AnthropicTextBlock " "] : messages req }
       , cpFromResponse = \_provider _model _configs _history acc _resp -> acc  -- No-op for response parsing
       , cpSerializeMessage = \_ -> Nothing  -- Let base handle serialization
       , cpDeserializeMessage = \_ -> Nothing  -- Let base handle deserialization
