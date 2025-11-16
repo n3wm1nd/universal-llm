@@ -43,7 +43,7 @@ instance HasTools ClaudeSonnet45 Anthropic where
   withTools = AnthropicProvider.anthropicWithTools
 
 instance ProviderImplementation Anthropic ClaudeSonnet45 where
-  getComposableProvider = AnthropicProvider.ensureUserFirst . withTools $ AnthropicProvider.baseComposableProvider
+  getComposableProvider = withTools AnthropicProvider.baseComposableProvider
 
 -- ============================================================================
 -- Configuration
@@ -129,10 +129,10 @@ handleProxy apiKey reqBody = do
   liftIO $ putStrLn "📨 Received response from backend"
 
   -- 5. Parse backend response to universal messages
-  let universalMessages = fromProviderResponse backendProvider backendModel
-                            (proxyConfigs proxyConfig)
-                            (proxyMessages proxyConfig)
-                            response
+  let (_backendProvider', _backendModel', universalMessages) = fromProviderResponse backendProvider backendModel
+                                                               (proxyConfigs proxyConfig)
+                                                               (proxyMessages proxyConfig)
+                                                               response
 
   liftIO $ putStrLn $ "🔄 Converted to " <> show (length universalMessages) <> " universal messages"
 

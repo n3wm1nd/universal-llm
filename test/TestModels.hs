@@ -25,7 +25,7 @@ instance HasTools ClaudeSonnet45 Anthropic where
   withTools = Anthropic.anthropicWithTools
 
 instance ProviderImplementation Anthropic ClaudeSonnet45 where
-  getComposableProvider = Anthropic.ensureUserFirst . withTools $ Anthropic.baseComposableProvider
+  getComposableProvider = withTools $ Anthropic.baseComposableProvider
 
 -- Test model for Claude Sonnet 4.5 with reasoning enabled (for testing extended thinking)
 data ClaudeSonnet45WithReasoning = ClaudeSonnet45WithReasoning deriving (Show, Eq)
@@ -40,7 +40,7 @@ instance HasReasoning ClaudeSonnet45WithReasoning Anthropic where
   withReasoning = Anthropic.anthropicWithReasoning
 
 instance ProviderImplementation Anthropic ClaudeSonnet45WithReasoning where
-  getComposableProvider = Anthropic.ensureUserFirst . withReasoning . withTools $ Anthropic.baseComposableProvider
+  getComposableProvider = withReasoning . withTools $ Anthropic.baseComposableProvider
 
 -- ============================================================================
 -- OpenAI-Compatible Models (for testing with llama.cpp/GLM4.5)

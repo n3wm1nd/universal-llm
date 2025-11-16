@@ -19,7 +19,6 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
 import GHC.Generics (Generic)
 import Control.Applicative ((<|>), asum)
-import Data.Maybe (listToMaybe)
 import UniversalLLM.Core.Types
 
 -- Request structure
@@ -308,7 +307,7 @@ mergeAnthropicDelta acc chunk =
     extractStopReason _ = Nothing
 
     initializeFromMessageStart :: Value -> AnthropicResponse
-    initializeFromMessageStart (Aeson.Object obj) =
+    initializeFromMessageStart (Aeson.Object _obj) =
         -- Extract initial message metadata if present
         let emptyResp = AnthropicSuccessResponse "" "" "assistant" [] Nothing (AnthropicUsage 0 0)
         in AnthropicSuccess emptyResp

@@ -104,157 +104,129 @@ instance Provider Anthropic model where
   type ProviderRequest Anthropic = AnthropicRequest
   type ProviderResponse Anthropic = AnthropicResponse
 
--- Message handlers for Anthropic
-
--- Base handler: model name and basic config
--- Updates the request with model name and config
-handleBase :: forall provider model . (ProviderRequest provider ~ AnthropicRequest, ModelName provider model) => MessageHandler provider model
-handleBase _provider modelType configs _msg req =
-  req { model = modelName @provider modelType
-      , max_tokens = case [mt | MaxTokens mt <- configs] of { (mt:_) -> mt; [] -> max_tokens req }
-      , temperature = case [t | Temperature t <- configs] of { (t:_) -> Just t; [] -> temperature req }
-      }
-
--- System prompt config handler (from config)
--- This is a ConfigHandler, not a MessageHandler - it runs after all messages are processed
-handleSystemPrompt :: ProviderRequest provider ~ AnthropicRequest => ConfigHandler provider model
-handleSystemPrompt = \_provider _model configs req ->
-  let systemPrompts = [sp | SystemPrompt sp <- configs]
-      sysBlocks = [AnthropicSystemBlock sp "text" | sp <- systemPrompts]
-  in if null sysBlocks
-     then req
-     else setSystemBlocks sysBlocks req
-
--- Streaming config handler
-handleStreaming :: ProviderRequest provider ~ AnthropicRequest => ConfigHandler provider model
-handleStreaming = \_provider _model configs req ->
-  let streamEnabled = case [s | Streaming s <- configs] of
-        (s:_) -> Just s
-        [] -> stream req
-  in req { stream = streamEnabled }
-
--- Text message handler - groups messages incrementally
-handleTextMessages :: ProviderRequest provider ~ AnthropicRequest => MessageHandler provider model
-handleTextMessages = \_provider _model _configs msg req -> case msg of
+-- Text message encoder - groups messages incrementally
+handleTextMessage :: ProviderRequest Anthropic ~ AnthropicRequest => MessageEncoder Anthropic model
+handleTextMessage msg req = case msg of
   UserText txt -> if Text.null txt then req else appendContentBlock "user" (fromText txt) req
   AssistantText txt -> if Text.null txt then req else appendContentBlock "assistant" (fromText txt) req
   SystemText txt -> if Text.null txt then req else appendContentBlock "user" (fromText txt) req
   _ -> req
 
--- Tools handler - groups tool blocks incrementally
-handleTools :: ProviderRequest provider ~ AnthropicRequest => MessageHandler provider model
-handleTools = \_provider _model configs msg req -> case msg of
+-- Tool message encoder - groups tool blocks incrementally
+handleToolMessage :: (ProviderRequest Anthropic ~ AnthropicRequest, HasTools model Anthropic) => MessageEncoder Anthropic model
+handleToolMessage msg req = case msg of
   AssistantTool toolCall -> appendContentBlock "assistant" (fromToolCall toolCall) req
   ToolResultMsg result -> appendContentBlock "user" (fromToolResult result) req
-  _ ->
-    -- Apply tool definitions from config (for any message)
-    let toolDefs = [defs | Tools defs <- configs]
-    in if null toolDefs
-       then req
-       else setToolDefinitions (map toAnthropicToolDef (concat toolDefs)) req
+  _ -> req
+
+-- Reasoning message encoder
+handleReasoningMessage :: MessageEncoder Anthropic model
+handleReasoningMessage msg req = case msg of
+  AssistantReasoning thinking -> appendContentBlock "assistant" (AnthropicThinkingBlock thinking) req
+  _ -> req
 
 
 -- Composable providers for Anthropic
 
 -- Base provider: handles text messages and basic configuration
-baseComposableProvider :: forall model provider . (ProviderRequest provider ~ AnthropicRequest, ProviderResponse provider ~ AnthropicResponse, ModelName provider model) => ComposableProvider provider model
-baseComposableProvider = ComposableProvider
-  { cpToRequest = handleBase >>> handleTextMessages
-  , cpConfigHandler = \p m cs -> handleStreaming p m cs . handleSystemPrompt p m cs
+baseComposableProvider :: forall model . (ModelName Anthropic model) => ComposableProvider Anthropic model
+baseComposableProvider p m configs = noopHandler
+  { cpPureMessageRequest = ensureUserFirstPure
+  , cpToRequest = \msg req ->
+      let req' = req { model = modelName @Anthropic m
+                     , max_tokens = case [mt | MaxTokens mt <- configs] of { (mt:_) -> mt; [] -> max_tokens req }
+                     , temperature = case [t | Temperature t <- configs] of { (t:_) -> Just t; [] -> temperature req }
+                     }
+      in handleTextMessage msg req'
+  , cpConfigHandler = \req ->
+      let systemPrompts = [sp | SystemPrompt sp <- configs]
+          sysBlocks = [AnthropicSystemBlock sp "text" | sp <- systemPrompts]
+          req1 = if null sysBlocks then req else setSystemBlocks sysBlocks req
+          streamEnabled = case [s | Streaming s <- configs] of
+            (s:_) -> Just s
+            [] -> stream req1
+      in req1 { stream = streamEnabled }
   , cpFromResponse = parseTextResponse
   , cpSerializeMessage = serializeBaseMessage
   , cpDeserializeMessage = deserializeBaseMessage
   }
   where
-    parseTextResponse _provider _model _configs _history _acc (AnthropicError err) =
+    ensureUserFirstPure msgs =
+      case msgs of
+        [] -> []
+        (m1:_) -> if messageDirection m1 == User then msgs else UserText " " : msgs
+
+    parseTextResponse (AnthropicError err) =
       error $ "Anthropic API error: " ++ show (errorType err) ++ ": " ++ show (errorMessage err)
-    parseTextResponse _provider _model _configs _history acc (AnthropicSuccess resp) =
+    parseTextResponse (AnthropicSuccess resp) =
       case [txt | AnthropicTextBlock txt <- responseContent resp] of
-        (txt:_) -> acc <> [AssistantText txt]
-        [] -> acc
+        (txt:_) -> Just (AssistantText txt, AnthropicSuccess resp { responseContent = [] })
+        [] -> Nothing
 
--- Tools capability combinator
-anthropicWithTools :: forall model provider . (ProviderRequest provider ~ AnthropicRequest, ProviderResponse provider ~ AnthropicResponse, HasTools model provider) => ComposableProvider provider model -> ComposableProvider provider model
-anthropicWithTools base = base `chainProviders` toolsProvider
+-- Standalone tools provider
+anthropicTools :: forall model . (HasTools model Anthropic) => ComposableProvider Anthropic model
+anthropicTools _p _m configs = noopHandler
+  { cpToRequest = handleToolMessage
+  , cpConfigHandler = \req ->
+      let toolDefs = [defs | Tools defs <- configs]
+      in if null toolDefs then req else setToolDefinitions (map toAnthropicToolDef (concat toolDefs)) req
+  , cpFromResponse = parseToolResponse
+  , cpSerializeMessage = serializeToolMessages
+  , cpDeserializeMessage = deserializeToolMessages
+  }
   where
-    toolsProvider = ComposableProvider
-      { cpToRequest = handleTools
-      , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
-      , cpFromResponse = parseToolResponse
-      , cpSerializeMessage = serializeToolMessages
-      , cpDeserializeMessage = deserializeToolMessages
-      }
-    parseToolResponse _provider _model _configs _history _acc (AnthropicError err) =
+    parseToolResponse (AnthropicError err) =
       error $ "Anthropic API error: " ++ show (errorType err) ++ ": " ++ show (errorMessage err)
-    parseToolResponse _provider _model _configs _history acc (AnthropicSuccess resp) =
-      acc <> [AssistantTool (ToolCall tid tname tinput) | AnthropicToolUseBlock tid tname tinput <- responseContent resp]
+    parseToolResponse (AnthropicSuccess resp) =
+      case [AnthropicToolUseBlock tid tname tinput | AnthropicToolUseBlock tid tname tinput <- responseContent resp] of
+        (AnthropicToolUseBlock tid tname tinput : _) ->
+          let remainingContent = [c | c@(AnthropicToolUseBlock _ _ _) <- responseContent resp]
+              newResp = resp { responseContent = drop 1 remainingContent }
+          in Just (AssistantTool (ToolCall tid tname tinput), AnthropicSuccess newResp)
+        [] -> Nothing
+        _ -> Nothing  -- Shouldn't happen, but needed for completeness
 
--- Reasoning capability combinator
-anthropicWithReasoning :: forall model provider . (ProviderRequest provider ~ AnthropicRequest, ProviderResponse provider ~ AnthropicResponse, HasReasoning model provider) => ComposableProvider provider model -> ComposableProvider provider model
-anthropicWithReasoning base = base `chainProviders` reasoningProvider
-  where
-    reasoningProvider = ComposableProvider
-      { cpToRequest = handleReasoning
-      , cpConfigHandler = \_provider _model configs req -> handleReasoningConfig configs req
-      , cpFromResponse = parseReasoningResponse
-      , cpSerializeMessage = UniversalLLM.Core.Serialization.serializeReasoningMessages
-      , cpDeserializeMessage = UniversalLLM.Core.Serialization.deserializeReasoningMessages
-      }
-
-    handleReasoning :: ProviderRequest provider ~ AnthropicRequest => MessageHandler provider model
-    handleReasoning = \_provider _model _configs msg req -> case msg of
-      AssistantReasoning thinking -> appendContentBlock "assistant" (AnthropicThinkingBlock thinking) req
-      _ -> req
-
-    -- Enable extended thinking if reasoning is enabled (default) or explicitly configured
-    -- Note: budget_tokens is required by the Anthropic API when thinking is enabled
-    -- The budget is set to max(1024, min(5000, max_tokens / 2)) to respect:
-    --   - API minimum: 1024 tokens
-    --   - Reasonable default: 5000 tokens
-    --   - User's max_tokens setting: half of their max_tokens
-    handleReasoningConfig configs req =
+-- Standalone reasoning provider
+anthropicReasoning :: forall model . (HasReasoning model Anthropic) => ComposableProvider Anthropic model
+anthropicReasoning _p _m configs = noopHandler
+  { cpToRequest = handleReasoningMessage
+  , cpConfigHandler = \req ->
       let reasoningEnabled = not $ any isReasoningFalse configs
-          -- Extract max_tokens from configs if present, otherwise use current req value
           maxTokensFromConfig = case [t | MaxTokens t <- configs] of
             (t:_) -> t
-            [] -> max_tokens req
-          -- Set budget respecting all constraints: at least 1024, at most 5000, at most half of max_tokens
+            [] -> 2048
           thinkingBudget = max 1024 (min 5000 (maxTokensFromConfig `div` 2))
       in if reasoningEnabled
          then req { thinking = Just $ AnthropicThinkingConfig "enabled" (Just thinkingBudget) }
          else req
-
+  , cpFromResponse = parseReasoningResponse
+  , cpSerializeMessage = UniversalLLM.Core.Serialization.serializeReasoningMessages
+  , cpDeserializeMessage = UniversalLLM.Core.Serialization.deserializeReasoningMessages
+  }
+  where
     isReasoningFalse (Reasoning False) = True
     isReasoningFalse _ = False
 
-    parseReasoningResponse _provider _model _configs _history acc (AnthropicError _) = acc
-    parseReasoningResponse _provider _model _configs _history acc (AnthropicSuccess resp) =
-      acc <> [AssistantReasoning thinking | AnthropicThinkingBlock thinking <- responseContent resp]
+    parseReasoningResponse (AnthropicError _) = Nothing
+    parseReasoningResponse (AnthropicSuccess resp) =
+      case [thinking | AnthropicThinkingBlock thinking <- responseContent resp] of
+        (thinking:_) ->
+          let remainingContent = [c | c@(AnthropicThinkingBlock _) <- responseContent resp]
+              newResp = resp { responseContent = drop 1 remainingContent }
+          in Just (AssistantReasoning thinking, AnthropicSuccess newResp)
+        [] -> Nothing
 
--- Ensures Anthropic's API constraint: conversations must start with a user message
--- If the first message is from assistant, prepends an empty user message
--- This should be composed at the END of the provider chain
-ensureUserFirst :: ProviderRequest provider ~ AnthropicRequest => ComposableProvider provider model -> ComposableProvider provider model
-ensureUserFirst base = base `chainProviders` ensureUserFirstProvider
-  where
-    ensureUserFirstProvider = ComposableProvider
-      { cpToRequest = \_provider _model _configs _msg req -> req  -- No message handling needed
-      , cpConfigHandler = \_provider _model _configs req ->
-          -- Anthropic API requires first message to be from user
-          case messages req of
-            [] -> req
-            (firstMsg:_) -> if role firstMsg == "user"
-              then req
-              else req { messages = AnthropicMessage "user" [AnthropicTextBlock " "] : messages req }
-      , cpFromResponse = \_provider _model _configs _history acc _resp -> acc  -- No-op for response parsing
-      , cpSerializeMessage = \_ -> Nothing  -- Let base handle serialization
-      , cpDeserializeMessage = \_ -> Nothing  -- Let base handle deserialization
-      }
+-- Backward compatibility wrappers using chainProviders
+anthropicWithTools :: forall model . (HasTools model Anthropic) => ComposableProvider Anthropic model -> ComposableProvider Anthropic model
+anthropicWithTools base = base `chainProviders` anthropicTools
+
+anthropicWithReasoning :: forall model . (HasReasoning model Anthropic) => ComposableProvider Anthropic model -> ComposableProvider Anthropic model
+anthropicWithReasoning base = base `chainProviders` anthropicReasoning
 
 -- Default ProviderImplementation for basic text-only models
 -- Models with capabilities (tools, vision, etc.) should provide their own instances
 instance {-# OVERLAPPABLE #-} ModelName Anthropic model => ProviderImplementation Anthropic model where
-  getComposableProvider = ensureUserFirst $ baseComposableProvider
+  getComposableProvider = baseComposableProvider
 
 
 -- | Add magic system prompt for OAuth authentication

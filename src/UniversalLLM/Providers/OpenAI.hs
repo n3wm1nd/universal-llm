@@ -194,41 +194,9 @@ lastMessage req = case messages req of
   [] -> Nothing
   msgs -> Just (last msgs)
 
--- Base handler: model name and basic config
--- Updates the request with model name and config
--- Polymorphic over any provider that uses OpenAI protocol
-handleBase :: forall provider model. (ModelName provider model, ProviderRequest provider ~ OpenAIRequest) => MessageHandler provider model
-handleBase _provider modelType configs _msg req =
-  req { model = modelName @provider modelType
-      , temperature = getFirst [t | Temperature t <- configs]
-      , max_tokens = getFirst [mt | MaxTokens mt <- configs]
-      , seed = getFirst [s | Seed s <- configs]
-      }
-  where
-    getFirst [] = Nothing
-    getFirst (x:_) = Just x
-
--- System prompt config handler (from config)
--- Polymorphic over any provider that uses OpenAI protocol
--- This is a ConfigHandler, not a MessageHandler - it runs after all messages are processed
-configureSystemPrompt :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => ConfigHandler provider model
-configureSystemPrompt = \_provider _model configs req ->
-  let systemPrompts = [sp | SystemPrompt sp <- configs]
-      sysMessages = map systemMessage systemPrompts
-  in modifyMessages (sysMessages <>) req
-
--- Streaming config handler
-configureStreaming :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => ConfigHandler provider model
-configureStreaming = \_provider _model configs req ->
-  let streamEnabled = case [s | Streaming s <- configs] of
-        (s:_) -> Just s
-        [] -> stream req
-  in req { stream = streamEnabled }
-
--- Basic text message handler
--- Polymorphic over any provider that uses OpenAI protocol
-handleTextMessages :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageHandler provider model
-handleTextMessages =  \_provider _model _configs msg req -> case msg of
+-- Text message encoder
+handleTextMessage :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageEncoder provider model
+handleTextMessage msg req = case msg of
   UserText txt ->
     case lastMessage req >>= appendToMessageIfSameRole "user" txt of
       Just updatedMsg -> modifyLastMessage (const updatedMsg) req
@@ -241,10 +209,9 @@ handleTextMessages =  \_provider _model _configs msg req -> case msg of
     appendMessage (systemMessage txt) req
   _ -> req  -- Not a text message
 
--- Tools handler
--- Polymorphic over any provider that uses OpenAI protocol
-handleTools :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageHandler provider model
-handleTools =  \_provider _model configs msg req -> case msg of
+-- Tool message encoder
+handleToolMessage :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageEncoder provider model
+handleToolMessage msg req = case msg of
   AssistantTool toolCall ->
     let tc = convertFromToolCall toolCall
     in case lastMessage req >>= appendToolCallToMessage tc of
@@ -254,17 +221,11 @@ handleTools =  \_provider _model configs msg req -> case msg of
     let resultCallId = getToolCallId (toolResultCall result)
         resultContent = either id (TE.decodeUtf8 . BSL.toStrict . Aeson.encode) $ toolResultOutput result
     in appendMessage (toolResultMessage resultCallId resultContent) req
-  _ ->
-    -- Apply tool definitions from config (for any message)
-    let toolDefs = [defs | Tools defs <- configs]
-    in if null toolDefs
-       then req
-       else setToolDefinitions (map toOpenAIToolDef (concat toolDefs)) req
+  _ -> req
 
--- JSON handler
--- Polymorphic over any provider that uses OpenAI protocol
-handleJSON :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageHandler provider model
-handleJSON =  \_provider _model _configs msg req -> case msg of
+-- JSON message encoder
+handleJSONMessage :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageEncoder provider model
+handleJSONMessage msg req = case msg of
   UserRequestJSON txt schema ->
     appendMessage (userMessage txt) req
       & setResponseFormat (OpenAIResponseFormat "json_schema" (Just schema))
@@ -275,139 +236,154 @@ handleJSON =  \_provider _model _configs msg req -> case msg of
   where
     (&) = flip ($)
 
--- Reasoning handler
--- Polymorphic over any provider that uses OpenAI protocol
-handleReasoning :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageHandler provider model
-handleReasoning =  \_provider _model _configs msg req -> case msg of
+-- Reasoning message encoder
+handleReasoningMessage :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageEncoder provider model
+handleReasoningMessage msg req = case msg of
   AssistantReasoning txt -> appendMessage (reasoningMessage txt) req
   _ -> req
 
--- Composable providers (bidirectional handlers)
+-- Composable providers
 
 -- Base composable provider: model name, basic config, text messages
--- Polymorphic over any provider that uses OpenAI protocol
 baseComposableProvider :: forall provider model. (ModelName provider model, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
-baseComposableProvider = ComposableProvider
-  { cpToRequest = handleBase >>> handleTextMessages
-  , cpConfigHandler = \p m cs -> configureStreaming p m cs . configureSystemPrompt p m cs
+baseComposableProvider _p m configs = noopHandler
+  { cpToRequest = \msg req ->
+      let req' = req { model = modelName @provider m
+                     , temperature = getFirst [t | Temperature t <- configs]
+                     , max_tokens = getFirst [mt | MaxTokens mt <- configs]
+                     , seed = getFirst [s | Seed s <- configs]
+                     }
+      in handleTextMessage msg req'
+  , cpConfigHandler = \req ->
+      let systemPrompts = [sp | SystemPrompt sp <- configs]
+          sysMessages = map systemMessage systemPrompts
+          req1 = modifyMessages (sysMessages <>) req
+          streamEnabled = case [s | Streaming s <- configs] of
+            (s:_) -> Just s
+            [] -> stream req1
+      in req1 { stream = streamEnabled }
   , cpFromResponse = parseTextResponse
   , cpSerializeMessage = serializeBaseMessage
   , cpDeserializeMessage = deserializeBaseMessage
   }
   where
-    parseTextResponse _provider _model _configs _history acc (OpenAISuccess (OpenAISuccessResponse respChoices)) =
+    getFirst [] = Nothing
+    getFirst (x:_) = Just x
+
+    parseTextResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
-        [] -> acc
+        [] -> Nothing
         (OpenAIChoice msg:_) ->
           case content msg of
-            Just txt -> acc <> [AssistantText txt]
-            Nothing -> acc
-    parseTextResponse _provider _model _configs _history acc _ = acc
+            Just txt -> Just (AssistantText txt, OpenAISuccess (OpenAISuccessResponse []))
+            Nothing -> Nothing
+    parseTextResponse _ = Nothing
 
--- Reasoning capability combinator
--- Polymorphic over any provider that uses OpenAI protocol
-openAIWithReasoning :: forall provider model. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model -> ComposableProvider provider model
-openAIWithReasoning base = base `chainProviders` reasoningProvider
+-- Standalone reasoning provider
+openAIReasoning :: forall provider model. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
+openAIReasoning _p _m _configs = noopHandler
+  { cpToRequest = handleReasoningMessage
+  , cpFromResponse = parseReasoningResponse
+  , cpSerializeMessage = serializeReasoningMessages
+  , cpDeserializeMessage = deserializeReasoningMessages
+  }
   where
-    reasoningProvider = ComposableProvider
-      { cpToRequest = UniversalLLM.Providers.OpenAI.handleReasoning
-      , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
-      , cpFromResponse = parseReasoningResponse
-      , cpSerializeMessage = serializeReasoningMessages
-      , cpDeserializeMessage = deserializeReasoningMessages
-      }
-    parseReasoningResponse _provider _model _configs _history acc (OpenAISuccess (OpenAISuccessResponse respChoices)) =
+    parseReasoningResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
-        [] -> acc
+        [] -> Nothing
         (OpenAIChoice msg:_) ->
           case reasoning_content msg of
-            Just reasoningTxt -> acc <> [AssistantReasoning reasoningTxt]
-            Nothing -> acc
-    parseReasoningResponse _provider _model _configs _history acc _ = acc
+            Just txt -> Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse []))
+            Nothing -> Nothing
+    parseReasoningResponse _ = Nothing
 
--- Tools capability combinator
--- Polymorphic over any provider that uses OpenAI protocol
-openAIWithTools :: forall provider model. (HasTools model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model -> ComposableProvider provider model
-openAIWithTools base = base `chainProviders` toolsProvider
+-- Standalone tools provider
+openAITools :: forall provider model. (HasTools model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
+openAITools _p _m configs = noopHandler
+  { cpToRequest = \msg req ->
+      let req' = handleToolMessage msg req
+          toolDefs = [defs | Tools defs <- configs]
+      in if null toolDefs then req' else setToolDefinitions (map toOpenAIToolDef (concat toolDefs)) req'
+  , cpFromResponse = parseToolResponse
+  , cpSerializeMessage = serializeToolMessages
+  , cpDeserializeMessage = deserializeToolMessages
+  }
   where
-    toolsProvider = ComposableProvider
-      { cpToRequest = handleTools
-      , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
-      , cpFromResponse = parseToolResponse
-      , cpSerializeMessage = serializeToolMessages
-      , cpDeserializeMessage = deserializeToolMessages
-      }
-    parseToolResponse _provider _model _configs _history acc (OpenAISuccess (OpenAISuccessResponse respChoices)) =
+    parseToolResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
-        [] -> acc
+        [] -> Nothing
         (OpenAIChoice msg:_) ->
           case tool_calls msg of
-            Just calls -> acc <> map (AssistantTool . convertToolCall) calls
-            Nothing -> acc
-    parseToolResponse _provider _model _configs _history acc _ = acc
+            Just (tc:_) -> Just (AssistantTool (convertToolCall tc), OpenAISuccess (OpenAISuccessResponse []))
+            _ -> Nothing
+    parseToolResponse _ = Nothing
+
+-- Standalone JSON provider
+openAIJSON :: forall provider model. (HasJSON model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
+openAIJSON _p _m _configs = noopHandler
+  { cpToRequest = handleJSONMessage
+  , cpFromResponse = \_ -> Nothing  -- Let base handler parse it
+  , cpPureMessageResponse = convertTextToJSON
+  , cpSerializeMessage = serializeJSONMessages
+  , cpDeserializeMessage = deserializeJSONMessages
+  }
+  where
+    -- FIXME: In the new composable provider architecture, we don't currently have access to the request
+    -- or message history in the pure message response handler. We should track whether JSON mode was
+    -- actually requested so we only parse as JSON when appropriate. For now, we do optimistic parsing:
+    -- if the text is valid JSON, convert it to AssistantJSON. This means we might incorrectly parse
+    -- regular text that happens to be JSON as a JSON response. This should be fixed when we have
+    -- a way to track request state through the response parsing pipeline.
+
+    -- Convert AssistantText messages to AssistantJSON if the text is valid JSON
+    convertTextToJSON :: [Message model provider] -> [Message model provider]
+    convertTextToJSON = map convertMessage
+      where
+        convertMessage (AssistantText txt) =
+          case Aeson.decode (BSL.fromStrict (TE.encodeUtf8 txt)) of
+            Just jsonVal -> AssistantJSON jsonVal
+            Nothing -> AssistantText txt  -- Keep as text if not valid JSON
+        convertMessage msg = msg
+
+-- Backward compatibility wrappers
+openAIWithReasoning :: forall provider model. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model -> ComposableProvider provider model
+openAIWithReasoning base = base `chainProviders` openAIReasoning
+
+-- Tools capability combinator
+openAIWithTools :: forall provider model. (HasTools model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model -> ComposableProvider provider model
+openAIWithTools base = base `chainProviders` openAITools
 
 -- JSON capability combinator
--- Transforms AssistantText messages that contain valid JSON into AssistantJSON
--- Only transforms if JSON was explicitly requested (checks response format in request)
--- Polymorphic over any provider that uses OpenAI protocol
 openAIWithJSON :: forall provider model. (HasJSON model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model -> ComposableProvider provider model
-openAIWithJSON base = base `chainProviders` jsonProvider
+openAIWithJSON base = base `chainProviders` openAIJSON
+
+-- ============================================================================
+-- Test Helper Functions (Convenience Wrappers)
+-- ============================================================================
+
+-- | Convenience wrapper: Apply base composable provider's model name and config handling (without message processing)
+handleBase :: forall provider model. (ModelName provider model, ProviderRequest provider ~ OpenAIRequest) => provider -> model -> [ModelConfig provider model] -> MessageEncoder provider model
+handleBase _p m configs _msg req =
+  let req' = req { model = modelName @provider m
+                 , temperature = getFirst [t | Temperature t <- configs]
+                 , max_tokens = getFirst [mt | MaxTokens mt <- configs]
+                 , seed = getFirst [s | Seed s <- configs]
+                 }
+  in req'
   where
-    jsonProvider = ComposableProvider
-      { cpToRequest = handleJSON
-      , cpConfigHandler = \_provider _model _configs req -> req  -- No config handling needed
-      , cpFromResponse = parseJSONResponse
-      , cpSerializeMessage = serializeJSONMessages
-      , cpDeserializeMessage = deserializeJSONMessages
-      }
+    getFirst [] = Nothing
+    getFirst (x:_) = Just x
 
-    parseJSONResponse _provider _model _configs history acc resp =
-      -- Only transform to JSON if:
-      -- 1. The last user message explicitly requested JSON mode (UserRequestJSON), AND
-      -- 2. Response indicates success (not an error), AND
-      -- 3. The text actually parses as valid JSON
-      if lastMessageRequestedJSON history && isSuccessResponse resp
-        then map transformTextToJSON acc
-        else acc
+-- | Convenience wrapper: Apply text message handler
+handleTextMessages :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => provider -> model -> [ModelConfig provider model] -> MessageEncoder provider model
+handleTextMessages _p _m _configs = handleTextMessage
 
-    lastMessageRequestedJSON :: [Message model provider] -> Bool
-    lastMessageRequestedJSON msgs =
-      case lastUserMessage msgs of
-        Just (UserRequestJSON _ _) -> True
-        _ -> False
-      where
-        -- Get the last user message (ignoring assistant messages)
-        lastUserMessage [] = Nothing
-        lastUserMessage [msg] = if isUserMessage msg then Just msg else Nothing
-        lastUserMessage (msg:rest) =
-          case lastUserMessage rest of
-            Nothing -> if isUserMessage msg then Just msg else Nothing
-            found -> found
-
-        isUserMessage (UserText _) = True
-        isUserMessage (UserImage _ _) = True
-        isUserMessage (UserRequestJSON _ _) = True
-        isUserMessage _ = False
-
-    isSuccessResponse :: OpenAIResponse -> Bool
-    isSuccessResponse (OpenAISuccess _) = True
-    isSuccessResponse (OpenAIError _) = False
-
-    transformTextToJSON :: Message model provider -> Message model provider
-    transformTextToJSON (AssistantText txt) =
-      -- Only transform if it's valid JSON and not empty
-      case Aeson.eitherDecodeStrict (TE.encodeUtf8 txt) of
-        Right jsonVal ->
-          -- Verify it's actually structured data, not just a JSON string literal
-          case jsonVal of
-            Aeson.Object _ -> AssistantJSON jsonVal
-            Aeson.Array _ -> AssistantJSON jsonVal
-            Aeson.Null -> AssistantJSON jsonVal
-            Aeson.Number _ -> AssistantJSON jsonVal
-            Aeson.Bool _ -> AssistantJSON jsonVal
-            Aeson.String _ -> AssistantJSON jsonVal  -- Even plain strings are valid JSON responses
-        Left _ -> AssistantText txt  -- Keep as text if parsing fails
-    transformTextToJSON other = other
+-- | Convenience wrapper: Apply reasoning message handler
+handleReasoning :: forall provider model. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => provider -> model -> [ModelConfig provider model] -> MessageEncoder provider model
+handleReasoning p m configs msg req =
+  let cp = openAIReasoning @provider @model
+      handlers = cp p m configs
+  in cpToRequest handlers msg req
 
 -- Default ProviderImplementation for basic text-only models
 -- Models with capabilities (tools, json, reasoning, etc.) should provide their own instances

@@ -42,7 +42,7 @@ instance HasTools FullFeaturedModel Anthropic where
   withTools = UniversalLLM.Providers.Anthropic.anthropicWithTools
 
 instance ProviderImplementation Anthropic FullFeaturedModel where
-  getComposableProvider = UniversalLLM.Providers.Anthropic.ensureUserFirst . withTools $ UniversalLLM.Providers.Anthropic.baseComposableProvider
+  getComposableProvider = withTools UniversalLLM.Providers.Anthropic.baseComposableProvider
 
 -- Note: This is a phantom model for examples and documentation
 -- Real model definitions in external packages should use specific model names

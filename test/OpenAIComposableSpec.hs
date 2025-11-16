@@ -36,7 +36,7 @@ parseOpenAIResponse :: forall model. (ProviderImplementation OpenAI model, Model
 parseOpenAIResponse model configs history (OpenAIError (OpenAIErrorResponse errDetail)) =
   Left $ ProviderError (code errDetail) $ errorMessage errDetail <> " (" <> errorType errDetail <> ")"
 parseOpenAIResponse model configs history resp =
-  let msgs = fromProviderResponse OpenAI model configs history resp
+  let (_provider, _model, msgs) = fromProviderResponse OpenAI model configs history resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs

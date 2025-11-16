@@ -43,7 +43,7 @@ instance HasTools ClaudeSonnet45 Anthropic where
   withTools = AnthropicProvider.anthropicWithTools
 
 instance ProviderImplementation Anthropic ClaudeSonnet45 where
-  getComposableProvider = AnthropicProvider.ensureUserFirst . withTools $ AnthropicProvider.baseComposableProvider
+  getComposableProvider = withTools AnthropicProvider.baseComposableProvider
 
 -- ============================================================================
 -- Tool Definition
@@ -120,7 +120,7 @@ agentLoop provider model tools callLLM configs messages = do
   response <- callLLM request
 
   -- Parse response (provider-agnostic)
-  let msgs = fromProviderResponse provider model configs messages response
+  let (_provider', _model', msgs) = fromProviderResponse provider model configs messages response
   responses <- if null msgs
                then except $ Left $ ParseError "No messages parsed from response"
                else return msgs

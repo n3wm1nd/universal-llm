@@ -445,9 +445,11 @@ mergeOpenAIDelta acc chunk =
             existing ++ replicate (idx - length existing) emptyToolCall ++ [newCall]
         | otherwise =
             -- Update existing tool call at index
-            let (before, at:after) = splitAt idx existing
-                merged = mergeToolCallPair at newCall
-            in before ++ [merged] ++ after
+            case splitAt idx existing of
+              (before, at:after) ->
+                let merged = mergeToolCallPair at newCall
+                in before ++ [merged] ++ after
+              (_, []) -> existing  -- Shouldn't happen due to guard above
 
     -- Empty placeholder tool call
     emptyToolCall :: OpenAIToolCall

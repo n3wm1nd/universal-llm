@@ -130,10 +130,10 @@ handleProxy apiKey reqBody = do
   liftIO $ putStrLn "📨 Received response from backend"
 
   -- 5. Parse backend response to universal messages
-  let universalMessages = fromProviderResponse backendProvider backendModel
-                            (proxyConfigs proxyConfig)
-                            (proxyMessages proxyConfig)
-                            response
+  let (_backendProvider', _backendModel', universalMessages) = fromProviderResponse backendProvider backendModel
+                                                                (proxyConfigs proxyConfig)
+                                                                (proxyMessages proxyConfig)
+                                                                response
 
   liftIO $ putStrLn $ "🔄 Converted to " <> show (length universalMessages) <> " universal messages"
 

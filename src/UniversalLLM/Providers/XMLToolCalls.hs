@@ -61,10 +61,6 @@ parseXMLFromResponse txt =
       toolCallMsgs = map (AssistantTool . xmlToolCallToToolCall) parsedCalls
   in (toolCallMsgs, cleanedText)
 
-isAssistantText :: Message model provider -> Bool
-isAssistantText (AssistantText _) = True
-isAssistantText _ = False
-
 -- ============================================================================
 -- Strategy A: Native Tool Support + XML Response Parsing Only
 -- ============================================================================
@@ -80,33 +76,33 @@ withXMLResponseParsing :: forall provider model.
                        -> ComposableProvider provider model
 withXMLResponseParsing base = base `chainProviders` xmlResponseParser
   where
-    xmlResponseParser = ComposableProvider
-      { cpToRequest = \_provider _model _configs _msg req -> req  -- No request modification
-      , cpConfigHandler = \_provider _model _configs req -> req   -- Tool defs use native format
-      , cpFromResponse = parseResponse
-      , cpSerializeMessage = \_ -> Nothing     -- Let base handle serialization
-      , cpDeserializeMessage = \_ -> Nothing   -- Let base handle deserialization
+    xmlResponseParser _p _m _configs = noopHandler
+      { cpFromResponse = parseResponse
+      , cpPureMessageResponse = extractXMLFromMessages
       }
 
-    parseResponse :: ResponseParser provider model
-    parseResponse _provider _model _configs _history acc (OpenAISuccess (OpenAISuccessResponse respChoices)) =
+    parseResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
-        [] -> acc
+        [] -> Nothing
         (OpenAIChoice msg:_) ->
           case content msg of
-            Nothing -> acc
-            Just txt ->
-              let (toolCallMsgs, cleanedText) = parseXMLFromResponse txt
-              in if null toolCallMsgs
-                   then acc  -- No tool calls, let base parser's text through
-                   else
-                     -- Remove AssistantText from acc, add cleaned text + tool calls
-                     let accWithoutText = filter (not . isAssistantText) acc
-                         textMsg = if T.null (T.strip cleanedText)
-                                   then []
-                                   else [AssistantText cleanedText]
-                     in accWithoutText <> textMsg <> toolCallMsgs
-    parseResponse _provider _model _configs _history acc _ = acc
+            Nothing -> Nothing
+            Just txt -> Just (AssistantText txt, OpenAISuccess (OpenAISuccessResponse []))
+    parseResponse _ = Nothing
+
+    extractXMLFromMessages :: [Message model provider] -> [Message model provider]
+    extractXMLFromMessages acc =
+      let (toolCalls, cleanedMsgs) = foldl processMessage ([], []) acc
+      in cleanedMsgs <> toolCalls
+      where
+        processMessage (calls, msgs) (AssistantText txt) =
+          let (toolCallMsgs, cleanedText) = parseXMLFromResponse txt
+          in if null toolCallMsgs
+             then (calls, msgs <> [AssistantText txt])
+             else
+               let cleanMsg = if T.null (T.strip cleanedText) then [] else [AssistantText cleanedText]
+               in (calls <> toolCallMsgs, msgs <> cleanMsg)
+        processMessage (calls, msgs) msg = (calls, msgs <> [msg])
 
 -- ============================================================================
 -- Strategy B: Full XML Tool Support (no native tool support)
@@ -124,34 +120,35 @@ withFullXMLToolSupport :: forall provider model.
                        -> ComposableProvider provider model
 withFullXMLToolSupport base = base `chainProviders` xmlFullSupport
   where
-    xmlFullSupport = ComposableProvider
-      { cpToRequest = handleMessages
-      , cpConfigHandler = injectToolDefinitions
+    xmlFullSupport _p _m configs = noopHandler
+      { cpPureMessageRequest = convertToolsToXML
+      , cpConfigHandler = injectToolDefinitions configs
       , cpFromResponse = parseResponse
-      , cpSerializeMessage = \_ -> Nothing     -- Let base handle serialization
-      , cpDeserializeMessage = \_ -> Nothing   -- Let base handle deserialization
+      , cpPureMessageResponse = extractXMLMessagesFromResponse
       }
 
-    -- Convert tool calls and results to XML text in messages
-    handleMessages :: MessageHandler provider model
-    handleMessages _provider _model _configs msg req = case msg of
-      -- Tool results become XML user messages
-      ToolResultMsg result ->
-        let xmlResult = toolResultToXML result
-            xmlText = encodeXMLToolResult xmlResult
-        in req { messages = messages req <> [OpenAIMessage "user" (Just xmlText) Nothing Nothing Nothing] }
+    -- Convert tool calls and results to XML before encoding
+    convertToolsToXML :: [Message model provider] -> [Message model provider]
+    convertToolsToXML = map convertMessage
+      where
+        convertMessage msg = case msg of
+          -- Tool results become XML text messages (will be encoded as user message by base)
+          ToolResultMsg result ->
+            let xmlResult = toolResultToXML result
+                xmlText = encodeXMLToolResult xmlResult
+            in UserText xmlText  -- Will get encoded as user's tool result response
 
-      -- Tool calls become XML assistant messages
-      AssistantTool toolCall ->
-        let xmlCall = toolCallToXMLText toolCall
-        in req { messages = messages req <> [OpenAIMessage "assistant" (Just xmlCall) Nothing Nothing Nothing] }
+          -- Tool calls become XML text (will be encoded as assistant message by base)
+          AssistantTool toolCall ->
+            let xmlCall = toolCallToXMLText toolCall
+            in AssistantText xmlCall
 
-      _ -> req
+          _ -> msg
 
     -- Inject tool definitions into system prompt
-    injectToolDefinitions :: ConfigHandler provider model
-    injectToolDefinitions _provider _model configs req =
-      let toolDefs = concat [defs | Tools defs <- configs]
+    injectToolDefinitions :: [ModelConfig provider model] -> ConfigEncoder provider model
+    injectToolDefinitions cfgs req =
+      let toolDefs = concat [defs | Tools defs <- cfgs]
       in if null toolDefs
            then req
            else
@@ -168,21 +165,26 @@ withFullXMLToolSupport base = base `chainProviders` xmlFullSupport
         isSystemMessage _ = False
 
     -- Parse XML from responses
-    parseResponse :: ResponseParser provider model
-    parseResponse _provider _model _configs _history acc (OpenAISuccess (OpenAISuccessResponse respChoices)) =
+    parseResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
-        [] -> acc
+        [] -> Nothing
         (OpenAIChoice msg:_) ->
           case content msg of
-            Nothing -> acc
-            Just txt ->
-              let (toolCallMsgs, cleanedText) = parseXMLFromResponse txt
-              in if null toolCallMsgs
-                   then acc
-                   else
-                     let accWithoutText = filter (not . isAssistantText) acc
-                         textMsg = if T.null (T.strip cleanedText)
-                                   then []
-                                   else [AssistantText cleanedText]
-                     in accWithoutText <> textMsg <> toolCallMsgs
-    parseResponse _provider _model _configs _history acc _ = acc
+            Nothing -> Nothing
+            Just txt -> Just (AssistantText txt, OpenAISuccess (OpenAISuccessResponse []))
+    parseResponse _ = Nothing
+
+    -- Extract XML tool calls from parsed text messages
+    extractXMLMessagesFromResponse :: [Message model provider] -> [Message model provider]
+    extractXMLMessagesFromResponse acc =
+      let (toolCalls, cleanedMsgs) = foldl processMessage ([], []) acc
+      in cleanedMsgs <> toolCalls
+      where
+        processMessage (calls, msgs) (AssistantText txt) =
+          let (toolCallMsgs, cleanedText) = parseXMLFromResponse txt
+          in if null toolCallMsgs
+             then (calls, msgs <> [AssistantText txt])
+             else
+               let cleanMsg = if T.null (T.strip cleanedText) then [] else [AssistantText cleanedText]
+               in (calls <> toolCallMsgs, msgs <> cleanMsg)
+        processMessage (calls, msgs) msg = (calls, msgs <> [msg])

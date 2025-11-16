@@ -67,7 +67,9 @@ parseResponse :: ProviderImplementation provider model
               -> [Message model provider]  -- history
               -> ProviderResponse provider
               -> [Message model provider]
-parseResponse = fromProviderResponse
+parseResponse provider model configs history resp =
+  let (_provider, _model, msgs) = fromProviderResponse provider model configs history resp
+  in msgs
 
 -- Create a mock OpenAI response with text content
 mockTextResponse :: Text -> OpenAIResponse

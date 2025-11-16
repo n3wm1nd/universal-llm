@@ -16,10 +16,7 @@
 module UniversalLLM.Core.Types where
 
 import Data.Text (Text)
-import qualified Data.Text as T
-import Data.Aeson (Value, Object, (.=), (.:))
-import qualified Data.Aeson as Aeson
-import qualified Data.Aeson.Types as Aeson
+import Data.Aeson (Value)
 import Control.Applicative ((<|>))
 
 
@@ -127,82 +124,78 @@ class Provider provider model => CompletionProvider provider model where
 
 
 -- ============================================================================
--- Composition Operator for Parameter Threading
+-- Handler Types
 -- ============================================================================
 
--- Threads common parameters through function composition
--- The first 4 parameters (p, m, cfg, msg) are automatically passed to both functions
-infixl 1 >>>
-(>>>) :: (p -> m -> cfg -> msg -> a -> b)
-      -> (p -> m -> cfg -> msg -> b -> c)
-      -> (p -> m -> cfg -> msg -> a -> c)
-f >>> g = \p m cfg msg a -> g p m cfg msg (f p m cfg msg a)
+-- Handler for encoding a single message into a request patch
+type MessageEncoder provider model =
+  Message model provider -> ProviderRequest provider -> ProviderRequest provider
 
--- ============================================================================
--- Handler Types (now just type aliases, no newtypes)
--- ============================================================================
+-- Handler for modifying request based on configs
+type ConfigEncoder provider model =
+  ProviderRequest provider -> ProviderRequest provider
 
--- A handler processes one message at a time, transforming the request
-type MessageHandler provider model =
-  provider
-  -> model
-  -> [ModelConfig provider model]
-  -> Message model provider
-  -> ProviderRequest provider
-  -> ProviderRequest provider
+-- Handler for unfolding response into individual provider messages
+-- Returns one message at a time, plus remaining response
+type ResponseUnfolder provider model =
+  ProviderResponse provider -> Maybe (Message model provider, ProviderResponse provider)
 
--- A parser extracts messages from a response and can transform previously parsed messages
--- Takes: provider, model, configs, message history, accumulated messages, response -> produces final messages
--- Having full context allows intelligent interpretation (e.g., checking if JSON was requested)
-type ResponseParser provider model =
-  provider
-  -> model
-  -> [ModelConfig provider model]
-  -> [Message model provider]  -- history (input messages)
-  -> [Message model provider]  -- accumulator (parsed messages so far)
-  -> ProviderResponse provider
-  -> [Message model provider]
+-- Collection of handlers for a specific provider/model/config combination
+data ComposableProviderHandlers provider model = ComposableProviderHandlers
+  { -- Request building phase
+    cpPureMessageRequest :: [Message model provider] -> [Message model provider]
+  , cpToRequest :: MessageEncoder provider model
+  , cpConfigHandler :: ConfigEncoder provider model
 
--- Config handler: processes configs after messages (e.g., for system prompts, tools)
-type ConfigHandler provider model =
-  provider
-  -> model
-  -> [ModelConfig provider model]
-  -> ProviderRequest provider
-  -> ProviderRequest provider
+  -- Response parsing phase
+  , cpFromResponse :: ResponseUnfolder provider model
+  , cpUpdateState :: ProviderResponse provider -> (provider, model) -> (provider, model)
+  , cpPureMessageResponse :: [Message model provider] -> [Message model provider]
 
--- Composable bidirectional provider (couples toRequest and fromResponse)
-data ComposableProvider provider model = ComposableProvider
-  { cpToRequest :: MessageHandler provider model
-  , cpConfigHandler :: ConfigHandler provider model  -- Applied after message processing
-  , cpFromResponse :: ResponseParser provider model
+  -- Serialization
   , cpSerializeMessage :: Message model provider -> Maybe Value
   , cpDeserializeMessage :: Value -> Maybe (Message model provider)
   }
 
+-- ComposableProvider is now a function that builds handlers given context
+type ComposableProvider provider model =
+  provider -> model -> [ModelConfig provider model] -> ComposableProviderHandlers provider model
+
+-- No-op handler collection (all functions are identity or return Nothing)
+noopHandler :: ComposableProviderHandlers provider model
+noopHandler = ComposableProviderHandlers
+  { cpPureMessageRequest = id
+  , cpToRequest = \_ req -> req
+  , cpConfigHandler = id
+  , cpFromResponse = \_ -> Nothing
+  , cpUpdateState = \_ (p, m) -> (p, m)
+  , cpPureMessageResponse = id
+  , cpSerializeMessage = \_ -> Nothing
+  , cpDeserializeMessage = \_ -> Nothing
+  }
+
+-- Chain two handler collections together
+chainProvidersAt :: ComposableProviderHandlers provider model -> ComposableProviderHandlers provider model -> ComposableProviderHandlers provider model
+chainProvidersAt h1 h2 = ComposableProviderHandlers
+  { cpPureMessageRequest = cpPureMessageRequest h2 . cpPureMessageRequest h1
+  , cpToRequest = \msg req -> cpToRequest h2 msg (cpToRequest h1 msg req)
+  , cpConfigHandler = cpConfigHandler h2 . cpConfigHandler h1
+  , cpFromResponse = \resp -> case cpFromResponse h1 resp of
+      Just (msg, resp') -> Just (msg, resp')
+      Nothing -> cpFromResponse h2 resp
+  , cpUpdateState = \resp (p', m') -> cpUpdateState h2 resp (cpUpdateState h1 resp (p', m'))
+  , cpPureMessageResponse = cpPureMessageResponse h2 . cpPureMessageResponse h1
+  , cpSerializeMessage = \msg -> cpSerializeMessage h1 msg <|> cpSerializeMessage h2 msg
+  , cpDeserializeMessage = \val -> cpDeserializeMessage h1 val <|> cpDeserializeMessage h2 val
+  }
+
 -- Chain two providers together, applying cp1 first then cp2
--- This replaces the previous Semigroup (<>) instance with explicit naming
 infixl 6 `chainProviders`
 chainProviders :: ComposableProvider provider model
                -> ComposableProvider provider model
                -> ComposableProvider provider model
-chainProviders cp1 cp2 = ComposableProvider
-  { cpToRequest = \provider model configs msg req ->
-      let req' = cpToRequest cp1 provider model configs msg req
-      in cpToRequest cp2 provider model configs msg req'
-  , cpConfigHandler = \provider model configs req ->
-      let req' = cpConfigHandler cp1 provider model configs req
-      in cpConfigHandler cp2 provider model configs req'
-  , cpFromResponse = \provider model configs history acc resp ->
-      let acc' = cpFromResponse cp1 provider model configs history acc resp
-      in cpFromResponse cp2 provider model configs history acc' resp
-  -- Serialization: try cp1 first, then cp2 (Alternative composition)
-  , cpSerializeMessage = \msg ->
-      cpSerializeMessage cp1 msg <|> cpSerializeMessage cp2 msg
-  -- Deserialization: try cp1 first, then cp2 (Alternative composition)
-  , cpDeserializeMessage = \val ->
-      cpDeserializeMessage cp1 val <|> cpDeserializeMessage cp2 val
-  }
+chainProviders cp1 cp2 p m configs =
+  (cp1 p m configs) `chainProvidersAt` (cp2 p m configs)
 
 -- Helper functions for building requests and parsing responses
 
@@ -216,13 +209,14 @@ toProviderRequest :: (ProviderImplementation provider model, Monoid (ProviderReq
                   -> ProviderRequest provider
 toProviderRequest provider model configs msgs =
   let composableProvider = getComposableProvider
-      messageHandler = cpToRequest composableProvider
-      configHandler = cpConfigHandler composableProvider
-      -- Start with mempty and fold over messages
-      fold acc msg = messageHandler provider model configs msg acc
-      reqAfterMessages = foldl fold mempty msgs
-      -- Second: apply config handlers
-  in configHandler provider model configs reqAfterMessages
+      handlers = composableProvider provider model configs
+      -- Apply pure message transformations first
+      pureMessages = cpPureMessageRequest handlers msgs
+      -- Fold over messages, encoding each one
+      fold acc msg = cpToRequest handlers msg acc
+      reqAfterMessages = foldl fold mempty pureMessages
+      -- Apply config handler
+  in cpConfigHandler handlers reqAfterMessages
 
 -- Parse a provider response using the model's provider implementation
 fromProviderResponse :: ProviderImplementation provider model
@@ -231,11 +225,22 @@ fromProviderResponse :: ProviderImplementation provider model
                      -> [ModelConfig provider model]
                      -> [Message model provider]  -- history
                      -> ProviderResponse provider
-                     -> [Message model provider]
-fromProviderResponse provider model configs history resp =
+                     -> (provider, model, [Message model provider])
+fromProviderResponse provider model configs _history resp =
   let composableProvider = getComposableProvider
-      parser = cpFromResponse composableProvider
-  in parser provider model configs history [] resp
+      handlers = composableProvider provider model configs
+      -- Unfold response into messages
+      messages = unfoldMessages (cpFromResponse handlers) resp
+      -- Apply pure message transformations
+      pureMessages = cpPureMessageResponse handlers messages
+      -- Update state
+      (provider', model') = cpUpdateState handlers resp (provider, model)
+  in (provider', model', pureMessages)
+  where
+    unfoldMessages unfolder response =
+      case unfolder response of
+        Just (msg, resp') -> msg : unfoldMessages unfolder resp'
+        Nothing -> []
 
 -- GADT Messages with capability constraints
 data Message model provider where

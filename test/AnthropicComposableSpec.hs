@@ -35,7 +35,7 @@ parseResponse :: forall model. (ProviderImplementation Provider.Anthropic model,
               -> AnthropicResponse
               -> Either LLMError [Message model Provider.Anthropic]
 parseResponse model configs history resp =
-  let msgs = fromProviderResponse Provider.Anthropic model configs history resp
+  let (_provider, _model, msgs) = fromProviderResponse Provider.Anthropic model configs history resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs
