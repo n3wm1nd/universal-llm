@@ -159,9 +159,11 @@ baseComposableProvider p m configs = noopHandler
     parseTextResponse (AnthropicError err) =
       error $ "Anthropic API error: " ++ show (errorType err) ++ ": " ++ show (errorMessage err)
     parseTextResponse (AnthropicSuccess resp) =
-      case [txt | AnthropicTextBlock txt <- responseContent resp] of
-        (txt:_) -> Just (AssistantText txt, AnthropicSuccess resp { responseContent = [] })
-        [] -> Nothing
+      case responseContent resp of
+        (AnthropicTextBlock txt : rest) ->
+          -- First block is text, extract it
+          Just (AssistantText txt, AnthropicSuccess resp { responseContent = rest })
+        _ -> Nothing  -- First block is not text, let another provider handle it
 
 -- Standalone tools provider
 anthropicTools :: forall model . (HasTools model Anthropic) => ComposableProvider Anthropic model
@@ -178,13 +180,11 @@ anthropicTools _p _m configs = noopHandler
     parseToolResponse (AnthropicError err) =
       error $ "Anthropic API error: " ++ show (errorType err) ++ ": " ++ show (errorMessage err)
     parseToolResponse (AnthropicSuccess resp) =
-      case [AnthropicToolUseBlock tid tname tinput | AnthropicToolUseBlock tid tname tinput <- responseContent resp] of
-        (AnthropicToolUseBlock tid tname tinput : _) ->
-          let remainingContent = [c | c@(AnthropicToolUseBlock _ _ _) <- responseContent resp]
-              newResp = resp { responseContent = drop 1 remainingContent }
-          in Just (AssistantTool (ToolCall tid tname tinput), AnthropicSuccess newResp)
-        [] -> Nothing
-        _ -> Nothing  -- Shouldn't happen, but needed for completeness
+      case responseContent resp of
+        (AnthropicToolUseBlock tid tname tinput : rest) ->
+          -- First block is a tool call, extract it
+          Just (AssistantTool (ToolCall tid tname tinput), AnthropicSuccess resp { responseContent = rest })
+        _ -> Nothing  -- First block is not a tool call, let another provider handle it
 
 -- Standalone reasoning provider
 anthropicReasoning :: forall model . (HasReasoning model Anthropic) => ComposableProvider Anthropic model
@@ -209,12 +209,11 @@ anthropicReasoning _p _m configs = noopHandler
 
     parseReasoningResponse (AnthropicError _) = Nothing
     parseReasoningResponse (AnthropicSuccess resp) =
-      case [thinking | AnthropicThinkingBlock thinking <- responseContent resp] of
-        (thinking:_) ->
-          let remainingContent = [c | c@(AnthropicThinkingBlock _) <- responseContent resp]
-              newResp = resp { responseContent = drop 1 remainingContent }
-          in Just (AssistantReasoning thinking, AnthropicSuccess newResp)
-        [] -> Nothing
+      case responseContent resp of
+        (AnthropicThinkingBlock thinking : rest) ->
+          -- First block is thinking, extract it
+          Just (AssistantReasoning thinking, AnthropicSuccess resp { responseContent = rest })
+        _ -> Nothing  -- First block is not thinking, let another provider handle it
 
 -- Backward compatibility wrappers using chainProviders
 anthropicWithTools :: forall model . (HasTools model Anthropic) => ComposableProvider Anthropic model -> ComposableProvider Anthropic model

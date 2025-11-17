@@ -6,6 +6,7 @@ import Test.Hspec
 import qualified CachedIntegrationSpec
 import qualified ComposableHandlersSpec
 import qualified OpenAIComposableSpec
+import qualified OpenAIStreamingSpec
 import qualified AnthropicComposableSpec
 import qualified AnthropicStreamingSpec
 import qualified PropertySpec
@@ -88,6 +89,20 @@ main = do
           in wrappedCall
         _ -> \req -> TestCache.playbackModeRaw cachePath (AnthropicProvider.withMagicSystemPrompt req)
 
+  -- Build OpenAI streaming response provider (for SSE responses)
+  let openaiStreamingProvider :: TestCache.ResponseProvider OpenAIRequest BSL.ByteString
+      openaiStreamingProvider = case mode of
+        Just "record" | Just url <- openaiUrl ->
+          TestCache.recordModeRaw cachePath $
+            TestHTTP.httpCallStreaming (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
+        Just "update" | Just url <- openaiUrl ->
+          TestCache.updateModeRaw cachePath $
+            TestHTTP.httpCallStreaming (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
+        Just "live" | Just url <- openaiUrl ->
+          TestCache.liveMode $
+            TestHTTP.httpCallStreaming (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
+        _ -> TestCache.playbackModeRaw cachePath
+
   -- Build Completion response provider (for /v1/completions endpoint)
   let completionProvider :: TestCache.ResponseProvider OpenAICompletionRequest OpenAICompletionResponse
       completionProvider = case mode of
@@ -121,6 +136,7 @@ main = do
 
     -- Composable provider integration tests
     describe "OpenAI Composable Provider (cached)" $ OpenAIComposableSpec.spec openaiProvider
+    describe "OpenAI Streaming Provider (cached)" $ OpenAIStreamingSpec.spec openaiStreamingProvider
     describe "Anthropic Composable Provider (cached)" $ AnthropicComposableSpec.spec anthropicProvider
     describe "Anthropic Streaming Provider (cached)" $ AnthropicStreamingSpec.spec anthropicStreamingProvider
 

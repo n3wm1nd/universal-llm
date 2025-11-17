@@ -333,6 +333,7 @@ instance HasCodec OpenAICompletionSuccessResponse where
 -- | Represents what's in a streaming delta
 data DeltaContent
     = ContentDelta Text
+    | ReasoningContentDelta Text
     | ToolCallsDelta [(Int, OpenAIToolCall)]  -- List of (index, toolCall) pairs
     | EmptyDelta
 
@@ -347,6 +348,8 @@ mergeOpenAIDelta acc chunk =
             case extractDelta chunk of
                 Just (ContentDelta txt) ->
                     OpenAISuccess $ OpenAISuccessResponse $ mergeContentDelta choices txt
+                Just (ReasoningContentDelta txt) ->
+                    OpenAISuccess $ OpenAISuccessResponse $ mergeReasoningContentDelta choices txt
                 Just (ToolCallsDelta toolCallDeltas) ->
                     OpenAISuccess $ OpenAISuccessResponse $ mergeToolCallsDelta choices toolCallDeltas
                 Just EmptyDelta ->
@@ -368,17 +371,21 @@ mergeOpenAIDelta acc chunk =
         case KM.lookup "content" delta of
             Just (Aeson.String txt) -> return $ ContentDelta txt
             _ ->
-                -- Try tool_calls
-                case KM.lookup "tool_calls" delta of
-                    Just (Aeson.Array toolCallsArr) -> do
-                        -- Manually parse each tool call from the array
-                        -- Each delta has an "index" field indicating which tool call it updates
-                        let parsedCalls = [(idx, tc) | Aeson.Object tcObj <- V.toList toolCallsArr
-                                                     , Just (idx, tc) <- [parseToolCallDelta tcObj]]
-                        if null parsedCalls
-                            then return EmptyDelta
-                            else return $ ToolCallsDelta parsedCalls
-                    _ -> return EmptyDelta  -- No content or tool_calls
+                -- Try reasoning_content
+                case KM.lookup "reasoning_content" delta of
+                    Just (Aeson.String txt) -> return $ ReasoningContentDelta txt
+                    _ ->
+                        -- Try tool_calls
+                        case KM.lookup "tool_calls" delta of
+                            Just (Aeson.Array toolCallsArr) -> do
+                                -- Manually parse each tool call from the array
+                                -- Each delta has an "index" field indicating which tool call it updates
+                                let parsedCalls = [(idx, tc) | Aeson.Object tcObj <- V.toList toolCallsArr
+                                                             , Just (idx, tc) <- [parseToolCallDelta tcObj]]
+                                if null parsedCalls
+                                    then return EmptyDelta
+                                    else return $ ToolCallsDelta parsedCalls
+                            _ -> return EmptyDelta  -- No content, reasoning_content, or tool_calls
     extractDelta _ = Nothing
 
     -- Parse a single tool call delta from JSON object
@@ -414,6 +421,13 @@ mergeOpenAIDelta acc chunk =
     mergeContentDelta [OpenAIChoice msg] txt =
         [OpenAIChoice (msg { content = Just $ maybe txt (<> txt) (content msg) })]
     mergeContentDelta xs _ = xs
+
+    mergeReasoningContentDelta :: [OpenAIChoice] -> Text -> [OpenAIChoice]
+    mergeReasoningContentDelta [] txt =
+        [OpenAIChoice (OpenAIMessage "assistant" Nothing (Just txt) Nothing Nothing)]
+    mergeReasoningContentDelta [OpenAIChoice msg] txt =
+        [OpenAIChoice (msg { reasoning_content = Just $ maybe txt (<> txt) (reasoning_content msg), content = content msg })]
+    mergeReasoningContentDelta xs _ = xs
 
     mergeToolCallsDelta :: [OpenAIChoice] -> [(Int, OpenAIToolCall)] -> [OpenAIChoice]
     mergeToolCallsDelta [] indexedCalls =

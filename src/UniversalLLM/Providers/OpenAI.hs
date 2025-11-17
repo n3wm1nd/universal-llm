@@ -272,11 +272,15 @@ baseComposableProvider _p m configs = noopHandler
 
     parseTextResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
-        [] -> Nothing
-        (OpenAIChoice msg:_) ->
+        (OpenAIChoice msg:rest) ->
           case content msg of
-            Just txt -> Just (AssistantText txt, OpenAISuccess (OpenAISuccessResponse []))
+            Just txt ->
+              -- Extract text but preserve reasoning_content and other fields in the choice
+              let updatedMsg = msg { content = Nothing }
+                  newChoices = OpenAIChoice updatedMsg : rest
+              in Just (AssistantText txt, OpenAISuccess (OpenAISuccessResponse newChoices))
             Nothing -> Nothing
+        [] -> Nothing
     parseTextResponse _ = Nothing
 
 -- Standalone reasoning provider
@@ -284,18 +288,43 @@ openAIReasoning :: forall provider model. (HasReasoning model provider, Provider
 openAIReasoning _p _m _configs = noopHandler
   { cpToRequest = handleReasoningMessage
   , cpFromResponse = parseReasoningResponse
+  , cpPureMessageResponse = orderReasoningBeforeText
   , cpSerializeMessage = serializeReasoningMessages
   , cpDeserializeMessage = deserializeReasoningMessages
   }
   where
     parseReasoningResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
-        [] -> Nothing
-        (OpenAIChoice msg:_) ->
+        (OpenAIChoice msg:rest) ->
           case reasoning_content msg of
-            Just txt -> Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse []))
+            Just txt ->
+              -- Extract reasoning but preserve content and other fields in the choice
+              let updatedMsg = msg { reasoning_content = Nothing }
+                  newChoices = OpenAIChoice updatedMsg : rest
+              in Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse newChoices))
             Nothing -> Nothing
+        [] -> Nothing
     parseReasoningResponse _ = Nothing
+
+    -- Move reasoning messages before text in the same sequence
+    -- When we encounter reasoning after text, put reasoning first, then text
+    orderReasoningBeforeText :: [Message model provider] -> [Message model provider]
+    orderReasoningBeforeText = go [] []
+      where
+        go accum reasoning [] = reasoning ++ accum
+        go accum reasoning (m@(AssistantReasoning _) : rest) =
+          let hasText = any isAssistantText accum
+          in if hasText
+             -- Text comes before reasoning, so put reasoning first in output
+             then [m] ++ reasoning ++ accum ++ go [] [] rest
+             else go accum (reasoning ++ [m]) rest
+        go accum reasoning (m@(AssistantText _) : rest) =
+          go (accum ++ [m]) reasoning rest
+        go accum reasoning (m : rest) =
+          go (accum ++ [m]) reasoning rest
+
+    isAssistantText (AssistantText _) = True
+    isAssistantText _ = False
 
 -- Standalone tools provider
 openAITools :: forall provider model. (HasTools model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
@@ -311,11 +340,15 @@ openAITools _p _m configs = noopHandler
   where
     parseToolResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
-        [] -> Nothing
-        (OpenAIChoice msg:_) ->
+        (OpenAIChoice msg:rest) ->
           case tool_calls msg of
-            Just (tc:_) -> Just (AssistantTool (convertToolCall tc), OpenAISuccess (OpenAISuccessResponse []))
+            Just (tc:remainingTCs) ->
+              -- Extract first tool call but preserve remaining tool calls and other fields
+              let updatedMsg = msg { tool_calls = if null remainingTCs then Nothing else Just remainingTCs }
+                  newChoices = OpenAIChoice updatedMsg : rest
+              in Just (AssistantTool (convertToolCall tc), OpenAISuccess (OpenAISuccessResponse newChoices))
             _ -> Nothing
+        [] -> Nothing
     parseToolResponse _ = Nothing
 
 -- Standalone JSON provider

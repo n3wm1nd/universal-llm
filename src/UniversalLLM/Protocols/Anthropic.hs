@@ -277,9 +277,12 @@ mergeAnthropicDelta acc chunk =
                 Just block -> AnthropicSuccess $ addContentBlock resp block
                 Nothing -> acc
         (AnthropicSuccess resp, Just "content_block_delta") ->
-            case asum [fmap (appendText resp) (extractTextDelta chunk), fmap (appendToolInput resp) (extractInputJsonDelta chunk), fmap (appendThinking resp) (extractThinkingDelta chunk)] of
-                Just updated -> AnthropicSuccess updated
+            case extractDeltaIndex chunk of
                 Nothing -> acc
+                Just idx ->
+                    case asum [fmap (appendTextAt idx resp) (extractTextDelta chunk), fmap (appendToolInputAt idx resp) (extractInputJsonDelta chunk), fmap (appendThinkingAt idx resp) (extractThinkingDelta chunk)] of
+                        Just updated -> AnthropicSuccess updated
+                        Nothing -> acc
         (AnthropicSuccess resp, Just "message_delta") ->
             case extractStopReason chunk of
                 Just reason -> AnthropicSuccess $ setStopReason resp reason
@@ -306,6 +309,43 @@ mergeAnthropicDelta acc chunk =
         return reason
     extractStopReason _ = Nothing
 
+    extractDeltaIndex :: Value -> Maybe Int
+    extractDeltaIndex (Aeson.Object obj) = do
+        Aeson.Number idx <- KM.lookup "index" obj
+        return $ round idx
+    extractDeltaIndex _ = Nothing
+
+    appendTextAt :: Int -> AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
+    appendTextAt idx resp text =
+        resp { responseContent = updateBlockAt idx (appendToText text) (responseContent resp) }
+      where
+        appendToText t (AnthropicTextBlock existing) = AnthropicTextBlock (existing <> t)
+        appendToText _ block = block
+
+    appendThinkingAt :: Int -> AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
+    appendThinkingAt idx resp thinking =
+        resp { responseContent = updateBlockAt idx (appendToThinking thinking) (responseContent resp) }
+      where
+        appendToThinking t (AnthropicThinkingBlock existing) = AnthropicThinkingBlock (existing <> t)
+        appendToThinking _ block = block
+
+    appendToolInputAt :: Int -> AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
+    appendToolInputAt idx resp jsonDelta =
+        resp { responseContent = updateBlockAt idx (appendToTool jsonDelta) (responseContent resp) }
+      where
+        appendToTool jd (AnthropicToolUseBlock toolId toolName currentInput) =
+            let accumulatedJson = case currentInput of
+                    Aeson.String s -> s <> jd
+                    _ -> jd
+                parsedInput = case Aeson.decode (BSL.fromStrict (encodeUtf8 accumulatedJson)) of
+                    Just val -> val
+                    Nothing -> Aeson.String accumulatedJson
+            in AnthropicToolUseBlock toolId toolName parsedInput
+        appendToTool _ block = block
+
+    updateBlockAt :: Int -> (AnthropicContentBlock -> AnthropicContentBlock) -> [AnthropicContentBlock] -> [AnthropicContentBlock]
+    updateBlockAt idx f blocks = take idx blocks ++ [f (blocks !! idx)] ++ drop (idx + 1) blocks
+
     initializeFromMessageStart :: Value -> AnthropicResponse
     initializeFromMessageStart (Aeson.Object _obj) =
         -- Extract initial message metadata if present
@@ -317,8 +357,13 @@ mergeAnthropicDelta acc chunk =
     appendText resp text =
         case responseContent resp of
             [] -> resp { responseContent = [AnthropicTextBlock text] }
-            [AnthropicTextBlock existing] -> resp { responseContent = [AnthropicTextBlock (existing <> text)] }
-            xs -> resp  -- Preserve if more complex content
+            blocks -> resp { responseContent = updateTextBlock blocks }
+      where
+        updateTextBlock [] = []
+        updateTextBlock (AnthropicTextBlock existing : rest) =
+            AnthropicTextBlock (existing <> text) : rest
+        updateTextBlock (block : rest) =
+            block : updateTextBlock rest
 
     setStopReason :: AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
     setStopReason resp reason = resp { responseStopReason = Just reason }
