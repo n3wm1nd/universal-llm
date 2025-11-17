@@ -475,6 +475,175 @@ prop_anthropicMultipleReasoningMessages = forAll reasoningSequence $ \msgs ->
       return (reasoning1 : reasoning2 : remaining)
 
 -- ============================================================================
+-- Full-stack roundtrip tests (request serialization & response parsing)
+-- ============================================================================
+
+-- | Full-stack test: OpenAI with tools and reasoning - serialize request
+-- Tests the full provider pipeline with a model that has both tools and reasoning
+prop_openaiFullStackRequestWithToolsAndReasoning :: Property
+prop_openaiFullStackRequestWithToolsAndReasoning = forAll genMessages $ \msgs ->
+  let configs = [MaxTokens 16000, Tools [ToolDefinition "test_tool" "A test tool" (object [])]]
+      req = toProviderRequest OpenAIProvider.OpenAI GLM45 configs msgs
+      -- Verify the request has messages
+      requestMsgCount = length (OP.messages req)
+      -- Verify model is set
+      modelSet = OP.model req /= ""
+      -- Verify tools are in request
+      hasTools = OP.tools req /= Nothing
+  in counterexample ("Generated messages: " ++ show (length msgs) ++
+                     ", Request messages: " ++ show requestMsgCount ++
+                     ", Model set: " ++ show modelSet ++
+                     ", Tools configured: " ++ show hasTools)
+       (requestMsgCount >= 1 .&&. modelSet .&&. hasTools)
+  where
+    genMessages = listOf1 genMessageOpenAIFull
+
+-- | Full-stack test: Anthropic with tools and reasoning - serialize request
+-- Tests the full provider pipeline with a model that has both tools and reasoning
+prop_anthropicFullStackRequestWithToolsAndReasoning :: Property
+prop_anthropicFullStackRequestWithToolsAndReasoning = forAll genMessages $ \msgs ->
+  let configs = [MaxTokens 16000, Reasoning True, Tools [ToolDefinition "test_tool" "A test tool" (object [])]]
+      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45WithReasoning configs msgs
+      -- Verify the request has messages
+      requestMsgCount = length (AP.messages req)
+      -- Verify model is set
+      modelSet = AP.model req /= ""
+      -- Verify messages alternate between user and assistant
+      roles = map AP.role (AP.messages req)
+      alternates = checkAlternating roles
+      -- Verify reasoning is enabled
+      reasoningEnabled = AP.thinking req /= Nothing
+  in counterexample ("Generated messages: " ++ show (length msgs) ++
+                     ", Request messages: " ++ show requestMsgCount ++
+                     ", Model set: " ++ show modelSet ++
+                     ", Alternates: " ++ show alternates ++
+                     ", Reasoning enabled: " ++ show reasoningEnabled)
+       (requestMsgCount >= 1 .&&. modelSet .&&. alternates .&&. reasoningEnabled)
+  where
+    checkAlternating [] = True
+    checkAlternating [_] = True
+    checkAlternating (r1:r2:rest)
+      | r1 == r2 = False
+      | otherwise = checkAlternating (r2:rest)
+
+    genMessages = listOf1 genMessageAnthropicReasoningTools
+
+-- | Full-stack response parsing test: Parse OpenAI responses through composable provider pipeline
+-- Actually use the provider's fromProviderResponse to parse messages including reasoning
+prop_openaiResponseParsingWithToolsAndReasoning :: Property
+prop_openaiResponseParsingWithToolsAndReasoning = forAll genResponse $ \(msgs, resp) ->
+  let configs = []
+      -- Use the actual provider pipeline to parse the response
+      (_provider, _model, parsedMsgs) = fromProviderResponse OpenAIProvider.OpenAI GLM45 configs msgs resp
+  in counterexample ("Generated messages: " ++ show (length msgs) ++
+                     ", Parsed messages: " ++ show (length parsedMsgs))
+       (length parsedMsgs >= 1 || null msgs)  -- Either we parsed messages or generated empty input
+  where
+    genResponse = do
+      -- Generate a list of messages for GLM45 (with tools and reasoning)
+      msgs <- listOf1 genMessageOpenAIFull
+      -- Create a mock response with text, reasoning, or tool calls
+      responseMsg <- oneof
+        [ -- Text response
+          OP.OpenAIMessage "assistant" <$> (Just <$> genNonEmptyText) <*> pure Nothing <*> pure Nothing <*> pure Nothing
+        , -- Reasoning response
+          OP.OpenAIMessage "assistant" <$> pure Nothing <*> (Just <$> genNonEmptyText) <*> pure Nothing <*> pure Nothing
+        , -- Tool call response
+          do tcId <- genNonEmptyText
+             tcName <- genNonEmptyText
+             let tc = OP.OpenAIToolCall tcId "function" (OP.OpenAIToolFunction tcName "{}")
+             return $ OP.OpenAIMessage "assistant" Nothing Nothing (Just [tc]) Nothing
+        ]
+      let resp = OP.OpenAISuccess (OP.OpenAISuccessResponse [OP.OpenAIChoice responseMsg])
+      return (msgs, resp)
+
+-- | Full-stack response parsing test: Parse Anthropic responses through composable provider pipeline
+-- Actually use the provider's fromProviderResponse to parse messages including thinking blocks
+prop_anthropicResponseParsingWithToolsAndReasoning :: Property
+prop_anthropicResponseParsingWithToolsAndReasoning = forAll genResponse $ \(msgs, resp) ->
+  let configs = [Reasoning True]
+      -- Use the actual provider pipeline to parse the response (with reasoning enabled)
+      (_provider, _model, parsedMsgs) = fromProviderResponse AnthropicProvider.Anthropic ClaudeSonnet45WithReasoning configs msgs resp
+  in counterexample ("Generated messages: " ++ show (length msgs) ++
+                     ", Parsed messages: " ++ show (length parsedMsgs))
+       (length parsedMsgs >= 1 || null msgs)  -- Either we parsed messages or generated empty input
+  where
+    genResponse = do
+      -- Generate a list of messages for ClaudeSonnet45WithReasoning (with tools and reasoning)
+      msgs <- listOf1 genMessageAnthropicReasoningTools
+      -- Create a mock response with various content block types
+      contentBlocks <- listOf1 $ oneof
+        [ AP.AnthropicTextBlock <$> genNonEmptyText
+        , AP.AnthropicThinkingBlock <$> genNonEmptyText
+        , AP.AnthropicToolUseBlock <$> genNonEmptyText <*> genNonEmptyText <*> genSimpleValue
+        ]
+      let successResp = AP.AnthropicSuccessResponse
+            { AP.responseId = "test-response-id"
+            , AP.responseModel = "claude-sonnet-4.5"
+            , AP.responseRole = "assistant"
+            , AP.responseContent = contentBlocks
+            , AP.responseStopReason = Just "end_turn"
+            , AP.responseUsage = AP.AnthropicUsage 100 200
+            }
+          resp = AP.AnthropicSuccess successResp
+      return (msgs, resp)
+
+-- | Full-stack provider pipeline test: Multiple messages through composable providers
+-- Verify that composable providers handle text message sequences correctly
+prop_openaiComposableProviderPipeline :: Property
+prop_openaiComposableProviderPipeline = forAll genMessages $ \msgs ->
+  let -- Apply the provider's message handler to each message sequentially
+      emptyReq = OP.OpenAIRequest "" [] Nothing Nothing Nothing Nothing Nothing Nothing
+      finalReq = foldl (\req msg -> OpenAIProvider.handleTextMessage msg req) emptyReq msgs
+      -- Verify messages were accumulated (only text messages are handled)
+      msgCount = length (OP.messages finalReq)
+      -- Count how many text messages were in the input
+      textMsgCount = length [m | m <- msgs, isTextMessage m]
+  in counterexample ("Generated messages: " ++ show (length msgs) ++
+                     ", Text messages: " ++ show textMsgCount ++
+                     ", Final request messages: " ++ show msgCount)
+       (if textMsgCount == 0 then msgCount == 0 else msgCount >= 1)
+  where
+    isTextMessage (UserText _) = True
+    isTextMessage (AssistantText _) = True
+    isTextMessage (SystemText _) = True
+    isTextMessage _ = False
+
+    genMessages = listOf genMessageOpenAIFull
+
+-- | Full-stack provider pipeline test: Anthropic composable provider message accumulation
+-- Verify that handleTextMessage properly groups consecutive messages and maintains alternation
+prop_anthropicComposableProviderPipeline :: Property
+prop_anthropicComposableProviderPipeline = forAll genMessages $ \msgs ->
+  let -- Apply the provider's message handler to each message sequentially
+      emptyReq = AP.AnthropicRequest "" [] 2048 Nothing Nothing Nothing Nothing Nothing
+      finalReq = foldl (\req msg -> AnthropicProvider.handleTextMessage msg req) emptyReq msgs
+      -- Verify messages were accumulated and alternation is maintained
+      msgCount = length (AP.messages finalReq)
+      roles = map AP.role (AP.messages finalReq)
+      alternates = checkAlternating roles
+      -- Count how many text messages were in the input (only these are handled by handleTextMessage)
+      textMsgCount = length [m | m <- msgs, isTextMessage m]
+  in counterexample ("Generated messages: " ++ show (length msgs) ++
+                     ", Text messages: " ++ show textMsgCount ++
+                     ", Final request messages: " ++ show msgCount ++
+                     ", Alternates: " ++ show alternates)
+       (if textMsgCount == 0 then msgCount == 0 else (msgCount >= 1 && alternates))
+  where
+    isTextMessage (UserText _) = True
+    isTextMessage (AssistantText _) = True
+    isTextMessage (SystemText _) = True
+    isTextMessage _ = False
+
+    checkAlternating [] = True
+    checkAlternating [_] = True
+    checkAlternating (r1:r2:rest)
+      | r1 == r2 = False
+      | otherwise = checkAlternating (r2:rest)
+
+    genMessages = listOf genMessageAnthropicTools
+
+-- ============================================================================
 -- HSpec test suite
 -- ============================================================================
 
@@ -551,3 +720,22 @@ spec = do
 
     it "handles multiple reasoning messages in sequence" $
       withMaxSuccess 50 prop_anthropicMultipleReasoningMessages
+
+  describe "Full-Stack Provider Pipeline Tests" $ do
+    it "serializes OpenAI requests with tools and reasoning" $
+      withMaxSuccess 100 prop_openaiFullStackRequestWithToolsAndReasoning
+
+    it "serializes Anthropic requests with tools and reasoning" $
+      withMaxSuccess 100 prop_anthropicFullStackRequestWithToolsAndReasoning
+
+    it "parses OpenAI responses with tools and reasoning" $
+      withMaxSuccess 100 prop_openaiResponseParsingWithToolsAndReasoning
+
+    it "parses Anthropic responses with tools and reasoning" $
+      withMaxSuccess 100 prop_anthropicResponseParsingWithToolsAndReasoning
+
+    it "handles OpenAI composable provider message accumulation" $
+      withMaxSuccess 100 prop_openaiComposableProviderPipeline
+
+    it "handles Anthropic composable provider message accumulation" $
+      withMaxSuccess 100 prop_anthropicComposableProviderPipeline
