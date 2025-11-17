@@ -474,3 +474,50 @@ spec getResponse = do
       -- - event: content_block_start (tool_use block start)
       -- - event: content_block_delta (tool_use block contents)
       -- Consumer code is responsible for reassembling SSE deltas into complete response
+
+  describe "Anthropic Provider - Content Block Types" $ do
+    it "correctly creates all content block types" $ do
+      -- Test thinking block
+      let thinkingBlock = AnthropicThinkingBlock "Some reasoning"
+      case thinkingBlock of
+        AnthropicThinkingBlock txt -> txt `shouldBe` "Some reasoning"
+        _ -> expectationFailure "Should be thinking block"
+
+      -- Test text block
+      let textBlock = AnthropicTextBlock "Some text response"
+      case textBlock of
+        AnthropicTextBlock txt -> txt `shouldBe` "Some text response"
+        _ -> expectationFailure "Should be text block"
+
+      -- Test tool use block
+      let toolBlock = AnthropicToolUseBlock "tool_id_123" "get_weather" (object ["location" .= ("Paris" :: Text)])
+      case toolBlock of
+        AnthropicToolUseBlock bid bname binput -> do
+          bid `shouldBe` "tool_id_123"
+          bname `shouldBe` "get_weather"
+        _ -> expectationFailure "Should be tool use block"
+
+    it "handles response with multiple blocks" $ do
+      -- Create a response with multiple content blocks
+      let resp = AnthropicSuccessResponse
+            { Proto.responseId = "msg_123"
+            , Proto.responseModel = "claude-sonnet"
+            , Proto.responseRole = "assistant"
+            , Proto.responseContent =
+                [ AnthropicThinkingBlock "First thinking"
+                , AnthropicTextBlock "First text"
+                , AnthropicThinkingBlock "Second thinking"
+                , AnthropicTextBlock "Second text"
+                ]
+            , Proto.responseStopReason = Just "end_turn"
+            , Proto.responseUsage = AnthropicUsage 100 200
+            }
+
+      -- Response should have 4 blocks
+      length (Proto.responseContent resp) `shouldBe` 4
+
+      -- Verify each block type
+      case Proto.responseContent resp of
+        [AnthropicThinkingBlock _, AnthropicTextBlock _, AnthropicThinkingBlock _, AnthropicTextBlock _] ->
+          return ()
+        _ -> expectationFailure "Should have thinking, text, thinking, text blocks in that order"

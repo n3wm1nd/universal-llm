@@ -279,3 +279,40 @@ spec getResponse = do
           req = buildRequest model [] msgs
       return ()
     -}
+
+  describe "OpenAI Provider - Message Structure" $ do
+    it "correctly structures OpenAI messages with all optional fields" $ do
+      -- Test that we can create messages with various combinations of fields
+      let msg1 = OpenAIMessage
+            { role = "assistant"
+            , content = Just "Hello"
+            , reasoning_content = Nothing
+            , tool_calls = Nothing
+            , tool_call_id = Nothing
+            }
+      role msg1 `shouldBe` "assistant"
+      content msg1 `shouldBe` Just "Hello"
+
+      -- Test with reasoning content
+      let msg2 = OpenAIMessage
+            { role = "assistant"
+            , content = Just "The answer is 42"
+            , reasoning_content = Just "Let me think..."
+            , tool_calls = Nothing
+            , tool_call_id = Nothing
+            }
+      reasoning_content msg2 `shouldBe` Just "Let me think..."
+      content msg2 `shouldBe` Just "The answer is 42"
+
+      -- Test with tool calls
+      let toolFunc = OpenAIToolFunction "get_weather" "{\"location\": \"Paris\"}"
+          toolCall = OpenAIToolCall "call1" "function" toolFunc
+          msg3 = OpenAIMessage
+            { role = "assistant"
+            , content = Nothing
+            , reasoning_content = Nothing
+            , tool_calls = Just [toolCall]
+            , tool_call_id = Nothing
+            }
+      tool_calls msg3 `shouldBe` Just [toolCall]
+

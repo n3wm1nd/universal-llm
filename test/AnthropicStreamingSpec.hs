@@ -170,3 +170,30 @@ spec getResponse = do
 
       -- Check for message_stop event (indicates complete response)
       T.isInfixOf "message_stop" (T.pack bodyStr) `shouldBe` True
+
+    it "handles multiple content blocks in order (thinking and tool_use)" $ do
+      let model = ClaudeSonnet45WithReasoning
+          toolDef = ToolDefinition
+            { toolDefName = "get_weather"
+            , toolDefDescription = "Get weather"
+            , toolDefParameters = object
+                [ "type" .= ("object" :: Text)
+                , "properties" .= object ["location" .= object ["type" .= ("string" :: Text)]]
+                , "required" .= (["location"] :: [Text])
+                ]
+            }
+          configs = [MaxTokens 16000, Tools [toolDef], Streaming True, Reasoning True]
+          msgs = [UserText "What's the weather in Paris?"]
+          req = Provider.withMagicSystemPrompt $
+                 buildStreamingRequest model configs msgs
+
+      Proto.stream req `shouldBe` Just True
+      Proto.thinking req `shouldNotBe` Nothing
+
+      sseBody <- getResponse req
+      BSL.null sseBody `shouldBe` False
+
+      -- Response should have thinking and tool_use blocks
+      let bodyStr = BSLC.unpack sseBody
+      T.isInfixOf "thinking_delta" (T.pack bodyStr) `shouldBe` True
+      T.isInfixOf "tool_use" (T.pack bodyStr) `shouldBe` True

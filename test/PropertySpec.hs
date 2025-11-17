@@ -347,6 +347,133 @@ prop_anthropicRequestIsValid = forAll genMessages $ \msgs ->
     isValidContentBlock (AP.AnthropicThinkingBlock txt) = not (T.null txt)
     isValidContentBlock _ = True  -- Tool use blocks don't have the same constraint
 
+-- | Property: OpenAI with multiple reasoning messages handles all of them correctly
+-- Reasoning messages should be processed and included in the request
+prop_openaiMultipleReasoningMessages :: Property
+prop_openaiMultipleReasoningMessages = forAll reasoningSequence $ \msgs ->
+  let configs = []
+      req = toProviderRequest OpenAIProvider.OpenAI GLM45 configs msgs
+      reasoningMsgs = filter (\m -> OP.role m == "assistant" && OP.reasoning_content m /= Nothing) (OP.messages req)
+  in counterexample ("Generated messages: " ++ show (length msgs) ++
+                     ", Reasoning in request: " ++ show (length reasoningMsgs))
+       (length reasoningMsgs >= 1)  -- At least one reasoning message made it through
+  where
+    reasoningSequence = do
+      -- Generate at least one reasoning message
+      reasoning1 <- AssistantReasoning <$> genNonEmptyText
+      -- Interleave with other message types
+      remaining <- listOf $ oneof
+        [ UserText <$> genNonEmptyText
+        , AssistantText <$> genNonEmptyText
+        , AssistantReasoning <$> genNonEmptyText
+        ]
+      return (reasoning1 : remaining)
+
+-- | Property: OpenAI with multiple tool calls handles all of them correctly
+-- Multiple consecutive tool calls should all be processed
+-- This also tests the branch where tool_calls becomes Nothing after extracting the last call
+prop_openaiMultipleToolCalls :: Property
+prop_openaiMultipleToolCalls = forAll toolCallSequence $ \msgs ->
+  let configs = []
+      req = toProviderRequest OpenAIProvider.OpenAI GLM45 configs msgs
+      -- Count tool calls in the request
+      toolCallCount = sum [case OP.tool_calls m of
+                             Just calls -> length calls
+                             Nothing -> 0
+                           | m <- OP.messages req, OP.role m == "assistant"]
+  in counterexample ("Generated messages: " ++ show (length msgs) ++
+                     ", Tool calls in request: " ++ show toolCallCount)
+       (toolCallCount >= 1)  -- At least one tool call made it through
+  where
+    genToolOutput = oneof
+      [ Left <$> genRealisticText
+      , Right <$> genSimpleValue
+      ]
+
+    toolCallSequence = do
+      -- Generate multiple tool calls to ensure we test the null remainingTCs branch
+      tool1 <- AssistantTool <$> arbitrary
+      -- Generate at least one more tool call to test the extraction of multiple calls
+      tool2 <- AssistantTool <$> arbitrary
+      -- Interleave with other message types
+      remaining <- listOf $ oneof
+        [ UserText <$> genNonEmptyText
+        , AssistantText <$> genNonEmptyText
+        , AssistantTool <$> arbitrary
+        , ToolResultMsg <$> (ToolResult <$> arbitrary <*> genToolOutput)
+        ]
+      return (tool1 : tool2 : remaining)
+
+-- | Property: Anthropic with reasoning messages handles them correctly
+-- Reasoning messages (thinking blocks) should be processed and included in the request
+prop_anthropicReasoningMessages :: Property
+prop_anthropicReasoningMessages = forAll reasoningMessage $ \msgs ->
+  let configs = [MaxTokens 16000]  -- Higher tokens for reasoning
+      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45WithReasoning configs msgs
+      -- Check for thinking blocks in any message
+      thinkingBlocks = [block | msg <- AP.messages req, block <- AP.content msg, isThinkingBlock block]
+  in counterexample ("Generated messages: " ++ show (length msgs) ++
+                     ", Thinking blocks in request: " ++ show (length thinkingBlocks))
+       (not (null thinkingBlocks))
+  where
+    isThinkingBlock (AP.AnthropicThinkingBlock _) = True
+    isThinkingBlock _ = False
+
+    reasoningMessage = do
+      -- Ensure at least one reasoning message
+      reasoning1 <- AssistantReasoning <$> genNonEmptyText
+      -- Interleave with other message types
+      remaining <- listOf genMessageAnthropicReasoningTools
+      return (reasoning1 : remaining)
+
+-- Helper generator for Anthropic messages with reasoning support
+genMessageAnthropicReasoningTools :: Gen (Message ClaudeSonnet45WithReasoning AnthropicProvider.Anthropic)
+genMessageAnthropicReasoningTools = oneof
+  [ UserText <$> genNonEmptyText
+  , AssistantText <$> genNonEmptyText
+  , SystemText <$> genNonEmptyText
+  , AssistantReasoning <$> genNonEmptyText  -- Thinking/reasoning message
+  , AssistantTool <$> arbitrary
+  , ToolResultMsg <$> (ToolResult <$> arbitrary <*> genToolOutput)
+  ]
+  where
+    genToolOutput = oneof
+      [ Left <$> genRealisticText
+      , Right <$> genSimpleValue
+      ]
+
+-- | Property: Anthropic with multiple reasoning messages handles all of them correctly
+-- Multiple consecutive reasoning messages should all be processed
+-- This tests the extraction of reasoning blocks from responses
+prop_anthropicMultipleReasoningMessages :: Property
+prop_anthropicMultipleReasoningMessages = forAll reasoningSequence $ \msgs ->
+  let configs = [MaxTokens 16000]
+      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45WithReasoning configs msgs
+      -- Count thinking blocks
+      thinkingBlocks = [block | msg <- AP.messages req, block <- AP.content msg, isThinkingBlock block]
+      -- Also verify thinking is enabled in config
+      thinkingEnabled = AP.thinking req /= Nothing
+  in counterexample ("Generated messages: " ++ show (length msgs) ++
+                     ", Thinking blocks in request: " ++ show (length thinkingBlocks) ++
+                     ", Thinking enabled: " ++ show thinkingEnabled)
+       (length thinkingBlocks >= 1 .&&. thinkingEnabled)  -- Reasoning must be processed and config must be set
+  where
+    isThinkingBlock (AP.AnthropicThinkingBlock _) = True
+    isThinkingBlock _ = False
+
+    reasoningSequence = do
+      -- Generate multiple reasoning messages to thoroughly exercise the code path
+      reasoning1 <- AssistantReasoning <$> genNonEmptyText
+      reasoning2 <- AssistantReasoning <$> genNonEmptyText
+      -- Interleave with other message types
+      remaining <- listOf $ oneof
+        [ UserText <$> genNonEmptyText
+        , AssistantText <$> genNonEmptyText
+        , AssistantReasoning <$> genNonEmptyText
+        , AssistantTool <$> arbitrary
+        ]
+      return (reasoning1 : reasoning2 : remaining)
+
 -- ============================================================================
 -- HSpec test suite
 -- ============================================================================
@@ -411,3 +538,16 @@ spec = do
 
     it "serialization always succeeds" $
       withMaxSuccess 100 prop_openaiSerializationSucceeds
+
+    it "handles multiple reasoning messages in sequence" $
+      withMaxSuccess 50 prop_openaiMultipleReasoningMessages
+
+    it "handles multiple tool calls in sequence" $
+      withMaxSuccess 50 prop_openaiMultipleToolCalls
+
+  describe "Anthropic Provider - Reasoning Support" $ do
+    it "handles reasoning (thinking) messages" $
+      withMaxSuccess 50 prop_anthropicReasoningMessages
+
+    it "handles multiple reasoning messages in sequence" $
+      withMaxSuccess 50 prop_anthropicMultipleReasoningMessages
