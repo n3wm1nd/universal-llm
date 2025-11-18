@@ -32,6 +32,7 @@ library
     UniversalLLM.Core.Types
     UniversalLLM.Core.Tools
     UniversalLLM.Core.Serialization
+    UniversalLLM.Core.ProviderM
     UniversalLLM.Models.SimpleModel
     UniversalLLM.Models.FullFeaturedModel
     UniversalLLM.Protocols.OpenAI
@@ -51,7 +52,10 @@ library
     aeson,
     bytestring,
     hashable,
-    vector
+    vector,
+    transformers,
+    mtl,
+    data-default
 
 library examples-helper
   import: shared-properties
