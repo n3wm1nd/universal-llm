@@ -45,8 +45,7 @@ instance HasJSON MistralModel OpenAI where
 
 -- Composable provider for MistralModel with tools
 mistralComposableProvider :: ComposableProvider OpenAI MistralModel ((), ())
-mistralComposableProvider = chainProviders UniversalLLM.Providers.OpenAI.openAITools $
-                            UniversalLLM.Providers.OpenAI.baseComposableProvider
+mistralComposableProvider = withTools $ UniversalLLM.Providers.OpenAI.baseComposableProvider @OpenAI @MistralModel
 
 -- ============================================================================
 -- Tool Definition

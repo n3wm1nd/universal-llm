@@ -44,8 +44,7 @@ instance HasTools ClaudeSonnet45 Anthropic where
 
 -- Composable provider for ClaudeSonnet45 with tools
 claudeSonnet45ComposableProvider :: ComposableProvider Anthropic ClaudeSonnet45 ((), ())
-claudeSonnet45ComposableProvider = chainProviders AnthropicProvider.anthropicTools $
-                                   AnthropicProvider.baseComposableProvider
+claudeSonnet45ComposableProvider = withTools $ AnthropicProvider.baseComposableProvider @ClaudeSonnet45
 
 -- ============================================================================
 -- Tool Definition
