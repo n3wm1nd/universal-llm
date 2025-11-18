@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
 
 module UniversalLLM.Models.FullFeaturedModel where
 
@@ -19,30 +20,35 @@ instance ModelName OpenAI FullFeaturedModel where
   modelName _ = "full-featured-model"
 
 instance HasTools FullFeaturedModel OpenAI where
-  withTools = UniversalLLM.Providers.OpenAI.openAIWithTools
+  withTools = chainProviders openAITools
 
 instance HasJSON FullFeaturedModel OpenAI where
-  withJSON = UniversalLLM.Providers.OpenAI.openAIWithJSON
+  withJSON = chainProviders openAIJSON
 
 instance HasReasoning FullFeaturedModel OpenAI where
-  withReasoning = UniversalLLM.Providers.OpenAI.openAIWithReasoning
+  withReasoning = chainProviders openAIReasoning
 
 -- Note: HasVision intentionally NOT implemented yet (no provider supports it)
 -- instance HasVision FullFeaturedModel OpenAI where
 --   withVision = UniversalLLM.Providers.OpenAI.openAIWithVision
 
-instance ProviderImplementation OpenAI FullFeaturedModel where
-  getComposableProvider = withReasoning . withJSON . withTools $ UniversalLLM.Providers.OpenAI.baseComposableProvider
+
+openai :: ComposableProvider OpenAI FullFeaturedModel ((), ((), ((), ())))
+openai = withReasoning . withJSON . withTools $ UniversalLLM.Providers.OpenAI.baseComposableProvider @OpenAI @FullFeaturedModel
 
 -- Anthropic provider support - subset of capabilities
 instance ModelName Anthropic FullFeaturedModel where
   modelName _ = "full-featured-model"
 
 instance HasTools FullFeaturedModel Anthropic where
-  withTools = UniversalLLM.Providers.Anthropic.anthropicWithTools
+  withTools :: ComposableProvider Anthropic FullFeaturedModel s -> ComposableProvider
+     Anthropic
+     FullFeaturedModel
+     (ToolState FullFeaturedModel Anthropic, s)
+  withTools = chainProviders anthropicTools
 
-instance ProviderImplementation Anthropic FullFeaturedModel where
-  getComposableProvider = withTools UniversalLLM.Providers.Anthropic.baseComposableProvider
+anthropic :: ComposableProvider Anthropic FullFeaturedModel ((), ())
+anthropic = withTools $ UniversalLLM.Providers.Anthropic.baseComposableProvider @FullFeaturedModel
 
 -- Note: This is a phantom model for examples and documentation
 -- Real model definitions in external packages should use specific model names

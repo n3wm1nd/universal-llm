@@ -19,26 +19,62 @@ import UniversalLLM.Protocols.Anthropic
 import qualified UniversalLLM.Protocols.Anthropic as Proto
 import qualified UniversalLLM.Providers.Anthropic as Provider
 
--- Helper to build request using the model's provider implementation
-buildRequest :: forall model. ProviderImplementation Provider.Anthropic model
-             => model
-             -> [ModelConfig Provider.Anthropic model]
-             -> [Message model Provider.Anthropic]
+-- Helper to build request for ClaudeSonnet45
+buildRequest :: TestModels.ClaudeSonnet45
+             -> [ModelConfig Provider.Anthropic TestModels.ClaudeSonnet45]
+             -> [Message TestModels.ClaudeSonnet45 Provider.Anthropic]
              -> AnthropicRequest
-buildRequest = toProviderRequest Provider.Anthropic
+buildRequest _model = buildRequestGeneric TestModels.anthropicSonnet45 TestModels.ClaudeSonnet45 ((), ())
 
--- Helper to parse response using the model's provider implementation
-parseResponse :: forall model. (ProviderImplementation Provider.Anthropic model, ModelName Provider.Anthropic model)
-              => model
-              -> [ModelConfig Provider.Anthropic model]
-              -> [Message model Provider.Anthropic]  -- history
+-- Helper to build request for ClaudeSonnet45WithReasoning
+buildRequestWithReasoning :: TestModels.ClaudeSonnet45WithReasoning
+                          -> [ModelConfig Provider.Anthropic TestModels.ClaudeSonnet45WithReasoning]
+                          -> [Message TestModels.ClaudeSonnet45WithReasoning Provider.Anthropic]
+                          -> AnthropicRequest
+buildRequestWithReasoning _model = buildRequestGeneric TestModels.anthropicSonnet45Reasoning TestModels.ClaudeSonnet45WithReasoning ((), ((), ()))
+
+-- Generic helper to build request with explicit composable provider
+buildRequestGeneric :: forall model s. ComposableProvider Provider.Anthropic model s
+                    -> model
+                    -> s
+                    -> [ModelConfig Provider.Anthropic model]
+                    -> [Message model Provider.Anthropic]
+                    -> AnthropicRequest
+buildRequestGeneric composableProvider model s configs = snd . toProviderRequest composableProvider Provider.Anthropic model configs s
+
+-- Helper to parse response for ClaudeSonnet45
+parseResponse :: TestModels.ClaudeSonnet45
+              -> [ModelConfig Provider.Anthropic TestModels.ClaudeSonnet45]
+              -> [Message TestModels.ClaudeSonnet45 Provider.Anthropic]
               -> AnthropicResponse
-              -> Either LLMError [Message model Provider.Anthropic]
-parseResponse model configs history resp =
-  let (_provider, _model, msgs) = fromProviderResponse Provider.Anthropic model configs history resp
+              -> Either LLMError [Message TestModels.ClaudeSonnet45 Provider.Anthropic]
+parseResponse _model configs _history resp =
+  let msgs = parseResponseGeneric TestModels.anthropicSonnet45 TestModels.ClaudeSonnet45 configs ((), ()) resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs
+
+-- Helper to parse response for ClaudeSonnet45WithReasoning
+parseResponseWithReasoning :: TestModels.ClaudeSonnet45WithReasoning
+                           -> [ModelConfig Provider.Anthropic TestModels.ClaudeSonnet45WithReasoning]
+                           -> [Message TestModels.ClaudeSonnet45WithReasoning Provider.Anthropic]
+                           -> AnthropicResponse
+                           -> Either LLMError [Message TestModels.ClaudeSonnet45WithReasoning Provider.Anthropic]
+parseResponseWithReasoning _model configs _history resp =
+  let msgs = parseResponseGeneric TestModels.anthropicSonnet45Reasoning TestModels.ClaudeSonnet45WithReasoning configs ((), ((), ())) resp
+  in if null msgs
+     then Left $ ParseError "No messages parsed from response"
+     else Right msgs
+
+-- Generic helper to parse response with explicit composable provider
+parseResponseGeneric :: forall model s. ComposableProvider Provider.Anthropic model s
+                     -> model
+                     -> [ModelConfig Provider.Anthropic model]
+                     -> s
+                     -> AnthropicResponse
+                     -> [Message model Provider.Anthropic]
+parseResponseGeneric composableProvider model configs s resp =
+  snd $ fromProviderResponse composableProvider Provider.Anthropic model configs s resp
 
 spec :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 spec getResponse = do
@@ -47,7 +83,7 @@ spec getResponse = do
       let model = ClaudeSonnet45
           configs = [Temperature 0.7, MaxTokens 200]
           msgs = [UserText "Test message"]
-          req = buildRequest model configs msgs
+          req = buildRequest TestModels.ClaudeSonnet45 configs msgs
 
       -- Force evaluation - should not loop
       req `seq` return ()
@@ -66,22 +102,22 @@ spec getResponse = do
           -- First exchange
           msgs1 = [UserText "What is 2+2?"]
           req1 = Provider.withMagicSystemPrompt $
-                   buildRequest model configs msgs1
+                   buildRequest TestModels.ClaudeSonnet45 configs msgs1
 
       resp1 <- getResponse req1
 
-      case parseResponse @ClaudeSonnet45 model configs msgs1 resp1 of
+      case parseResponse model configs msgs1 resp1 of
         Right [AssistantText txt] -> do
           T.isInfixOf "4" txt `shouldBe` True
 
           -- Second exchange - append to history
           let msgs2 = msgs1 <> [AssistantText txt, UserText "What about 3+3?"]
               req2 = Provider.withMagicSystemPrompt $
-                       buildRequest model configs msgs2
+                       buildRequest TestModels.ClaudeSonnet45 configs msgs2
 
           resp2 <- getResponse req2
 
-          case parseResponse @ClaudeSonnet45 model configs msgs2 resp2 of
+          case parseResponse model configs msgs2 resp2 of
             Right [AssistantText txt2] -> do
               T.isInfixOf "6" txt2 `shouldBe` True
 
@@ -97,7 +133,7 @@ spec getResponse = do
           configs = [MaxTokens 50, SystemPrompt sysPrompt]
           msgs = [UserText "Hello"]
           req = Provider.withMagicSystemPrompt $
-                  buildRequest model configs msgs
+                  buildRequest TestModels.ClaudeSonnet45 configs msgs
 
       case system req of
         Just blocks -> do
@@ -132,7 +168,7 @@ spec getResponse = do
           -- Step 1: Initial request with tools
           msgs1 = [UserText "What is the weather like in San Francisco?"]
           req1 = Provider.withMagicSystemPrompt $
-                   buildRequest model configs msgs1
+                   buildRequest TestModels.ClaudeSonnet45 configs msgs1
 
       -- Verify tools are in request
       case tools req1 of
@@ -143,7 +179,7 @@ spec getResponse = do
 
       resp1 <- getResponse req1
 
-      case parseResponse @ClaudeSonnet45 model configs msgs1 resp1 of
+      case parseResponse model configs msgs1 resp1 of
         Right [AssistantTool toolCall] -> do
           getToolCallName toolCall `shouldBe` "get_weather"
 
@@ -155,7 +191,7 @@ spec getResponse = do
                                ])
               msgs2 = msgs1 <> [AssistantTool toolCall, ToolResultMsg toolResult]
               req2 = Provider.withMagicSystemPrompt $
-                       buildRequest model configs msgs2
+                       buildRequest TestModels.ClaudeSonnet45 configs msgs2
 
           -- Verify history has all messages (grouped by direction)
           -- user -> assistant (tool_use) -> user (tool_result)
@@ -163,7 +199,7 @@ spec getResponse = do
 
           resp2 <- getResponse req2
 
-          case parseResponse @ClaudeSonnet45 model configs msgs2 resp2 of
+          case parseResponse model configs msgs2 resp2 of
             Right [AssistantText finalTxt] -> do
               -- Should incorporate the tool result
               (T.isInfixOf "72" finalTxt || T.isInfixOf "sunny" finalTxt) `shouldBe` True
@@ -180,11 +216,11 @@ spec getResponse = do
           configs = [MaxTokens 200, Tools [toolDef]]
           msgs = [UserText "What is 15 * 23?"]
           req = Provider.withMagicSystemPrompt $
-                  buildRequest model configs msgs
+                  buildRequest TestModels.ClaudeSonnet45 configs msgs
 
       resp <- getResponse req
 
-      case parseResponse @ClaudeSonnet45 model configs msgs resp of
+      case parseResponse model configs msgs resp of
         -- Could get just tool call, or text + tool call, or just text
         Right parsedMsgs -> do
           length parsedMsgs `shouldSatisfy` (> 0)
@@ -204,7 +240,7 @@ spec getResponse = do
                  , UserText "Third question"
                  ]
           req = Provider.withMagicSystemPrompt $
-                  buildRequest model configs msgs
+                  buildRequest TestModels.ClaudeSonnet45 configs msgs
 
       -- Anthropic should group all consecutive user messages into one
       length (messages req) `shouldBe` 1
@@ -230,7 +266,7 @@ spec getResponse = do
                  , ToolResultMsg (ToolResult toolCall (Right $ object []))
                  ]
           req = Provider.withMagicSystemPrompt $
-                  buildRequest model configs msgs
+                  buildRequest TestModels.ClaudeSonnet45 configs msgs
 
       -- Should have: user, assistant, user, assistant (with tool_use), user (with tool_result)
       -- = 5 messages (tool call and tool result alternate directions)
@@ -264,7 +300,7 @@ spec getResponse = do
             }
           configs = [MaxTokens 2048, Tools [toolDef], Streaming True]
           msgs = [UserText "Calculate 2+2"]
-          req = buildRequest model configs msgs
+          req = buildRequest TestModels.ClaudeSonnet45 configs msgs
 
       -- Verify streaming is enabled
       Proto.stream req `shouldBe` Just True
@@ -292,7 +328,7 @@ spec getResponse = do
             }
           configs = [MaxTokens 4000, Tools [toolDef], Streaming True]
           msgs = [UserText "Search for Haskell"]
-          req = buildRequest model configs msgs
+          req = buildRequestWithReasoning model configs msgs
 
       -- Verify streaming and reasoning are enabled
       Proto.stream req `shouldBe` Just True
@@ -311,7 +347,7 @@ spec getResponse = do
           toolDef = ToolDefinition "test_tool" "Test" (object [])
           configs = [Tools [toolDef], MaxTokens 50]
           msgs = [UserText "test"]
-          req = buildRequest model configs msgs
+          req = buildRequest TestModels.ClaudeSonnet45 configs msgs
 
       case tools req of
         Just [_] -> return ()
@@ -333,7 +369,7 @@ spec getResponse = do
           -- No instance for (HasTools NoToolsModel)
           configs = [Tools [toolDef], MaxTokens 50]
           msgs = [UserText "test"]
-          req = buildRequest model configs msgs
+          req = buildRequest TestModels.ClaudeSonnet45 configs msgs
       return ()
     -}
 
@@ -348,7 +384,7 @@ spec getResponse = do
           -- This line will fail to compile:
           -- No instance for (HasTools NoToolsModel)
           msgs = [AssistantTool toolCall]
-          req = buildRequest model configs msgs
+          req = buildRequest TestModels.ClaudeSonnet45 configs msgs
       return ()
     -}
 
@@ -357,7 +393,7 @@ spec getResponse = do
       let model = ClaudeSonnet45WithReasoning
           configs = [MaxTokens 4000]  -- Use 4000 so we get 2000 budget (within bounds)
           msgs = [UserText "Think about this problem"]
-          req = buildRequest model configs msgs
+          req = buildRequestWithReasoning model configs msgs
 
       -- Check that thinking config is present
       case Proto.thinking req of
@@ -374,7 +410,7 @@ spec getResponse = do
       let model = ClaudeSonnet45WithReasoning
           configs = [MaxTokens 1000]  -- Small max_tokens would give budget < 1024
           msgs = [UserText "Think about this"]
-          req = buildRequest model configs msgs
+          req = buildRequestWithReasoning model configs msgs
 
       -- Check that budget respects API minimum
       case Proto.thinking req of
@@ -388,7 +424,7 @@ spec getResponse = do
       let model = ClaudeSonnet45WithReasoning
           configs = [MaxTokens 4000]
           msgs = [UserText "Think about this"]
-          req = buildRequest model configs msgs
+          req = buildRequestWithReasoning model configs msgs
 
       -- Check that thinking config respects the user's max_tokens
       case Proto.thinking req of
@@ -402,7 +438,7 @@ spec getResponse = do
       let model = ClaudeSonnet45WithReasoning
           configs = [MaxTokens 20000]
           msgs = [UserText "Think about this"]
-          req = buildRequest model configs msgs
+          req = buildRequestWithReasoning model configs msgs
 
       -- Check that thinking budget doesn't exceed 5000
       case Proto.thinking req of
@@ -416,7 +452,7 @@ spec getResponse = do
       let model = ClaudeSonnet45
           configs = [MaxTokens 200]
           msgs = [UserText "Simple question"]
-          req = buildRequest model configs msgs
+          req = buildRequest TestModels.ClaudeSonnet45 configs msgs
 
       -- Check that thinking config is not present
       Proto.thinking req `shouldBe` Nothing
@@ -427,7 +463,7 @@ spec getResponse = do
           configs = [MaxTokens 12000]
           msgs = [UserText "What is 2+2?"]
           req = Provider.withMagicSystemPrompt $
-                 buildRequest model configs msgs
+                 buildRequestWithReasoning model configs msgs
 
       resp <- getResponse req
 
@@ -459,7 +495,7 @@ spec getResponse = do
           configs = [MaxTokens 2048, Tools [toolDef], Streaming True]
           msgs = [UserText "What's the weather in Paris?"]
           req = Provider.withMagicSystemPrompt $
-                 buildRequest model configs msgs
+                 buildRequest TestModels.ClaudeSonnet45 configs msgs
 
       -- Verify the request is correctly configured for streaming
       Proto.stream req `shouldBe` Just True

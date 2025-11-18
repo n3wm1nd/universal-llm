@@ -8,6 +8,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE InstanceSigs #-}
 
 module UniversalLLM.Providers.OpenAI where
 
@@ -245,8 +246,8 @@ handleReasoningMessage msg req = case msg of
 -- Composable providers
 
 -- Base composable provider: model name, basic config, text messages
-baseComposableProvider :: forall provider model. (ModelName provider model, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
-baseComposableProvider _p m configs = noopHandler
+baseComposableProvider :: forall provider model. (ModelName provider model, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model ()
+baseComposableProvider _p m configs _s = noopHandler
   { cpToRequest = \msg req ->
       let req' = req { model = modelName @provider m
                      , temperature = getFirst [t | Temperature t <- configs]
@@ -284,8 +285,8 @@ baseComposableProvider _p m configs = noopHandler
     parseTextResponse _ = Nothing
 
 -- Standalone reasoning provider
-openAIReasoning :: forall provider model. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
-openAIReasoning _p _m _configs = noopHandler
+openAIReasoning :: forall provider model state. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model state
+openAIReasoning _p _m _configs _s = noopHandler
   { cpToRequest = handleReasoningMessage
   , cpFromResponse = parseReasoningResponse
   , cpPureMessageResponse = orderReasoningBeforeText
@@ -327,8 +328,8 @@ openAIReasoning _p _m _configs = noopHandler
     isAssistantText _ = False
 
 -- Standalone tools provider
-openAITools :: forall provider model. (HasTools model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
-openAITools _p _m configs = noopHandler
+openAITools :: forall provider model state. (HasTools model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model state
+openAITools _p _m configs _s = noopHandler
   { cpToRequest = \msg req ->
       let req' = handleToolMessage msg req
           toolDefs = [defs | Tools defs <- configs]
@@ -352,8 +353,8 @@ openAITools _p _m configs = noopHandler
     parseToolResponse _ = Nothing
 
 -- Standalone JSON provider
-openAIJSON :: forall provider model. (HasJSON model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model
-openAIJSON _p _m _configs = noopHandler
+openAIJSON :: forall provider model state. (HasJSON model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model state
+openAIJSON _p _m _configs _s = noopHandler
   { cpToRequest = handleJSONMessage
   , cpFromResponse = \_ -> Nothing  -- Let base handler parse it
   , cpPureMessageResponse = convertTextToJSON
@@ -378,17 +379,8 @@ openAIJSON _p _m _configs = noopHandler
             Nothing -> AssistantText txt  -- Keep as text if not valid JSON
         convertMessage msg = msg
 
--- Backward compatibility wrappers
-openAIWithReasoning :: forall provider model. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model -> ComposableProvider provider model
-openAIWithReasoning base = base `chainProviders` openAIReasoning
-
--- Tools capability combinator
-openAIWithTools :: forall provider model. (HasTools model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model -> ComposableProvider provider model
-openAIWithTools base = base `chainProviders` openAITools
-
--- JSON capability combinator
-openAIWithJSON :: forall provider model. (HasJSON model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model -> ComposableProvider provider model
-openAIWithJSON base = base `chainProviders` openAIJSON
+-- These are removed - use the typeclass methods withTools, withReasoning, etc. instead
+-- They're defined in the HasTools/HasReasoning/HasJSON instances
 
 -- ============================================================================
 -- Test Helper Functions (Convenience Wrappers)
@@ -412,16 +404,12 @@ handleTextMessages :: forall provider model. (ProviderRequest provider ~ OpenAIR
 handleTextMessages _p _m _configs = handleTextMessage
 
 -- | Convenience wrapper: Apply reasoning message handler
-handleReasoning :: forall provider model. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => provider -> model -> [ModelConfig provider model] -> MessageEncoder provider model
-handleReasoning p m configs msg req =
+handleReasoning :: forall provider model s. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => provider -> model -> [ModelConfig provider model] -> s -> MessageEncoder provider model
+handleReasoning p m configs s msg req =
   let cp = openAIReasoning @provider @model
-      handlers = cp p m configs
+      handlers = cp p m configs s
   in cpToRequest handlers msg req
 
--- Default ProviderImplementation for basic text-only models
--- Models with capabilities (tools, json, reasoning, etc.) should provide their own instances
-instance {-# OVERLAPPABLE #-} ModelName OpenAI model => ProviderImplementation OpenAI model where
-  getComposableProvider = baseComposableProvider
 
 -- ============================================================================
 -- Completion Interface (Legacy /v1/completions endpoint)

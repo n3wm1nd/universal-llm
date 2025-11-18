@@ -33,10 +33,7 @@ instance ModelName OpenAI.LlamaCpp MockXMLResponseModel where
   modelName _ = "mock-xml-response"
 
 instance HasTools MockXMLResponseModel OpenAI.LlamaCpp where
-  withTools = withXMLResponseParsing . OpenAI.openAIWithTools
-
-instance ProviderImplementation OpenAI.LlamaCpp MockXMLResponseModel where
-  getComposableProvider = withTools $ OpenAI.baseComposableProvider
+  withTools = chainProviders OpenAI.openAITools
 
 -- Mock model that uses full XML support (Strategy B)
 data MockFullXMLModel = MockFullXMLModel deriving (Show, Eq)
@@ -45,31 +42,80 @@ instance ModelName OpenAI.OpenAICompatible MockFullXMLModel where
   modelName _ = "mock-full-xml"
 
 instance HasTools MockFullXMLModel OpenAI.OpenAICompatible where
-  withTools = withFullXMLToolSupport . OpenAI.openAIWithTools
+  withTools = chainProviders OpenAI.openAITools
 
-instance ProviderImplementation OpenAI.OpenAICompatible MockFullXMLModel where
-  getComposableProvider = withTools $ OpenAI.baseComposableProvider
+-- Helper to build a request from messages (with explicit composable provider)
+buildRequestGeneric :: (Monoid (ProviderRequest provider))
+                   => ComposableProvider provider model s
+                   -> provider
+                   -> model
+                   -> [ModelConfig provider model]
+                   -> s
+                   -> [Message model provider]
+                   -> ProviderRequest provider
+buildRequestGeneric composableProvider provider model configs s = snd . toProviderRequest composableProvider provider model configs s
 
--- Helper to build a request from messages
-buildRequest :: (ProviderImplementation provider model, Monoid (ProviderRequest provider))
-             => provider
-             -> model
-             -> [ModelConfig provider model]
-             -> [Message model provider]
-             -> ProviderRequest provider
-buildRequest = toProviderRequest
+-- TypeClass to support buildRequest with implicit composable provider/state
+class BuildRequest provider model where
+  buildRequest :: provider
+               -> model
+               -> [ModelConfig provider model]
+               -> [Message model provider]
+               -> ProviderRequest provider
 
--- Helper to parse a response
-parseResponse :: ProviderImplementation provider model
-              => provider
-              -> model
-              -> [ModelConfig provider model]
-              -> [Message model provider]  -- history
-              -> ProviderResponse provider
-              -> [Message model provider]
-parseResponse provider model configs history resp =
-  let (_provider, _model, msgs) = fromProviderResponse provider model configs history resp
+-- Instance for MockXMLResponseModel
+instance BuildRequest OpenAI.LlamaCpp MockXMLResponseModel where
+  buildRequest provider model configs msgs =
+    let base = OpenAI.baseComposableProvider @OpenAI.LlamaCpp @MockXMLResponseModel
+        withToolsProvider = chainProviders OpenAI.openAITools base
+        composableProvider = withXMLResponseParsing withToolsProvider
+    in snd $ toProviderRequest composableProvider provider model configs (((), ()), ()) msgs
+
+-- Instance for MockFullXMLModel
+instance BuildRequest OpenAI.OpenAICompatible MockFullXMLModel where
+  buildRequest provider model configs msgs =
+    let base = OpenAI.baseComposableProvider @OpenAI.OpenAICompatible @MockFullXMLModel
+        withToolsProvider = chainProviders OpenAI.openAITools base
+        composableProvider = withFullXMLToolSupport withToolsProvider
+    in snd $ toProviderRequest composableProvider provider model configs (((), ()), ()) msgs
+
+-- Helper to parse a response (with explicit composable provider)
+parseResponseGeneric :: ComposableProvider provider model s
+                    -> provider
+                    -> model
+                    -> [ModelConfig provider model]
+                    -> s
+                    -> [Message model provider]  -- history
+                    -> ProviderResponse provider
+                    -> [Message model provider]
+parseResponseGeneric composableProvider provider model configs s history resp =
+  let msgs = snd $ fromProviderResponse composableProvider provider model configs s resp
   in msgs
+
+-- TypeClass to support parseResponse with implicit composable provider/state
+class ParseResponse provider model where
+  parseResponse :: provider
+                -> model
+                -> [ModelConfig provider model]
+                -> [Message model provider]  -- history
+                -> ProviderResponse provider
+                -> [Message model provider]
+
+-- Instance for MockXMLResponseModel
+instance ParseResponse OpenAI.LlamaCpp MockXMLResponseModel where
+  parseResponse provider model configs history resp =
+    let base = OpenAI.baseComposableProvider @OpenAI.LlamaCpp @MockXMLResponseModel
+        withToolsProvider = chainProviders OpenAI.openAITools base
+        composableProvider = withXMLResponseParsing withToolsProvider
+    in snd $ fromProviderResponse composableProvider provider model configs (((), ()), ()) resp
+
+-- Instance for MockFullXMLModel
+instance ParseResponse OpenAI.OpenAICompatible MockFullXMLModel where
+  parseResponse provider model configs history resp =
+    let base = OpenAI.baseComposableProvider @OpenAI.OpenAICompatible @MockFullXMLModel
+        withToolsProvider = chainProviders OpenAI.openAITools base
+        composableProvider = withFullXMLToolSupport withToolsProvider
+    in snd $ fromProviderResponse composableProvider provider model configs (((), ()), ()) resp
 
 -- Create a mock OpenAI response with text content
 mockTextResponse :: Text -> OpenAIResponse

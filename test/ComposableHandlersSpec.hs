@@ -25,23 +25,23 @@ instance ModelName OpenAI BasicModel where
 instance ModelName OpenAI ToolsModel where
   modelName _ = "tools-model"
 instance HasTools ToolsModel OpenAI where
-  withTools = OpenAIProvider.openAIWithTools
+  withTools = chainProviders OpenAIProvider.openAITools
 
 -- ReasoningModel: text + reasoning
 instance ModelName OpenAI ReasoningModel where
   modelName _ = "reasoning-model"
 instance HasReasoning ReasoningModel OpenAI where
-  withReasoning = OpenAIProvider.openAIWithReasoning
+  withReasoning = chainProviders OpenAIProvider.openAIReasoning
 
 -- FullFeaturedModel: text + tools + reasoning + JSON
 instance ModelName OpenAI FullFeaturedModel where
   modelName _ = "full-featured-model"
 instance HasTools FullFeaturedModel OpenAI where
-  withTools = OpenAIProvider.openAIWithTools
+  withTools = chainProviders OpenAIProvider.openAITools
 instance HasReasoning FullFeaturedModel OpenAI where
-  withReasoning = OpenAIProvider.openAIWithReasoning
+  withReasoning = chainProviders OpenAIProvider.openAIReasoning
 instance HasJSON FullFeaturedModel OpenAI where
-  withJSON = OpenAIProvider.openAIWithJSON
+  withJSON = chainProviders OpenAIProvider.openAIJSON
 
 spec :: Spec
 spec = do
@@ -107,7 +107,7 @@ spec = do
           model = ReasoningModel
           configs = []
           msg = AssistantReasoning "thinking about the problem..."
-          req = OpenAIProvider.handleReasoning provider model configs msg mempty
+          req = OpenAIProvider.handleReasoning provider model configs () msg mempty
 
       length (messages req) `shouldBe` 1
       case head (messages req) of
@@ -124,7 +124,7 @@ spec = do
 
           -- Compose: reasoning then text
           req0 = mempty
-          req1 = OpenAIProvider.handleReasoning provider model configs reasoningMsg req0
+          req1 = OpenAIProvider.handleReasoning provider model configs () reasoningMsg req0
           req2 = handleTextMessages provider model configs textMsg req1
 
       length (messages req2) `shouldBe` 2
@@ -162,9 +162,9 @@ spec = do
 
           -- Chain handlers manually
           req1 = handleTextMessages provider model configs reasoningMsg
-                   (OpenAIProvider.handleReasoning provider model configs reasoningMsg mempty)
+                   (OpenAIProvider.handleReasoning provider model configs () reasoningMsg mempty)
           req2 = handleTextMessages provider model configs textMsg
-                   (OpenAIProvider.handleReasoning provider model configs textMsg req1)
+                   (OpenAIProvider.handleReasoning provider model configs () textMsg req1)
 
       length (messages req2) `shouldBe` 2
 
@@ -175,7 +175,7 @@ spec = do
           model = BasicModel
           configs = []
           msg = UserText "Hello"
-          handlers = baseComposableProvider @OpenAI @BasicModel provider model configs
+          handlers = baseComposableProvider @OpenAI @BasicModel provider model configs ()
           req = cpToRequest handlers msg mempty
 
       length (messages req) `shouldBe` 1
@@ -191,8 +191,8 @@ spec = do
           msg = AssistantReasoning "thinking"
 
           -- Compose base + reasoning
-          composed = OpenAIProvider.openAIWithReasoning @OpenAI @ReasoningModel (baseComposableProvider @OpenAI @ReasoningModel)
-          handlers = composed provider model configs
+          composed = (baseComposableProvider @OpenAI @ReasoningModel) `chainProviders` OpenAIProvider.openAIReasoning
+          handlers = composed provider model configs ((), ())
           req = cpToRequest handlers msg mempty
 
       length (messages req) `shouldBe` 1

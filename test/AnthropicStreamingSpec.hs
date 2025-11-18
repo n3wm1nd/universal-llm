@@ -18,13 +18,27 @@ import UniversalLLM.Protocols.Anthropic
 import qualified UniversalLLM.Protocols.Anthropic as Proto
 import qualified UniversalLLM.Providers.Anthropic as Provider
 
--- Helper to build streaming request using the model's provider implementation
-buildStreamingRequest :: forall model. ProviderImplementation Provider.Anthropic model
-                     => model
-                     -> [ModelConfig Provider.Anthropic model]
-                     -> [Message model Provider.Anthropic]
+-- Helper to build streaming request - uses ClaudeSonnet45 with basic composition
+-- (Wrapper around the generic version that provides the specific model and composable provider)
+buildStreamingRequest :: [ModelConfig Provider.Anthropic TestModels.ClaudeSonnet45]
+                     -> [Message TestModels.ClaudeSonnet45 Provider.Anthropic]
                      -> AnthropicRequest
-buildStreamingRequest = toProviderRequest Provider.Anthropic
+buildStreamingRequest = buildStreamingRequestGeneric TestModels.anthropicSonnet45 TestModels.ClaudeSonnet45 ((), ())
+
+-- Helper to build streaming request - uses ClaudeSonnet45WithReasoning
+buildStreamingRequestWithReasoning :: [ModelConfig Provider.Anthropic TestModels.ClaudeSonnet45WithReasoning]
+                                 -> [Message TestModels.ClaudeSonnet45WithReasoning Provider.Anthropic]
+                                 -> AnthropicRequest
+buildStreamingRequestWithReasoning = buildStreamingRequestGeneric TestModels.anthropicSonnet45Reasoning TestModels.ClaudeSonnet45WithReasoning ((), ((), ()))
+
+-- Generic helper to build streaming request with explicit composable provider
+buildStreamingRequestGeneric :: forall model s. ComposableProvider Provider.Anthropic model s
+                           -> model
+                           -> s
+                           -> [ModelConfig Provider.Anthropic model]
+                           -> [Message model Provider.Anthropic]
+                           -> AnthropicRequest
+buildStreamingRequestGeneric composableProvider model s configs = snd . toProviderRequest composableProvider Provider.Anthropic model configs s
 
 spec :: ResponseProvider AnthropicRequest BSL.ByteString -> Spec
 spec getResponse = do
@@ -35,7 +49,7 @@ spec getResponse = do
           configs = [MaxTokens 100, Streaming True]
           msgs = [UserText "Say hello"]
           req = Provider.withMagicSystemPrompt $
-                 buildStreamingRequest model configs msgs
+                 buildStreamingRequest configs msgs
 
       -- Verify the request is correctly configured for streaming
       Proto.stream req `shouldBe` Just True
@@ -72,7 +86,7 @@ spec getResponse = do
           configs = [MaxTokens 2048, Tools [toolDef], Streaming True]
           msgs = [UserText "What's the weather in Paris?"]
           req = Provider.withMagicSystemPrompt $
-                 buildStreamingRequest model configs msgs
+                 buildStreamingRequest configs msgs
 
       -- Verify the request is correctly configured for streaming and tools
       Proto.stream req `shouldBe` Just True
@@ -95,12 +109,12 @@ spec getResponse = do
       T.isInfixOf "message_stop" (T.pack bodyStr) `shouldBe` True
 
     it "sends streaming request with extended thinking and receives SSE response with thinking_delta events" $ do
+      -- Use ClaudeSonnet45WithReasoning for this test since reasoning requires HasReasoning instance
       let model = ClaudeSonnet45WithReasoning
-          -- Extended thinking/reasoning config
           configs = [MaxTokens 16000, Streaming True, Reasoning True]
           msgs = [UserText "Solve this puzzle: What has cities but no houses, forests but no trees, and water but no fish?"]
           req = Provider.withMagicSystemPrompt $
-                 buildStreamingRequest model configs msgs
+                 buildStreamingRequestWithReasoning configs msgs
 
       -- Verify the request is correctly configured for streaming with thinking
       Proto.stream req `shouldBe` Just True
@@ -142,7 +156,7 @@ spec getResponse = do
           configs = [MaxTokens 16000, Tools [toolDef], Streaming True, Reasoning True]
           msgs = [UserText "What's the weather in Paris?"]
           req = Provider.withMagicSystemPrompt $
-                 buildStreamingRequest model configs msgs
+                 buildStreamingRequestWithReasoning configs msgs
 
       -- Verify the request is correctly configured for streaming with thinking and tools
       Proto.stream req `shouldBe` Just True
@@ -185,7 +199,7 @@ spec getResponse = do
           configs = [MaxTokens 16000, Tools [toolDef], Streaming True, Reasoning True]
           msgs = [UserText "What's the weather in Paris?"]
           req = Provider.withMagicSystemPrompt $
-                 buildStreamingRequest model configs msgs
+                 buildStreamingRequestWithReasoning configs msgs
 
       Proto.stream req `shouldBe` Just True
       Proto.thinking req `shouldNotBe` Nothing

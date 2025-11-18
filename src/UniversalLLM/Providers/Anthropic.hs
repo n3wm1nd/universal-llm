@@ -129,8 +129,8 @@ handleReasoningMessage msg req = case msg of
 -- Composable providers for Anthropic
 
 -- Base provider: handles text messages and basic configuration
-baseComposableProvider :: forall model . (ModelName Anthropic model) => ComposableProvider Anthropic model
-baseComposableProvider p m configs = noopHandler
+baseComposableProvider :: forall model. (ModelName Anthropic model) => ComposableProvider Anthropic model ()
+baseComposableProvider p m configs _s = noopHandler
   { cpPureMessageRequest = ensureUserFirstPure
   , cpToRequest = \msg req ->
       let req' = req { model = modelName @Anthropic m
@@ -166,8 +166,8 @@ baseComposableProvider p m configs = noopHandler
         _ -> Nothing  -- First block is not text, let another provider handle it
 
 -- Standalone tools provider
-anthropicTools :: forall model . (HasTools model Anthropic) => ComposableProvider Anthropic model
-anthropicTools _p _m configs = noopHandler
+anthropicTools :: forall model s . (HasTools model Anthropic) => ComposableProvider Anthropic model s
+anthropicTools _p _m configs _s = noopHandler
   { cpToRequest = handleToolMessage
   , cpConfigHandler = \req ->
       let toolDefs = [defs | Tools defs <- configs]
@@ -187,8 +187,8 @@ anthropicTools _p _m configs = noopHandler
         _ -> Nothing  -- First block is not a tool call, let another provider handle it
 
 -- Standalone reasoning provider
-anthropicReasoning :: forall model . (HasReasoning model Anthropic) => ComposableProvider Anthropic model
-anthropicReasoning _p _m configs = noopHandler
+anthropicReasoning :: forall model s. (HasReasoning model Anthropic) => ComposableProvider Anthropic model s
+anthropicReasoning _p _m configs _s = noopHandler
   { cpToRequest = handleReasoningMessage
   , cpConfigHandler = \req ->
       let reasoningEnabled = not $ any isReasoningFalse configs
@@ -215,18 +215,8 @@ anthropicReasoning _p _m configs = noopHandler
           Just (AssistantReasoning thinking, AnthropicSuccess resp { responseContent = rest })
         _ -> Nothing  -- First block is not thinking, let another provider handle it
 
--- Backward compatibility wrappers using chainProviders
-anthropicWithTools :: forall model . (HasTools model Anthropic) => ComposableProvider Anthropic model -> ComposableProvider Anthropic model
-anthropicWithTools base = base `chainProviders` anthropicTools
-
-anthropicWithReasoning :: forall model . (HasReasoning model Anthropic) => ComposableProvider Anthropic model -> ComposableProvider Anthropic model
-anthropicWithReasoning base = base `chainProviders` anthropicReasoning
-
--- Default ProviderImplementation for basic text-only models
--- Models with capabilities (tools, vision, etc.) should provide their own instances
-instance {-# OVERLAPPABLE #-} ModelName Anthropic model => ProviderImplementation Anthropic model where
-  getComposableProvider = baseComposableProvider
-
+-- These are removed - use the typeclass methods withTools and withReasoning instead
+-- They're defined in the HasTools/HasReasoning instances
 
 -- | Add magic system prompt for OAuth authentication
 -- Prepends the Claude Code authentication prompt to user's system prompts

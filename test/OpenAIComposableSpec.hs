@@ -18,28 +18,45 @@ import UniversalLLM.Core.Types
 import UniversalLLM.Protocols.OpenAI
 import UniversalLLM.Providers.OpenAI
 
--- Helper to build request using the model's provider implementation
-buildRequest :: forall model. ProviderImplementation OpenAI model
-             => model
-             -> [ModelConfig OpenAI model]
-             -> [Message model OpenAI]
+-- Helper to build request for GLM45 (GLM45 with full composition)
+buildRequest :: GLM45
+             -> [ModelConfig OpenAI GLM45]
+             -> [Message GLM45 OpenAI]
              -> OpenAIRequest
-buildRequest = toProviderRequest OpenAI
+buildRequest _model = buildRequestGeneric TestModels.openAIGLM45 GLM45 ((), ((), ((), ())))
 
--- Helper to parse response using the model's provider implementation
-parseOpenAIResponse :: forall model. (ProviderImplementation OpenAI model, ModelName OpenAI model)
-                    => model
+-- Generic helper to build request with explicit composable provider
+buildRequestGeneric :: forall model s. ComposableProvider OpenAI model s
+                    -> model
+                    -> s
                     -> [ModelConfig OpenAI model]
-                    -> [Message model OpenAI]  -- history
+                    -> [Message model OpenAI]
+                    -> OpenAIRequest
+buildRequestGeneric composableProvider model s configs = snd . toProviderRequest composableProvider OpenAI model configs s
+
+-- Helper to parse OpenAI response for GLM45
+parseOpenAIResponse :: GLM45
+                    -> [ModelConfig OpenAI GLM45]
+                    -> [Message GLM45 OpenAI]
                     -> OpenAIResponse
-                    -> Either LLMError [Message model OpenAI]
-parseOpenAIResponse model configs history (OpenAIError (OpenAIErrorResponse errDetail)) =
+                    -> Either LLMError [Message GLM45 OpenAI]
+parseOpenAIResponse _model configs _history (OpenAIError (OpenAIErrorResponse errDetail)) =
   Left $ ProviderError (code errDetail) $ errorMessage errDetail <> " (" <> errorType errDetail <> ")"
-parseOpenAIResponse model configs history resp =
-  let (_provider, _model, msgs) = fromProviderResponse OpenAI model configs history resp
+parseOpenAIResponse _model configs _history resp =
+  let msgs = parseOpenAIResponseGeneric TestModels.openAIGLM45 GLM45 configs ((), ((), ((), ()))) resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs
+
+-- Generic helper to parse response with explicit composable provider
+parseOpenAIResponseGeneric :: forall model s. ComposableProvider OpenAI model s
+                           -> model
+                           -> [ModelConfig OpenAI model]
+                           -> s
+                           -> OpenAIResponse
+                           -> [Message model OpenAI]
+parseOpenAIResponseGeneric composableProvider model configs s resp =
+  snd $ fromProviderResponse composableProvider OpenAI model configs s resp
 
 spec :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 spec getResponse = do
@@ -51,21 +68,21 @@ spec getResponse = do
 
           -- First exchange
           msgs1 = [UserText "What is 2+2?" :: Message GLM45 OpenAI]
-          req1 = buildRequest model configs msgs1
+          req1 = buildRequest GLM45 configs msgs1
 
       resp1 <- getResponse req1
 
-      case parseOpenAIResponse @GLM45 model configs msgs1 resp1 of
+      case parseOpenAIResponse GLM45 configs msgs1 resp1 of
         Right [AssistantText txt] -> do
           T.isInfixOf "4" txt `shouldBe` True
 
           -- Second exchange - append to history
           let msgs2 = msgs1 <> [AssistantText txt, UserText "What about 3+3?"]
-              req2 = buildRequest model configs msgs2
+              req2 = buildRequest GLM45 configs msgs2
 
           resp2 <- getResponse req2
 
-          case parseOpenAIResponse @GLM45 model configs msgs2 resp2 of
+          case parseOpenAIResponse GLM45 configs msgs2 resp2 of
             Right [AssistantText txt2] -> do
               T.isInfixOf "6" txt2 `shouldBe` True
 
@@ -81,7 +98,7 @@ spec getResponse = do
           msgs = [ UserText "First part" :: Message GLM45 OpenAI
                  , UserText "Second part"
                  ]
-          req = buildRequest model configs msgs
+          req = buildRequest GLM45 configs msgs
 
       -- Should merge into single user message
       length (messages req) `shouldBe` 1
@@ -112,7 +129,7 @@ spec getResponse = do
 
           -- Step 1: Initial request with tools
           msgs1 = [UserText "What's the weather in Paris?" :: Message GLM45 OpenAI]
-          req1 = buildRequest model configs msgs1
+          req1 = buildRequest GLM45 configs msgs1
 
       -- Verify tools are in request
       case tools req1 of
@@ -123,7 +140,7 @@ spec getResponse = do
 
       resp1 <- getResponse req1
 
-      case parseOpenAIResponse @GLM45 model configs msgs1 resp1 of
+      case parseOpenAIResponse GLM45 configs msgs1 resp1 of
         Right [AssistantTool toolCall] -> do
           getToolCallName toolCall `shouldBe` "get_weather"
 
@@ -131,14 +148,14 @@ spec getResponse = do
           let toolResult = ToolResult toolCall
                              (Right $ object ["temperature" .= ("22°C" :: Text)])
               msgs2 = msgs1 <> [AssistantTool toolCall, ToolResultMsg toolResult]
-              req2 = buildRequest model configs msgs2
+              req2 = buildRequest GLM45 configs msgs2
 
           -- Verify history has all messages
           length (messages req2) `shouldBe` 3
 
           resp2 <- getResponse req2
 
-          case parseOpenAIResponse @GLM45 model configs msgs2 resp2 of
+          case parseOpenAIResponse GLM45 configs msgs2 resp2 of
             Right [AssistantText finalTxt] -> do
               -- Should incorporate the tool result
               T.isInfixOf "22" finalTxt `shouldBe` True
@@ -164,7 +181,7 @@ spec getResponse = do
             ]
           configs = [MaxTokens 500]  -- Increased for reasoning models
           msgs = [UserRequestJSON "List 3 primary colors" schema :: Message GLM45 OpenAI]
-          req = buildRequest model configs msgs
+          req = buildRequest GLM45 configs msgs
 
       -- Verify response_format is set with correct schema
       case response_format req of
@@ -183,7 +200,7 @@ spec getResponse = do
 
       resp <- getResponse req
 
-      case parseOpenAIResponse @GLM45 model configs msgs resp of
+      case parseOpenAIResponse GLM45 configs msgs resp of
         Right [AssistantJSON jsonVal] -> do
           case jsonVal of
             Aeson.Object obj ->
@@ -202,11 +219,11 @@ spec getResponse = do
 
           -- First JSON request
           msgs1 = [UserRequestJSON "Give me a string" schema1 :: Message GLM45 OpenAI]
-          req1 = buildRequest model configs msgs1
+          req1 = buildRequest GLM45 configs msgs1
 
           -- Second request after response - add new JSON request with different schema
           msgs2 = msgs1 <> [AssistantJSON (Aeson.String "hello"), UserRequestJSON "Give me a number" schema2]
-          req2 = buildRequest model configs msgs2
+          req2 = buildRequest GLM45 configs msgs2
 
       -- req1 should have schema1
       case response_format req1 of
@@ -235,7 +252,7 @@ spec getResponse = do
           toolDef = ToolDefinition "test_tool" "Test" (object [])
           configs = [Tools [toolDef], MaxTokens 50]
           msgs = [UserText "test" :: Message GLM45 OpenAI]
-          req = buildRequest model configs msgs
+          req = buildRequest GLM45 configs msgs
 
       case tools req of
         Just [_] -> return ()
@@ -253,7 +270,7 @@ spec getResponse = do
           configs = [Tools [toolDef], MaxTokens 50]
           msgs = [UserText "test" :: Message BasicTextModel OpenAI]
           -- Cannot use fullComposableProvider without HasTools and HasJSON
-          req = buildRequest model configs msgs
+          req = buildRequest GLM45 configs msgs
       return ()
     -}
 

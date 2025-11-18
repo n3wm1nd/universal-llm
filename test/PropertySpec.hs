@@ -19,6 +19,7 @@ import qualified UniversalLLM.Protocols.OpenAI as OP
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
 import qualified UniversalLLM.Providers.OpenAI as OpenAIProvider
 import TestModels
+import UniversalLLM.Providers.Anthropic (Anthropic(Anthropic))
 
 -- ============================================================================
 -- Arbitrary instances
@@ -135,6 +136,17 @@ genConfigOpenAI = oneof
   , Reasoning <$> arbitrary
   ]
 
+
+toProviderRequestSonnet45 msg = fmap snd $ toProviderRequest anthropicSonnet45 Anthropic ClaudeSonnet45 msg ((), ())
+toProviderRequestSonnet45WithReasoning msg = fmap snd $ toProviderRequest anthropicSonnet45Reasoning Anthropic ClaudeSonnet45WithReasoning msg ((), ((), ()))
+
+toProviderRequestGLM45 msg = fmap snd $ toProviderRequest openAIGLM45 OpenAIProvider.OpenAI GLM45 msg ((), ((), ((), ())))
+toProviderRequestGLM45WithReasoning msg = fmap snd $ toProviderRequest openAIGLM45 OpenAIProvider.OpenAI GLM45 msg ((), ((), ((), ())))
+
+-- fromProviderResponse signature: composableProvider -> provider -> model -> configs -> state -> response -> (state, messages)
+fromProviderResponseGLM45 configs resp = snd $ fromProviderResponse openAIGLM45 OpenAIProvider.OpenAI GLM45 configs ((), ((), ((), ()))) resp
+fromProviderResponseSonnet45WithReasoning configs resp = snd $ fromProviderResponse anthropicSonnet45Reasoning Anthropic ClaudeSonnet45WithReasoning configs ((),((),())) resp
+
 -- ============================================================================
 -- Property tests for Anthropic
 -- ============================================================================
@@ -143,7 +155,7 @@ genConfigOpenAI = oneof
 prop_anthropicRequestTerminates :: Property
 prop_anthropicRequestTerminates = forAll genMessages $ \msgs ->
   let configs = []  -- Use empty configs to avoid Show instance requirement
-      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45 configs msgs
+      req = toProviderRequestSonnet45 configs msgs
   in req `seq` property True
   where
     genMessages = listOf genMessageAnthropicTools
@@ -153,7 +165,7 @@ prop_anthropicRequestTerminates = forAll genMessages $ \msgs ->
 prop_anthropicMessagesAlternate :: Property
 prop_anthropicMessagesAlternate = forAll genMessages $ \msgs ->
   let configs = []
-      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45 configs msgs
+      req = toProviderRequestSonnet45 configs msgs
       roles = map AP.role (AP.messages req)
   in not (null roles) ==> checkAlternating roles
   where
@@ -171,7 +183,7 @@ prop_anthropicMessagesAlternate = forAll genMessages $ \msgs ->
 prop_anthropicStartsWithUser :: Property
 prop_anthropicStartsWithUser = forAll genMessages $ \msgs ->
   let configs = []
-      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45 configs msgs
+      req = toProviderRequestSonnet45 configs msgs
   in not (null (AP.messages req)) ==> AP.role (head (AP.messages req)) === "user"
   where
     genMessages = listOf1 genMessageAnthropicTools
@@ -180,7 +192,7 @@ prop_anthropicStartsWithUser = forAll genMessages $ \msgs ->
 prop_anthropicGroupsConsecutiveUsers :: Property
 prop_anthropicGroupsConsecutiveUsers = forAll consecutiveUsers $ \msgs ->
   let configs = []
-      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45 configs msgs
+      req = toProviderRequestSonnet45 configs msgs
   in length (AP.messages req) === 1
      .&&. AP.role (head (AP.messages req)) === "user"
      .&&. length (AP.content (head (AP.messages req))) === length msgs
@@ -192,7 +204,7 @@ prop_anthropicMaxTokens :: Property
 prop_anthropicMaxTokens = forAll (choose (1, 4096)) $ \maxTok ->
   let configs = [MaxTokens maxTok]
       msgs = [UserText "test"]
-      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45 configs msgs
+      req = toProviderRequestSonnet45 configs msgs
   in AP.max_tokens req === maxTok
 
 -- | Property: Temperature config should be reflected in request
@@ -200,7 +212,7 @@ prop_anthropicTemperature :: Property
 prop_anthropicTemperature = forAll (choose (0.0, 2.0)) $ \temp ->
   let configs = [Temperature temp]
       msgs = [UserText "test"]
-      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45 configs msgs
+      req = toProviderRequestSonnet45 configs msgs
   in AP.temperature req === Just temp
 
 -- | Property: Tools config should be reflected in request
@@ -208,7 +220,7 @@ prop_anthropicTools :: Property
 prop_anthropicTools = forAll (listOf1 arbitrary) $ \(toolDefs :: [ToolDefinition]) ->
   let configs = [Tools toolDefs]
       msgs = [UserText "test"]
-      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45 configs msgs
+      req = toProviderRequestSonnet45 configs msgs
   in case AP.tools req of
        Just toolList -> length toolList === length toolDefs
        Nothing -> property False
@@ -218,7 +230,7 @@ prop_anthropicSystemPrompt :: Property
 prop_anthropicSystemPrompt = forAll genNonEmptyText $ \sysPrompt ->
   let configs = [SystemPrompt sysPrompt]
       msgs = [UserText "test"]
-      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45 configs msgs
+      req = toProviderRequestSonnet45 configs msgs
   in case AP.system req of
        Just blocks -> property $ any (\(AP.AnthropicSystemBlock txt _) -> txt == sysPrompt) blocks
        Nothing -> property False
@@ -231,7 +243,7 @@ prop_anthropicSystemPrompt = forAll genNonEmptyText $ \sysPrompt ->
 prop_openaiRequestTerminates :: Property
 prop_openaiRequestTerminates = forAll genMessages $ \msgs ->
   let configs = []
-      req = toProviderRequest OpenAIProvider.OpenAI GLM45 configs msgs
+      req = toProviderRequestGLM45 configs msgs
   in req `seq` property True
   where
     genMessages = listOf genMessageOpenAIFull
@@ -240,7 +252,7 @@ prop_openaiRequestTerminates = forAll genMessages $ \msgs ->
 prop_openaiMergesConsecutiveUsers :: Property
 prop_openaiMergesConsecutiveUsers = forAll consecutiveUsers $ \msgs ->
   let configs = []
-      req = toProviderRequest OpenAIProvider.OpenAI GLM45 configs msgs
+      req = toProviderRequestGLM45 configs msgs
       userMessages = filter (\m -> OP.role m == "user") (OP.messages req)
   in length userMessages === 1
      .&&. OP.role (head userMessages) === "user"
@@ -252,7 +264,7 @@ prop_openaiMaxTokens :: Property
 prop_openaiMaxTokens = forAll (choose (1, 4096)) $ \maxTok ->
   let configs = [MaxTokens maxTok]
       msgs = [UserText "test"]
-      req = toProviderRequest OpenAIProvider.OpenAI GLM45 configs msgs
+      req = toProviderRequestGLM45 configs msgs
   in OP.max_tokens req === Just maxTok
 
 -- | Property: Temperature config should be reflected in OpenAI request
@@ -260,7 +272,7 @@ prop_openaiTemperature :: Property
 prop_openaiTemperature = forAll (choose (0.0, 2.0)) $ \temp ->
   let configs = [Temperature temp]
       msgs = [UserText "test"]
-      req = toProviderRequest OpenAIProvider.OpenAI GLM45 configs msgs
+      req = toProviderRequestGLM45 configs msgs
   in OP.temperature req === Just temp
 
 -- | Property: Seed config should be reflected in OpenAI request
@@ -268,7 +280,7 @@ prop_openaiSeed :: Property
 prop_openaiSeed = forAll arbitrary $ \seedVal ->
   let configs = [Seed seedVal]
       msgs = [UserText "test"]
-      req = toProviderRequest OpenAIProvider.OpenAI GLM45 configs msgs
+      req = toProviderRequestGLM45 configs msgs
   in OP.seed req === Just seedVal
 
 -- | Property: Tools config should be reflected in OpenAI request
@@ -276,7 +288,7 @@ prop_openaiTools :: Property
 prop_openaiTools = forAll (listOf1 arbitrary) $ \(toolDefs :: [ToolDefinition]) ->
   let configs = [Tools toolDefs]
       msgs = [UserText "test"]
-      req = toProviderRequest OpenAIProvider.OpenAI GLM45 configs msgs
+      req = toProviderRequestGLM45 configs msgs
   in case OP.tools req of
        Just toolList -> length toolList === length toolDefs
        Nothing -> property False
@@ -286,7 +298,7 @@ prop_openaiSystemPrompt :: Property
 prop_openaiSystemPrompt = forAll genNonEmptyText $ \sysPrompt ->
   let configs = [SystemPrompt sysPrompt]
       msgs = [UserText "test"]
-      req = toProviderRequest OpenAIProvider.OpenAI GLM45 configs msgs
+      req = toProviderRequestGLM45 configs msgs
   in not (null (OP.messages req)) ==>
        OP.role (head (OP.messages req)) === "system"
        .&&. OP.content (head (OP.messages req)) === Just sysPrompt
@@ -297,7 +309,7 @@ prop_openaiJSONMode = forAll genNonEmptyText $ \prompt ->
   forAll genSimpleValue $ \schema ->
     let msgs = [UserRequestJSON prompt schema]
         configs = []
-        req = toProviderRequest OpenAIProvider.OpenAI GLM45 configs msgs
+        req = toProviderRequestGLM45 configs msgs
     in case OP.response_format req of
          Just fmt -> OP.responseType fmt === "json_schema"
          Nothing -> property False
@@ -310,7 +322,7 @@ prop_openaiJSONMode = forAll genNonEmptyText $ \prompt ->
 prop_anthropicSerializationSucceeds :: Property
 prop_anthropicSerializationSucceeds = forAll genMessages $ \msgs ->
   let configs = []
-      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45 configs msgs
+      req = toProviderRequestSonnet45 configs msgs
       encoded = toJSONViaCodec req
   in length (show encoded) > 0
   where
@@ -319,7 +331,7 @@ prop_anthropicSerializationSucceeds = forAll genMessages $ \msgs ->
 prop_openaiSerializationSucceeds :: Property
 prop_openaiSerializationSucceeds = forAll genMessages $ \msgs ->
   let configs = []
-      req = toProviderRequest OpenAIProvider.OpenAI GLM45 configs msgs
+      req = toProviderRequestGLM45 configs msgs
       encoded = toJSONViaCodec req
   in length (show encoded) > 0
   where
@@ -332,7 +344,7 @@ prop_openaiSerializationSucceeds = forAll genMessages $ \msgs ->
 prop_anthropicRequestIsValid :: Property
 prop_anthropicRequestIsValid = forAll genMessages $ \msgs ->
   let configs = []
-      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45 configs msgs
+      req = toProviderRequestSonnet45 configs msgs
       msgs_list = AP.messages req
       -- Check all content blocks are valid
       validBlocks = all isValidContentBlock (concatMap AP.content msgs_list)
@@ -352,7 +364,7 @@ prop_anthropicRequestIsValid = forAll genMessages $ \msgs ->
 prop_openaiMultipleReasoningMessages :: Property
 prop_openaiMultipleReasoningMessages = forAll reasoningSequence $ \msgs ->
   let configs = []
-      req = toProviderRequest OpenAIProvider.OpenAI GLM45 configs msgs
+      req = toProviderRequestGLM45 configs msgs
       reasoningMsgs = filter (\m -> OP.role m == "assistant" && OP.reasoning_content m /= Nothing) (OP.messages req)
   in counterexample ("Generated messages: " ++ show (length msgs) ++
                      ", Reasoning in request: " ++ show (length reasoningMsgs))
@@ -375,7 +387,7 @@ prop_openaiMultipleReasoningMessages = forAll reasoningSequence $ \msgs ->
 prop_openaiMultipleToolCalls :: Property
 prop_openaiMultipleToolCalls = forAll toolCallSequence $ \msgs ->
   let configs = []
-      req = toProviderRequest OpenAIProvider.OpenAI GLM45 configs msgs
+      req = toProviderRequestGLM45 configs msgs
       -- Count tool calls in the request
       toolCallCount = sum [case OP.tool_calls m of
                              Just calls -> length calls
@@ -409,7 +421,7 @@ prop_openaiMultipleToolCalls = forAll toolCallSequence $ \msgs ->
 prop_anthropicReasoningMessages :: Property
 prop_anthropicReasoningMessages = forAll reasoningMessage $ \msgs ->
   let configs = [MaxTokens 16000]  -- Higher tokens for reasoning
-      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45WithReasoning configs msgs
+      req = toProviderRequestSonnet45WithReasoning configs msgs
       -- Check for thinking blocks in any message
       thinkingBlocks = [block | msg <- AP.messages req, block <- AP.content msg, isThinkingBlock block]
   in counterexample ("Generated messages: " ++ show (length msgs) ++
@@ -448,7 +460,7 @@ genMessageAnthropicReasoningTools = oneof
 prop_anthropicMultipleReasoningMessages :: Property
 prop_anthropicMultipleReasoningMessages = forAll reasoningSequence $ \msgs ->
   let configs = [MaxTokens 16000]
-      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45WithReasoning configs msgs
+      req = toProviderRequestSonnet45WithReasoning configs msgs
       -- Count thinking blocks
       thinkingBlocks = [block | msg <- AP.messages req, block <- AP.content msg, isThinkingBlock block]
       -- Also verify thinking is enabled in config
@@ -483,7 +495,7 @@ prop_anthropicMultipleReasoningMessages = forAll reasoningSequence $ \msgs ->
 prop_openaiFullStackRequestWithToolsAndReasoning :: Property
 prop_openaiFullStackRequestWithToolsAndReasoning = forAll genMessages $ \msgs ->
   let configs = [MaxTokens 16000, Tools [ToolDefinition "test_tool" "A test tool" (object [])]]
-      req = toProviderRequest OpenAIProvider.OpenAI GLM45 configs msgs
+      req = toProviderRequestGLM45 configs msgs
       -- Verify the request has messages
       requestMsgCount = length (OP.messages req)
       -- Verify model is set
@@ -503,7 +515,7 @@ prop_openaiFullStackRequestWithToolsAndReasoning = forAll genMessages $ \msgs ->
 prop_anthropicFullStackRequestWithToolsAndReasoning :: Property
 prop_anthropicFullStackRequestWithToolsAndReasoning = forAll genMessages $ \msgs ->
   let configs = [MaxTokens 16000, Reasoning True, Tools [ToolDefinition "test_tool" "A test tool" (object [])]]
-      req = toProviderRequest AnthropicProvider.Anthropic ClaudeSonnet45WithReasoning configs msgs
+      req = toProviderRequestSonnet45WithReasoning configs msgs
       -- Verify the request has messages
       requestMsgCount = length (AP.messages req)
       -- Verify model is set
@@ -534,7 +546,7 @@ prop_openaiResponseParsingWithToolsAndReasoning :: Property
 prop_openaiResponseParsingWithToolsAndReasoning = forAll genResponse $ \(msgs, resp) ->
   let configs = []
       -- Use the actual provider pipeline to parse the response
-      (_provider, _model, parsedMsgs) = fromProviderResponse OpenAIProvider.OpenAI GLM45 configs msgs resp
+      parsedMsgs = fromProviderResponseGLM45 configs resp
   in counterexample ("Generated messages: " ++ show (length msgs) ++
                      ", Parsed messages: " ++ show (length parsedMsgs))
        (length parsedMsgs >= 1 || null msgs)  -- Either we parsed messages or generated empty input
@@ -563,7 +575,7 @@ prop_anthropicResponseParsingWithToolsAndReasoning :: Property
 prop_anthropicResponseParsingWithToolsAndReasoning = forAll genResponse $ \(msgs, resp) ->
   let configs = [Reasoning True]
       -- Use the actual provider pipeline to parse the response (with reasoning enabled)
-      (_provider, _model, parsedMsgs) = fromProviderResponse AnthropicProvider.Anthropic ClaudeSonnet45WithReasoning configs msgs resp
+      parsedMsgs = fromProviderResponseSonnet45WithReasoning configs resp
   in counterexample ("Generated messages: " ++ show (length msgs) ++
                      ", Parsed messages: " ++ show (length parsedMsgs))
        (length parsedMsgs >= 1 || null msgs)  -- Either we parsed messages or generated empty input

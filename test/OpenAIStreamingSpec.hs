@@ -18,13 +18,21 @@ import UniversalLLM.Protocols.OpenAI
 import qualified UniversalLLM.Protocols.OpenAI as Proto
 import qualified UniversalLLM.Providers.OpenAI as Provider
 
--- Helper to build streaming request using the model's provider implementation
-buildStreamingRequest :: forall model. ProviderImplementation Provider.OpenAI model
-                     => model
-                     -> [ModelConfig Provider.OpenAI model]
-                     -> [Message model Provider.OpenAI]
+-- Helper to build streaming request - uses GLM45 with full composition
+-- (Wrapper around the generic version that provides the specific model and composable provider)
+buildStreamingRequest :: [ModelConfig Provider.OpenAI GLM45]
+                     -> [Message GLM45 Provider.OpenAI]
                      -> OpenAIRequest
-buildStreamingRequest = toProviderRequest Provider.OpenAI
+buildStreamingRequest = buildStreamingRequestGeneric TestModels.openAIGLM45 GLM45 ((), ((), ((), ())))
+
+-- Generic helper to build streaming request with explicit composable provider
+buildStreamingRequestGeneric :: forall model s. ComposableProvider Provider.OpenAI model s
+                           -> model
+                           -> s
+                           -> [ModelConfig Provider.OpenAI model]
+                           -> [Message model Provider.OpenAI]
+                           -> OpenAIRequest
+buildStreamingRequestGeneric composableProvider model s configs = snd . toProviderRequest composableProvider Provider.OpenAI model configs s
 
 spec :: ResponseProvider OpenAIRequest BSL.ByteString -> Spec
 spec getResponse = do
@@ -34,7 +42,7 @@ spec getResponse = do
       let model = GLM45
           configs = [MaxTokens 100, Streaming True]
           msgs = [UserText "Say hello"]
-          req = buildStreamingRequest model configs msgs
+          req = buildStreamingRequest configs msgs
 
       -- Verify the request is correctly configured for streaming
       Proto.stream req `shouldBe` Just True
@@ -67,7 +75,7 @@ spec getResponse = do
             }
           configs = [MaxTokens 2048, Tools [toolDef], Streaming True]
           msgs = [UserText "What's the weather in Paris?"]
-          req = buildStreamingRequest model configs msgs
+          req = buildStreamingRequest configs msgs
 
       -- Verify the request is correctly configured for streaming and tools
       Proto.stream req `shouldBe` Just True
@@ -91,7 +99,7 @@ spec getResponse = do
           -- Reasoning config for models that support it
           configs = [MaxTokens 16000, Streaming True, Reasoning True]
           msgs = [UserText "Solve this puzzle: What has cities but no houses, forests but no trees, and water but no fish?"]
-          req = buildStreamingRequest model configs msgs
+          req = buildStreamingRequest configs msgs
 
       -- Verify the request is correctly configured for streaming with reasoning
       Proto.stream req `shouldBe` Just True
@@ -125,7 +133,7 @@ spec getResponse = do
             }
           configs = [MaxTokens 16000, Tools [toolDef], Streaming True, Reasoning True]
           msgs = [UserText "What's the weather in Paris?"]
-          req = buildStreamingRequest model configs msgs
+          req = buildStreamingRequest configs msgs
 
       -- Verify the request is correctly configured for streaming with reasoning and tools
       Proto.stream req `shouldBe` Just True

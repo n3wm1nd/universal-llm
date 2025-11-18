@@ -69,26 +69,17 @@ parseXMLFromResponse txt =
 
 -- | Parse XML tool calls from responses (provider has native tool support)
 -- This ONLY handles response parsing - tool definitions use native format
-withXMLResponseParsing :: forall provider model.
-                          (HasTools model provider,
-                           ProviderResponse provider ~ OpenAIResponse)
-                       => ComposableProvider provider model
-                       -> ComposableProvider provider model
+withXMLResponseParsing ::
+  forall provider model s s'.
+  (HasTools model provider) =>
+  ComposableProvider provider model s ->
+  ComposableProvider provider model (s, s')
 withXMLResponseParsing base = base `chainProviders` xmlResponseParser
   where
-    xmlResponseParser _p _m _configs = noopHandler
-      { cpFromResponse = parseResponse
-      , cpPureMessageResponse = extractXMLFromMessages
+    xmlResponseParser _p _m _configs _s = noopHandler
+      { 
+        cpPureMessageResponse = extractXMLFromMessages
       }
-
-    parseResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
-      case respChoices of
-        [] -> Nothing
-        (OpenAIChoice msg:_) ->
-          case content msg of
-            Nothing -> Nothing
-            Just txt -> Just (AssistantText txt, OpenAISuccess (OpenAISuccessResponse []))
-    parseResponse _ = Nothing
 
     extractXMLFromMessages :: [Message model provider] -> [Message model provider]
     extractXMLFromMessages acc =
@@ -112,18 +103,17 @@ withXMLResponseParsing base = base `chainProviders` xmlResponseParser
 
 -- | Full XML tool support
 -- Handles: system prompt injection, tool results as text, XML response parsing
-withFullXMLToolSupport :: forall provider model.
-                          (HasTools model provider,
-                           ProviderRequest provider ~ OpenAIRequest,
-                           ProviderResponse provider ~ OpenAIResponse)
-                       => ComposableProvider provider model
-                       -> ComposableProvider provider model
+
+withFullXMLToolSupport ::
+  forall provider model s s'.
+  (ProviderRequest provider ~ OpenAIRequest, HasTools model provider) =>
+   -- FIXME: we need a way to modify [Config] to make this work with all providers by putting it in SystemPrompt
+  ComposableProvider provider model s -> ComposableProvider provider model (s, s')
 withFullXMLToolSupport base = base `chainProviders` xmlFullSupport
   where
-    xmlFullSupport _p _m configs = noopHandler
+    xmlFullSupport _p _m configs _s = noopHandler
       { cpPureMessageRequest = convertToolsToXML
       , cpConfigHandler = injectToolDefinitions configs
-      , cpFromResponse = parseResponse
       , cpPureMessageResponse = extractXMLMessagesFromResponse
       }
 
@@ -163,16 +153,6 @@ withFullXMLToolSupport base = base `chainProviders` xmlFullSupport
       where
         isSystemMessage (OpenAIMessage "system" _ _ _ _) = True
         isSystemMessage _ = False
-
-    -- Parse XML from responses
-    parseResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
-      case respChoices of
-        [] -> Nothing
-        (OpenAIChoice msg:_) ->
-          case content msg of
-            Nothing -> Nothing
-            Just txt -> Just (AssistantText txt, OpenAISuccess (OpenAISuccessResponse []))
-    parseResponse _ = Nothing
 
     -- Extract XML tool calls from parsed text messages
     extractXMLMessagesFromResponse :: [Message model provider] -> [Message model provider]

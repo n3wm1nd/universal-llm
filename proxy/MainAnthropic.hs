@@ -40,10 +40,12 @@ instance ModelName Anthropic ClaudeSonnet45 where
   modelName _ = "claude-sonnet-4.5-20250514"
 
 instance HasTools ClaudeSonnet45 Anthropic where
-  withTools = AnthropicProvider.anthropicWithTools
+  withTools = chainProviders AnthropicProvider.anthropicTools
 
-instance ProviderImplementation Anthropic ClaudeSonnet45 where
-  getComposableProvider = withTools AnthropicProvider.baseComposableProvider
+-- Composable provider for ClaudeSonnet45 with tools
+claudeSonnet45ComposableProvider :: ComposableProvider Anthropic ClaudeSonnet45 ((), ())
+claudeSonnet45ComposableProvider = chainProviders AnthropicProvider.anthropicTools $
+                                   AnthropicProvider.baseComposableProvider
 
 -- ============================================================================
 -- Configuration
@@ -116,9 +118,12 @@ handleProxy apiKey reqBody = do
   liftIO $ putStrLn $ "🔄 Converted to " <> show (length $ proxyMessages proxyConfig) <> " universal messages"
 
   -- 3. Convert universal format to backend provider request
-  let backendRequest = toProviderRequest backendProvider backendModel
-                         (proxyConfigs proxyConfig)
-                         (proxyMessages proxyConfig)
+  let backendRequest = snd $ toProviderRequest claudeSonnet45ComposableProvider
+                                                  backendProvider
+                                                  backendModel
+                                                  (proxyConfigs proxyConfig)
+                                                  ((), ())
+                                                  (proxyMessages proxyConfig)
 
   liftIO $ putStrLn $ "📤 Sending to backend provider (Anthropic Claude Sonnet 4.5)"
 
@@ -129,10 +134,12 @@ handleProxy apiKey reqBody = do
   liftIO $ putStrLn "📨 Received response from backend"
 
   -- 5. Parse backend response to universal messages
-  let (_backendProvider', _backendModel', universalMessages) = fromProviderResponse backendProvider backendModel
-                                                               (proxyConfigs proxyConfig)
-                                                               (proxyMessages proxyConfig)
-                                                               response
+  let universalMessages = snd $ fromProviderResponse claudeSonnet45ComposableProvider
+                                                       backendProvider
+                                                       backendModel
+                                                       (proxyConfigs proxyConfig)
+                                                       ((), ())
+                                                       response
 
   liftIO $ putStrLn $ "🔄 Converted to " <> show (length universalMessages) <> " universal messages"
 

@@ -81,7 +81,7 @@ spec = do
             model = GLM45
             configs = [Tools [toolDef]]
             msgs = [UserText "Calculate 5 + 3" :: Message GLM45 OpenAI.OpenAI]
-            req = toProviderRequest OpenAI.OpenAI model configs msgs
+            req = snd $ toProviderRequest openAIGLM45 OpenAI.OpenAI GLM45 configs ((), ((), ((), ()))) msgs
 
         -- Verify tool is correctly translated to OpenAI format
         case OpenAIProt.tools req of
@@ -121,7 +121,7 @@ spec = do
             model = ClaudeSonnet45
             configs = [Tools [toolDef]]
             msgs = [UserText "Calculate 10 * 7" :: Message ClaudeSonnet45 Anthropic.Anthropic]
-            req = toProviderRequest Anthropic.Anthropic model configs msgs
+            req = snd $ toProviderRequest TestModels.anthropicSonnet45 Anthropic.Anthropic model configs ((), ()) msgs
 
         -- Verify tool is correctly translated to Anthropic format
         case AnthropicProt.tools req of
@@ -155,7 +155,7 @@ spec = do
             model = GLM45
             configs = [Tools [calcDef]]
             msgs = [UserText "Do some math" :: Message GLM45 OpenAI.OpenAI]
-            req = toProviderRequest OpenAI.OpenAI model configs msgs
+            req = snd $ toProviderRequest openAIGLM45 OpenAI.OpenAI GLM45 configs ((), ((), ((), ()))) msgs
 
         -- Should have tools in the request
         case OpenAIProt.tools req of

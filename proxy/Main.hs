@@ -40,13 +40,15 @@ instance ModelName OpenAI GPT4o where
   modelName _ = "gpt-4o"
 
 instance HasTools GPT4o OpenAI where
-  withTools = OpenAIProvider.openAIWithTools
+  withTools = chainProviders OpenAIProvider.openAITools
 
 instance HasJSON GPT4o OpenAI where
-  withJSON = OpenAIProvider.openAIWithJSON
+  withJSON = chainProviders OpenAIProvider.openAIJSON
 
-instance ProviderImplementation OpenAI GPT4o where
-  getComposableProvider = withJSON . withTools $ OpenAIProvider.baseComposableProvider
+-- Composable provider for GPT4o with tools
+gpt4oComposableProvider :: ComposableProvider OpenAI GPT4o ((), ())
+gpt4oComposableProvider = chainProviders OpenAIProvider.openAITools $
+                          OpenAIProvider.baseComposableProvider
 
 -- ============================================================================
 -- Configuration
@@ -117,9 +119,12 @@ handleProxy apiKey reqBody = do
   liftIO $ putStrLn $ "🔄 Converted to " <> show (length $ proxyMessages proxyConfig) <> " universal messages"
 
   -- 3. Convert universal format to backend provider request
-  let backendRequest = toProviderRequest backendProvider backendModel
-                         (proxyConfigs proxyConfig)
-                         (proxyMessages proxyConfig)
+  let backendRequest = snd $ toProviderRequest gpt4oComposableProvider
+                                                 backendProvider
+                                                 backendModel
+                                                 (proxyConfigs proxyConfig)
+                                                 ((), ())
+                                                 (proxyMessages proxyConfig)
 
   liftIO $ putStrLn $ "📤 Sending to backend provider (OpenAI GPT-4o)"
 
@@ -130,10 +135,12 @@ handleProxy apiKey reqBody = do
   liftIO $ putStrLn "📨 Received response from backend"
 
   -- 5. Parse backend response to universal messages
-  let (_backendProvider', _backendModel', universalMessages) = fromProviderResponse backendProvider backendModel
-                                                                (proxyConfigs proxyConfig)
-                                                                (proxyMessages proxyConfig)
-                                                                response
+  let universalMessages = snd $ fromProviderResponse gpt4oComposableProvider
+                                                       backendProvider
+                                                       backendModel
+                                                       (proxyConfigs proxyConfig)
+                                                       ((), ())
+                                                       response
 
   liftIO $ putStrLn $ "🔄 Converted to " <> show (length universalMessages) <> " universal messages"
 

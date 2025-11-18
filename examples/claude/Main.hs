@@ -40,10 +40,12 @@ instance ModelName Anthropic ClaudeSonnet45 where
   modelName _ = "claude-sonnet-4-5-20250929"
 
 instance HasTools ClaudeSonnet45 Anthropic where
-  withTools = AnthropicProvider.anthropicWithTools
+  withTools = chainProviders AnthropicProvider.anthropicTools
 
-instance ProviderImplementation Anthropic ClaudeSonnet45 where
-  getComposableProvider = withTools AnthropicProvider.baseComposableProvider
+-- Composable provider for ClaudeSonnet45 with tools
+claudeSonnet45ComposableProvider :: ComposableProvider Anthropic ClaudeSonnet45 ((), ())
+claudeSonnet45ComposableProvider = chainProviders AnthropicProvider.anthropicTools $
+                                   AnthropicProvider.baseComposableProvider
 
 -- ============================================================================
 -- Tool Definition
@@ -93,7 +95,7 @@ mkAnthropicCall oauthToken =
 -- KEY ARCHITECTURAL POINT:
 -- The business logic below is fully polymorphic over provider and model types.
 -- It works with ANY provider/model combination that supports the required capabilities
--- (in this case: ProviderImplementation and HasTools).
+-- (in this case: HasTools).
 --
 -- This demonstrates how user code should be written: decoupled from specific providers
 -- and models, using only the capability constraints needed. The concrete provider/model
@@ -103,24 +105,26 @@ mkAnthropicCall oauthToken =
 
 -- Main agent loop - continues until text response (non-tool)
 -- This is polymorphic over BOTH provider and model
-agentLoop :: forall provider model req resp.
-             (ProviderImplementation provider model, HasTools model provider,
+agentLoop :: forall provider model req resp state.
+             (HasTools model provider,
               req ~ ProviderRequest provider, resp ~ ProviderResponse provider,
               Monoid req)
-          => provider
+          => ComposableProvider provider model state
+          -> provider
           -> model
+          -> state
           -> [LLMTool IO]
           -> LLMCall req resp
           -> [ModelConfig provider model]
           -> [Message model provider]
           -> ExceptT LLMError IO ()
-agentLoop provider model tools callLLM configs messages = do
+agentLoop composableProvider provider model state tools callLLM configs messages = do
   -- Build and send request (provider-agnostic)
-  let request = toProviderRequest provider model configs messages
+  let request = snd $ toProviderRequest composableProvider provider model configs state messages
   response <- callLLM request
 
   -- Parse response (provider-agnostic)
-  let (_provider', _model', msgs) = fromProviderResponse provider model configs messages response
+  let msgs = snd $ fromProviderResponse composableProvider provider model configs state response
   responses <- if null msgs
                then except $ Left $ ParseError "No messages parsed from response"
                else return msgs
@@ -128,7 +132,7 @@ agentLoop provider model tools callLLM configs messages = do
   newMsgs <- liftIO $ concat <$> mapM (handleResponse tools) responses
   -- Continue loop only if there are tool results to send back
   unless (null newMsgs) $
-    agentLoop provider model tools callLLM configs (messages ++ responses ++ newMsgs)
+    agentLoop composableProvider provider model state tools callLLM configs (messages ++ responses ++ newMsgs)
 
 -- Handle different response types (polymorphic over provider and model)
 -- Returns empty list for text (stops loop), tool results for tool calls (continues loop)
@@ -190,7 +194,7 @@ main = do
   let initialMsg = [UserText "Use the get_time tool to tell me what time it is."]
 
   -- Business logic (agentLoop) is polymorphic - works with any provider/model
-  result <- runExceptT $ agentLoop provider model tools callClaude configs initialMsg
+  result <- runExceptT $ agentLoop claudeSonnet45ComposableProvider provider model ((), ()) tools callClaude configs initialMsg
   case result of
     Left err -> putStrLn $ "❌ Error: " <> show err
     Right () -> return ()
