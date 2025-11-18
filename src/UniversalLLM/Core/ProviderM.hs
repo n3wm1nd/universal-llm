@@ -8,6 +8,7 @@ module UniversalLLM.Core.ProviderM
   ( ProviderM
   , withProviderState
   , withProvider
+  , withProviderCall
   , toRequest
   , fromResponse
   ) where
@@ -91,3 +92,25 @@ fromResponse composableProvider provider model configs response =
     let (newState, messages) = fromProviderResponse composableProvider provider model configs state response
     put newState
     pure messages
+
+-- | Run with a query function that handles request/response directly.
+-- The query function takes messages and returns response messages.
+-- Usage: resp <- query [UserText "question"]
+--        resp2 <- query (resp <> [UserText "followup"])
+withProviderCall :: forall provider model s m a.
+                    (Monad m, Default s, Monoid (ProviderRequest provider))
+                 => ComposableProvider provider model s
+                 -> provider
+                 -> model
+                 -> [ModelConfig provider model]
+                 -> (ProviderRequest provider -> m (ProviderResponse provider))
+                 -> (([Message model provider] -> ProviderM provider model s m [Message model provider]) -> ProviderM provider model s m a)
+                 -> m a
+withProviderCall cp provider model configs callLLM mkProgram =
+  withProvider cp provider model (mkProgram query)
+  where
+    query :: [Message model provider] -> ProviderM provider model s m [Message model provider]
+    query msgs = do
+      request <- toRequest cp provider model configs msgs
+      response <- lift $ callLLM request
+      fromResponse cp provider model configs response
