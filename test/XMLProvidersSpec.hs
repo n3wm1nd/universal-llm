@@ -33,7 +33,7 @@ instance ModelName OpenAI.LlamaCpp MockXMLResponseModel where
   modelName _ = "mock-xml-response"
 
 instance HasTools MockXMLResponseModel OpenAI.LlamaCpp where
-  withTools = chainProviders OpenAI.openAITools
+  withTools = OpenAI.openAITools
 
 -- Mock model that uses full XML support (Strategy B)
 data MockFullXMLModel = MockFullXMLModel deriving (Show, Eq)
@@ -42,7 +42,7 @@ instance ModelName OpenAI.OpenAICompatible MockFullXMLModel where
   modelName _ = "mock-full-xml"
 
 instance HasTools MockFullXMLModel OpenAI.OpenAICompatible where
-  withTools = chainProviders OpenAI.openAITools
+  withTools = OpenAI.openAITools
 
 -- Helper to build a request from messages (with explicit composable provider)
 buildRequestGeneric :: (Monoid (ProviderRequest provider))
@@ -69,7 +69,7 @@ instance BuildRequest OpenAI.LlamaCpp MockXMLResponseModel where
     let base = OpenAI.baseComposableProvider @OpenAI.LlamaCpp @MockXMLResponseModel
         withToolsProvider = chainProviders OpenAI.openAITools base
         composableProvider = withXMLResponseParsing withToolsProvider
-    in snd $ toProviderRequest composableProvider provider model configs (((), ()), ()) msgs
+    in snd $ toProviderRequest composableProvider provider model configs ((), ((), ())) msgs
 
 -- Instance for MockFullXMLModel
 instance BuildRequest OpenAI.OpenAICompatible MockFullXMLModel where
@@ -77,7 +77,7 @@ instance BuildRequest OpenAI.OpenAICompatible MockFullXMLModel where
     let base = OpenAI.baseComposableProvider @OpenAI.OpenAICompatible @MockFullXMLModel
         withToolsProvider = chainProviders OpenAI.openAITools base
         composableProvider = withFullXMLToolSupport withToolsProvider
-    in snd $ toProviderRequest composableProvider provider model configs (((), ()), ()) msgs
+    in snd $ toProviderRequest composableProvider provider model configs ((), ((), ())) msgs
 
 -- Helper to parse a response (with explicit composable provider)
 parseResponseGeneric :: ComposableProvider provider model s
@@ -107,7 +107,7 @@ instance ParseResponse OpenAI.LlamaCpp MockXMLResponseModel where
     let base = OpenAI.baseComposableProvider @OpenAI.LlamaCpp @MockXMLResponseModel
         withToolsProvider = chainProviders OpenAI.openAITools base
         composableProvider = withXMLResponseParsing withToolsProvider
-    in snd $ fromProviderResponse composableProvider provider model configs (((), ()), ()) resp
+    in snd $ fromProviderResponse composableProvider provider model configs ((), ((), ())) resp
 
 -- Instance for MockFullXMLModel
 instance ParseResponse OpenAI.OpenAICompatible MockFullXMLModel where
@@ -115,7 +115,7 @@ instance ParseResponse OpenAI.OpenAICompatible MockFullXMLModel where
     let base = OpenAI.baseComposableProvider @OpenAI.OpenAICompatible @MockFullXMLModel
         withToolsProvider = chainProviders OpenAI.openAITools base
         composableProvider = withFullXMLToolSupport withToolsProvider
-    in snd $ fromProviderResponse composableProvider provider model configs (((), ()), ()) resp
+    in snd $ fromProviderResponse composableProvider provider model configs ((), ((), ())) resp
 
 -- Create a mock OpenAI response with text content
 mockTextResponse :: Text -> OpenAIResponse

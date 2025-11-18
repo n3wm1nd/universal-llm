@@ -13,6 +13,7 @@ module UniversalLLM.Providers.XMLToolCalls
   , withFullXMLToolSupport
     -- * Helper Functions
   , toolCallToXMLArgs
+  , xmlResponseParser
   ) where
 
 import UniversalLLM.Core.Types
@@ -73,27 +74,32 @@ withXMLResponseParsing ::
   forall provider model s s'.
   (HasTools model provider) =>
   ComposableProvider provider model s ->
-  ComposableProvider provider model (s, s')
-withXMLResponseParsing base = base `chainProviders` xmlResponseParser
-  where
-    xmlResponseParser _p _m _configs _s = noopHandler
-      { 
-        cpPureMessageResponse = extractXMLFromMessages
-      }
+  ComposableProvider provider model ((), s)
+withXMLResponseParsing  = chainProviders xmlResponseParser
 
-    extractXMLFromMessages :: [Message model provider] -> [Message model provider]
-    extractXMLFromMessages acc =
-      let (toolCalls, cleanedMsgs) = foldl processMessage ([], []) acc
-      in cleanedMsgs <> toolCalls
-      where
-        processMessage (calls, msgs) (AssistantText txt) =
-          let (toolCallMsgs, cleanedText) = parseXMLFromResponse txt
-          in if null toolCallMsgs
-             then (calls, msgs <> [AssistantText txt])
-             else
-               let cleanMsg = if T.null (T.strip cleanedText) then [] else [AssistantText cleanedText]
-               in (calls <> toolCallMsgs, msgs <> cleanMsg)
-        processMessage (calls, msgs) msg = (calls, msgs <> [msg])
+
+xmlResponseParser :: HasTools model provider => p1 -> p2 -> p3 -> p4 -> ComposableProviderHandlers provider model state
+xmlResponseParser _p _m _configs _s = noopHandler
+  { 
+    cpPureMessageResponse = extractXMLFromMessages
+  }
+
+extractXMLFromMessages :: HasTools model provider => [Message model provider] -> [Message model provider]
+extractXMLFromMessages acc =
+  let (toolCalls, cleanedMsgs) = foldl processMessage ([], []) acc
+  in cleanedMsgs <> toolCalls
+  where
+    processMessage (calls, msgs) (AssistantText txt) =
+      let (toolCallMsgs, cleanedText) = parseXMLFromResponse txt
+      in if null toolCallMsgs
+          then (calls, msgs <> [AssistantText txt])
+          else
+            let cleanMsg = if T.null (T.strip cleanedText) then [] else [AssistantText cleanedText]
+            in (calls <> toolCallMsgs, msgs <> cleanMsg)
+    processMessage (calls, msgs) msg = (calls, msgs <> [msg])
+
+
+
 
 -- ============================================================================
 -- Strategy B: Full XML Tool Support (no native tool support)
@@ -108,8 +114,8 @@ withFullXMLToolSupport ::
   forall provider model s s'.
   (ProviderRequest provider ~ OpenAIRequest, HasTools model provider) =>
    -- FIXME: we need a way to modify [Config] to make this work with all providers by putting it in SystemPrompt
-  ComposableProvider provider model s -> ComposableProvider provider model (s, s')
-withFullXMLToolSupport base = base `chainProviders` xmlFullSupport
+  ComposableProvider provider model s -> ComposableProvider provider model ((), s)
+withFullXMLToolSupport = chainProviders xmlFullSupport
   where
     xmlFullSupport _p _m configs _s = noopHandler
       { cpPureMessageRequest = convertToolsToXML

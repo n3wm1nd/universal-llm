@@ -36,22 +36,22 @@ class SupportsStreaming a
 class Provider provider model => HasTools model provider where
   type ToolState model provider
   type ToolState model provider = ()
-  withTools :: ComposableProvider provider model s -> ComposableProvider provider model (ToolState model provider, s)
+  withTools :: ComposableProvider provider model (ToolState model provider)
 
 class Provider provider model => HasVision model provider where
   type VisionState model provider
   type VisionState model provider = ()
-  withVision :: ComposableProvider provider model s -> ComposableProvider provider model (VisionState model provider, s)
+  withVision :: ComposableProvider provider model (VisionState model provider)
 
 class Provider provider model => HasJSON model provider where
   type JSONState model provider
   type JSONState model provider = ()
-  withJSON :: ComposableProvider provider model s -> ComposableProvider provider model (JSONState model provider, s)
+  withJSON :: ComposableProvider provider model (JSONState model provider)
 
 class Provider provider model => HasReasoning model provider where
   type ReasoningState model provider
   type ReasoningState model provider = ()
-  withReasoning :: ComposableProvider provider model s -> ComposableProvider provider model (ReasoningState model provider, s)
+  withReasoning :: ComposableProvider provider model (ReasoningState model provider)
 
 -- ModelConfig GADT - configuration values with provider and model constraints
 -- Only constructible if the provider supports the parameter and/or model
@@ -183,21 +183,21 @@ noopHandler = ComposableProviderHandlers
 -- Chain two handler collections together
 chainProvidersAt :: ComposableProviderHandlers provider model s -> ComposableProviderHandlers provider model s' -> ComposableProviderHandlers provider model (s,s')
 chainProvidersAt h1 h2 = ComposableProviderHandlers
-  { cpPureMessageRequest = cpPureMessageRequest h2 . cpPureMessageRequest h1
+  { cpPureMessageRequest = cpPureMessageRequest h1 . cpPureMessageRequest h2
   , cpToRequest = \msg req -> cpToRequest h2 msg (cpToRequest h1 msg req)
-  , cpConfigHandler = cpConfigHandler h2 . cpConfigHandler h1
+  , cpConfigHandler = cpConfigHandler h1 . cpConfigHandler h2
   , cpPreRequest = \req (s, s') -> (cpPreRequest h1 req s, cpPreRequest h2 req s')
   , cpPostResponse = \resp (s, s') -> (cpPostResponse h1 resp s, cpPostResponse h2 resp s')
-  , cpFromResponse = \resp -> case cpFromResponse h1 resp of
+  , cpFromResponse = \resp -> case cpFromResponse h2 resp of
       Just (msg, resp') -> Just (msg, resp')
-      Nothing -> cpFromResponse h2 resp
-  , cpPureMessageResponse = cpPureMessageResponse h2 . cpPureMessageResponse h1
+      Nothing -> cpFromResponse h1 resp
+  , cpPureMessageResponse = cpPureMessageResponse h1 . cpPureMessageResponse h2
   , cpSerializeMessage = \msg -> cpSerializeMessage h1 msg <|> cpSerializeMessage h2 msg
   , cpDeserializeMessage = \val -> cpDeserializeMessage h1 val <|> cpDeserializeMessage h2 val
   }
 
 -- Chain two providers together, applying cp1 first then cp2
-infixl 6 `chainProviders`
+infixr 6 `chainProviders`
 chainProviders :: ComposableProvider provider model s
                -> ComposableProvider provider model s'
                -> ComposableProvider provider model (s,s')

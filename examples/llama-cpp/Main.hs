@@ -9,6 +9,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE InstanceSigs #-}
 
 module Main (main) where
 
@@ -38,14 +39,16 @@ instance ModelName OpenAI MistralModel where
   modelName _ = "mistral-7b-instruct"
 
 instance HasTools MistralModel OpenAI where
-  withTools = chainProviders UniversalLLM.Providers.OpenAI.openAITools
+  withTools = UniversalLLM.Providers.OpenAI.openAITools
 
 instance HasJSON MistralModel OpenAI where
-  withJSON = chainProviders UniversalLLM.Providers.OpenAI.openAIJSON
+  withJSON :: ComposableProvider
+    OpenAI MistralModel (JSONState MistralModel OpenAI)
+  withJSON = UniversalLLM.Providers.OpenAI.openAIJSON
 
 -- Composable provider for MistralModel with tools
 mistralComposableProvider :: ComposableProvider OpenAI MistralModel ((), ())
-mistralComposableProvider = withTools $ UniversalLLM.Providers.OpenAI.baseComposableProvider @OpenAI @MistralModel
+mistralComposableProvider = withTools `chainProviders` UniversalLLM.Providers.OpenAI.baseComposableProvider @OpenAI @MistralModel
 
 -- ============================================================================
 -- Tool Definition

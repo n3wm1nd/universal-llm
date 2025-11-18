@@ -40,14 +40,14 @@ instance ModelName OpenAI GPT4o where
   modelName _ = "gpt-4o"
 
 instance HasTools GPT4o OpenAI where
-  withTools = chainProviders OpenAIProvider.openAITools
+  withTools = OpenAIProvider.openAITools
 
 instance HasJSON GPT4o OpenAI where
-  withJSON = chainProviders OpenAIProvider.openAIJSON
+  withJSON = OpenAIProvider.openAIJSON
 
 -- Composable provider for GPT4o with tools
 gpt4oComposableProvider :: ComposableProvider OpenAI GPT4o ((), ())
-gpt4oComposableProvider = withTools $ OpenAIProvider.baseComposableProvider @OpenAI @GPT4o
+gpt4oComposableProvider = withTools `chainProviders` OpenAIProvider.baseComposableProvider @OpenAI @GPT4o
 
 -- ============================================================================
 -- Configuration

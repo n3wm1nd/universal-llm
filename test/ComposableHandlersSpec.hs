@@ -25,23 +25,23 @@ instance ModelName OpenAI BasicModel where
 instance ModelName OpenAI ToolsModel where
   modelName _ = "tools-model"
 instance HasTools ToolsModel OpenAI where
-  withTools = chainProviders OpenAIProvider.openAITools
+  withTools = OpenAIProvider.openAITools
 
 -- ReasoningModel: text + reasoning
 instance ModelName OpenAI ReasoningModel where
   modelName _ = "reasoning-model"
 instance HasReasoning ReasoningModel OpenAI where
-  withReasoning = chainProviders OpenAIProvider.openAIReasoning
+  withReasoning = OpenAIProvider.openAIReasoning
 
 -- FullFeaturedModel: text + tools + reasoning + JSON
 instance ModelName OpenAI FullFeaturedModel where
   modelName _ = "full-featured-model"
 instance HasTools FullFeaturedModel OpenAI where
-  withTools = chainProviders OpenAIProvider.openAITools
+  withTools = OpenAIProvider.openAITools
 instance HasReasoning FullFeaturedModel OpenAI where
-  withReasoning = chainProviders OpenAIProvider.openAIReasoning
+  withReasoning = OpenAIProvider.openAIReasoning
 instance HasJSON FullFeaturedModel OpenAI where
-  withJSON = chainProviders OpenAIProvider.openAIJSON
+  withJSON = OpenAIProvider.openAIJSON
 
 spec :: Spec
 spec = do

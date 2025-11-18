@@ -20,13 +20,13 @@ instance ModelName OpenAI FullFeaturedModel where
   modelName _ = "full-featured-model"
 
 instance HasTools FullFeaturedModel OpenAI where
-  withTools = chainProviders openAITools
+  withTools = openAITools
 
 instance HasJSON FullFeaturedModel OpenAI where
-  withJSON = chainProviders openAIJSON
+  withJSON = openAIJSON
 
 instance HasReasoning FullFeaturedModel OpenAI where
-  withReasoning = chainProviders openAIReasoning
+  withReasoning = openAIReasoning
 
 -- Note: HasVision intentionally NOT implemented yet (no provider supports it)
 -- instance HasVision FullFeaturedModel OpenAI where
@@ -34,21 +34,21 @@ instance HasReasoning FullFeaturedModel OpenAI where
 
 
 openai :: ComposableProvider OpenAI FullFeaturedModel ((), ((), ((), ())))
-openai = withReasoning . withJSON . withTools $ UniversalLLM.Providers.OpenAI.baseComposableProvider @OpenAI @FullFeaturedModel
+openai = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` UniversalLLM.Providers.OpenAI.baseComposableProvider @OpenAI @FullFeaturedModel
 
 -- Anthropic provider support - subset of capabilities
 instance ModelName Anthropic FullFeaturedModel where
   modelName _ = "full-featured-model"
 
 instance HasTools FullFeaturedModel Anthropic where
-  withTools :: ComposableProvider Anthropic FullFeaturedModel s -> ComposableProvider
+  withTools :: ComposableProvider
      Anthropic
      FullFeaturedModel
-     (ToolState FullFeaturedModel Anthropic, s)
-  withTools = chainProviders anthropicTools
+     (ToolState FullFeaturedModel Anthropic)
+  withTools = anthropicTools
 
 anthropic :: ComposableProvider Anthropic FullFeaturedModel ((), ())
-anthropic = withTools $ UniversalLLM.Providers.Anthropic.baseComposableProvider @FullFeaturedModel
+anthropic = withTools `chainProviders` UniversalLLM.Providers.Anthropic.baseComposableProvider @FullFeaturedModel
 
 -- Note: This is a phantom model for examples and documentation
 -- Real model definitions in external packages should use specific model names

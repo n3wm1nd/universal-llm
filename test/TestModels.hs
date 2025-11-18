@@ -22,10 +22,10 @@ instance ModelName Anthropic ClaudeSonnet45 where
   modelName _ = "claude-sonnet-4-5-20250929"
 
 instance HasTools ClaudeSonnet45 Anthropic where
-  withTools = chainProviders Anthropic.anthropicTools
+  withTools = Anthropic.anthropicTools
 
 anthropicSonnet45 :: ComposableProvider Anthropic ClaudeSonnet45 ((), ())
-anthropicSonnet45 = withTools $ Anthropic.baseComposableProvider @ClaudeSonnet45
+anthropicSonnet45 = withTools `chainProviders` Anthropic.baseComposableProvider @ClaudeSonnet45
 
 -- Test model for Claude Sonnet 4.5 with reasoning enabled (for testing extended thinking)
 data ClaudeSonnet45WithReasoning = ClaudeSonnet45WithReasoning deriving (Show, Eq)
@@ -34,13 +34,13 @@ instance ModelName Anthropic ClaudeSonnet45WithReasoning where
   modelName _ = "claude-sonnet-4-5-20250929"
 
 instance HasTools ClaudeSonnet45WithReasoning Anthropic where
-  withTools = chainProviders Anthropic.anthropicTools
+  withTools = Anthropic.anthropicTools
 
 instance HasReasoning ClaudeSonnet45WithReasoning Anthropic where
-  withReasoning = chainProviders Anthropic.anthropicReasoning
+  withReasoning = Anthropic.anthropicReasoning
 
 anthropicSonnet45Reasoning :: ComposableProvider   Anthropic ClaudeSonnet45WithReasoning ((), ((), ()))
-anthropicSonnet45Reasoning = withReasoning . withTools $ Anthropic.baseComposableProvider @ClaudeSonnet45WithReasoning
+anthropicSonnet45Reasoning = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @ClaudeSonnet45WithReasoning
 
 -- ============================================================================
 -- OpenAI-Compatible Models (for testing with llama.cpp/GLM4.5)
@@ -53,16 +53,16 @@ instance ModelName OpenAI GLM45 where
   modelName _ = "glm-4-plus"
 
 instance HasTools GLM45 OpenAI where
-  withTools = chainProviders OpenAI.openAITools
+  withTools = OpenAI.openAITools
 
 instance HasReasoning GLM45 OpenAI where
-  withReasoning = chainProviders OpenAI.openAIReasoning
+  withReasoning = OpenAI.openAIReasoning
 
 instance HasJSON GLM45 OpenAI where
-  withJSON = chainProviders OpenAI.openAIJSON
+  withJSON = OpenAI.openAIJSON
 
 openAIGLM45 :: ComposableProvider OpenAI GLM45 ((), ((), ((), ())))
-openAIGLM45 = withJSON . withReasoning . withTools $ OpenAI.baseComposableProvider @OpenAI @GLM45
+openAIGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @OpenAI @GLM45
 
 -- Basic text-only model (for compile-time safety tests)
 data BasicTextModel = BasicTextModel deriving (Show, Eq)
@@ -79,10 +79,10 @@ instance ModelName OpenAI ToolsOnlyModel where
   modelName _ = "tools-only-model"
 
 instance HasTools ToolsOnlyModel OpenAI where
-  withTools = chainProviders OpenAI.openAITools
+  withTools = OpenAI.openAITools
 
 openAIToolsonly :: ComposableProvider OpenAI ToolsOnlyModel ((), ())
-openAIToolsonly = withTools $ OpenAI.baseComposableProvider @OpenAI @ToolsOnlyModel
+openAIToolsonly = withTools `chainProviders` OpenAI.baseComposableProvider @OpenAI @ToolsOnlyModel
 
 -- JSON-capable model (no tools, no reasoning)
 data JSONModel = JSONModel deriving (Show, Eq)
@@ -91,7 +91,7 @@ instance ModelName OpenAI JSONModel where
   modelName _ = "json-model"
 
 instance HasJSON JSONModel OpenAI where
-  withJSON = chainProviders OpenAI.openAIJSON
+  withJSON = OpenAI.openAIJSON
 
 openaiJSON :: ComposableProvider OpenAI JSONModel ((), ())
-openaiJSON = withJSON $ OpenAI.baseComposableProvider @OpenAI @JSONModel
+openaiJSON = withJSON `chainProviders` OpenAI.baseComposableProvider @OpenAI @JSONModel

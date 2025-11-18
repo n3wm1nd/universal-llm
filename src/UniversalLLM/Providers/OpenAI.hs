@@ -328,7 +328,7 @@ openAIReasoning _p _m _configs _s = noopHandler
     isAssistantText _ = False
 
 -- Standalone tools provider
-openAITools :: forall provider model state. (HasTools model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model state
+openAITools :: forall provider model . (HasTools model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model ()
 openAITools _p _m configs _s = noopHandler
   { cpToRequest = \msg req ->
       let req' = handleToolMessage msg req
@@ -353,7 +353,7 @@ openAITools _p _m configs _s = noopHandler
     parseToolResponse _ = Nothing
 
 -- Standalone JSON provider
-openAIJSON :: forall provider model state. (HasJSON model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model state
+openAIJSON :: forall provider model . (HasJSON model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model ()
 openAIJSON _p _m _configs _s = noopHandler
   { cpToRequest = handleJSONMessage
   , cpFromResponse = \_ -> Nothing  -- Let base handler parse it
