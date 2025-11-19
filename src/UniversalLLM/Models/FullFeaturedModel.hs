@@ -3,12 +3,15 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module UniversalLLM.Models.FullFeaturedModel where
 
 import UniversalLLM.Core.Types
 import UniversalLLM.Providers.OpenAI
+import qualified UniversalLLM.Providers.OpenAI as OpenAI
 import UniversalLLM.Providers.Anthropic
+import qualified UniversalLLM.Providers.Anthropic as Anthropic
 
 -- FullFeaturedModel - example model demonstrating all implemented capabilities
 -- This serves as a reference implementation showing how to declare a model
@@ -18,6 +21,9 @@ data FullFeaturedModel = FullFeaturedModel deriving (Show, Eq)
 -- OpenAI provider support - all capabilities
 instance ModelName OpenAI FullFeaturedModel where
   modelName _ = "full-featured-model"
+
+instance BaseComposableProvider FullFeaturedModel OpenAI where
+  baseProvider = OpenAI.baseComposableProvider
 
 instance HasTools FullFeaturedModel OpenAI where
   withTools = openAITools
@@ -33,12 +39,12 @@ instance HasReasoning FullFeaturedModel OpenAI where
 --   withVision = UniversalLLM.Providers.OpenAI.openAIWithVision
 
 
-openai :: ComposableProvider OpenAI FullFeaturedModel ((), ((), ((), ())))
-openai = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` UniversalLLM.Providers.OpenAI.baseComposableProvider @OpenAI @FullFeaturedModel
-
 -- Anthropic provider support - subset of capabilities
 instance ModelName Anthropic FullFeaturedModel where
   modelName _ = "full-featured-model"
+
+instance BaseComposableProvider FullFeaturedModel Anthropic where
+  baseProvider = Anthropic.baseComposableProvider
 
 instance HasTools FullFeaturedModel Anthropic where
   withTools :: ComposableProvider
@@ -47,9 +53,9 @@ instance HasTools FullFeaturedModel Anthropic where
      (ToolState FullFeaturedModel Anthropic)
   withTools = anthropicTools
 
-anthropic :: ComposableProvider Anthropic FullFeaturedModel ((), ())
-anthropic = withTools `chainProviders` UniversalLLM.Providers.Anthropic.baseComposableProvider @FullFeaturedModel
+fullprovider :: (HasReasoning provider model, HasJSON provider model, HasTools provider model,
+  BaseComposableProvider provider model) =>
+  ComposableProvider model provider
+    (ReasoningState provider model, (JSONState provider model, (ToolState provider model, BaseState provider model)))
+fullprovider = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` baseProvider
 
--- Note: This is a phantom model for examples and documentation
--- Real model definitions in external packages should use specific model names
--- e.g., "gpt-4o", "claude-3-5-sonnet-20241022", etc.

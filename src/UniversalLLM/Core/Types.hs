@@ -20,6 +20,11 @@ import Data.Aeson (Value)
 import Control.Applicative ((<|>))
 
 
+class Provider provider model => BaseComposableProvider model provider where
+  type BaseState model provider
+  type BaseState model provider = ()
+  baseProvider :: ComposableProvider provider model (BaseState model provider)
+
 -- Unified capability classes
 -- SupportsX for parameters (things providers accept)
 class SupportsTemperature a
@@ -68,6 +73,32 @@ data ModelConfig provider model where
 -- Provider-specific model names
 class ModelName provider model where
   modelName :: model -> Text
+
+providerReasoningTools :: 
+  ( HasTools model provider, HasReasoning model provider,
+  BaseComposableProvider model provider ) =>
+  ComposableProvider provider model
+  (ToolState model provider, (ReasoningState model provider, BaseState model provider ))
+providerReasoningTools = withTools 
+  `chainProviders` withReasoning 
+  `chainProviders` baseProvider
+
+providerReasoning :: 
+  ( HasReasoning model provider,
+  BaseComposableProvider model provider ) =>ComposableProvider provider model
+  (ReasoningState model provider, BaseState model provider )
+providerReasoning = withReasoning 
+  `chainProviders` baseProvider
+
+providerTools :: 
+  ( HasTools model provider,
+  BaseComposableProvider model provider ) =>
+  ComposableProvider provider model
+  (ToolState model provider,  BaseState model provider )
+providerTools = withTools 
+  `chainProviders` baseProvider
+
+
 
 -- Tool use types
 -- Provider-agnostic tool definition (just metadata, no execution)
