@@ -46,6 +46,40 @@ setSystemBlocks blocks = modifySystemBlocks (const (Just blocks))
 setToolDefinitions :: [AnthropicToolDefinition] -> AnthropicRequest -> AnthropicRequest
 setToolDefinitions defs = modifyToolDefinitions (const (Just defs))
 
+-- | Add cache control to conversation history
+-- Applies cache control to the last content block of an earlier message
+-- This caches the conversation prefix while leaving room for new turns
+addConversationCacheControl :: AnthropicRequest -> AnthropicRequest
+addConversationCacheControl req =
+  let msgs = messages req
+      -- Apply cache control to last block of second-to-last message (if exists)
+      -- This ensures we cache conversation history while allowing the latest turn to vary
+      updatedMsgs = case reverse msgs of
+        (lastMsg : secondToLastMsg : rest) ->
+          let cachedMsg = addCacheToLastBlock secondToLastMsg
+          in reverse (lastMsg : cachedMsg : rest)
+        _ -> msgs  -- Less than 2 messages, no caching needed
+  in req { messages = updatedMsgs }
+  where
+    addCacheToLastBlock :: AnthropicMessage -> AnthropicMessage
+    addCacheToLastBlock msg =
+      case reverse (content msg) of
+        [] -> msg
+        (lastBlock : restBlocks) ->
+          let cachedBlock = addCacheControlToBlock lastBlock
+          in msg { content = reverse (cachedBlock : restBlocks) }
+
+    addCacheControlToBlock :: AnthropicContentBlock -> AnthropicContentBlock
+    addCacheControlToBlock (AnthropicTextBlock txt _) =
+      AnthropicTextBlock txt (Just (CacheControl "ephemeral" "5m"))
+    addCacheControlToBlock (AnthropicToolUseBlock tid tname tinput _) =
+      AnthropicToolUseBlock tid tname tinput (Just (CacheControl "ephemeral" "5m"))
+    addCacheControlToBlock (AnthropicToolResultBlock rid rcontent _) =
+      AnthropicToolResultBlock rid rcontent (Just (CacheControl "ephemeral" "5m"))
+    addCacheControlToBlock (AnthropicThinkingBlock thinking _) =
+      AnthropicThinkingBlock thinking (Just (CacheControl "ephemeral" "5m"))
+    addCacheControlToBlock block = block
+
 -- | Append a content block to messages, grouping with last message if same role
 appendContentBlock :: Text -> AnthropicContentBlock -> AnthropicRequest -> AnthropicRequest
 appendContentBlock msgRole block = modifyMessages (appendBlockToMessages msgRole block)
@@ -65,13 +99,13 @@ appendContentBlock msgRole block = modifyMessages (appendBlockToMessages msgRole
 
 -- | Convert a ToolCall to an AnthropicContentBlock
 fromToolCall :: ToolCall -> AnthropicContentBlock
-fromToolCall (ToolCall tcId tcName tcParams) = AnthropicToolUseBlock tcId tcName tcParams
+fromToolCall (ToolCall tcId tcName tcParams) = AnthropicToolUseBlock tcId tcName tcParams Nothing
 fromToolCall (InvalidToolCall tcId tcName rawArgs err) =
   -- InvalidToolCall cannot be directly converted to Anthropic's tool_use format
   -- Instead, convert it to a text message describing the error
   let errorText = "Tool call error for " <> tcName <> " (id: " <> tcId <> "): " <> err
                   <> "\nRaw arguments: " <> rawArgs
-  in AnthropicTextBlock errorText
+  in AnthropicTextBlock errorText Nothing
 
 -- | Convert a ToolResult to an AnthropicContentBlock
 fromToolResult :: ToolResult -> AnthropicContentBlock
@@ -80,11 +114,11 @@ fromToolResult (ToolResult toolCall output) =
       resultContent = case output of
         Left errMsg -> errMsg
         Right jsonVal -> Text.pack $ show jsonVal
-  in AnthropicToolResultBlock callId resultContent
+  in AnthropicToolResultBlock callId resultContent Nothing
 
 -- | Convert text to a text content block
 fromText :: Text -> AnthropicContentBlock
-fromText = AnthropicTextBlock
+fromText txt = AnthropicTextBlock txt Nothing
 
 -- ============================================================================
 -- Message Handlers
@@ -122,7 +156,7 @@ handleToolMessage msg req = case msg of
 -- Reasoning message encoder
 handleReasoningMessage :: MessageEncoder Anthropic model
 handleReasoningMessage msg req = case msg of
-  AssistantReasoning thinking -> appendContentBlock "assistant" (AnthropicThinkingBlock thinking) req
+  AssistantReasoning thinking -> appendContentBlock "assistant" (AnthropicThinkingBlock thinking Nothing) req
   _ -> req
 
 
@@ -140,12 +174,22 @@ baseComposableProvider p m configs _s = noopHandler
       in handleTextMessage msg req'
   , cpConfigHandler = \req ->
       let systemPrompts = [sp | SystemPrompt sp <- configs]
-          sysBlocks = [AnthropicSystemBlock sp "text" | sp <- systemPrompts]
+          -- Create system blocks with cache control on the last block
+          sysBlocks = case systemPrompts of
+            [] -> []
+            prompts ->
+              let allButLast = [AnthropicSystemBlock sp "text" Nothing | sp <- init prompts]
+                  lastBlock = AnthropicSystemBlock (last prompts) "text" (Just (CacheControl "ephemeral" "5m"))
+              in if length prompts == 1
+                 then [lastBlock]
+                 else allButLast ++ [lastBlock]
           req1 = if null sysBlocks then req else setSystemBlocks sysBlocks req
+          -- Add cache control to conversation history
+          req2 = addConversationCacheControl req1
           streamEnabled = case [s | Streaming s <- configs] of
             (s:_) -> Just s
-            [] -> stream req1
-      in req1 { stream = streamEnabled }
+            [] -> stream req2
+      in req2 { stream = streamEnabled }
   , cpFromResponse = parseTextResponse
   , cpSerializeMessage = serializeBaseMessage
   , cpDeserializeMessage = deserializeBaseMessage
@@ -160,7 +204,7 @@ baseComposableProvider p m configs _s = noopHandler
       error $ "Anthropic API error: " ++ show (errorType err) ++ ": " ++ show (errorMessage err)
     parseTextResponse (AnthropicSuccess resp) =
       case responseContent resp of
-        (AnthropicTextBlock txt : rest) ->
+        (AnthropicTextBlock txt _ : rest) ->
           -- First block is text, extract it
           Just (AssistantText txt, AnthropicSuccess resp { responseContent = rest })
         _ -> Nothing  -- First block is not text, let another provider handle it
@@ -171,7 +215,9 @@ anthropicTools _p _m configs _s = noopHandler
   { cpToRequest = handleToolMessage
   , cpConfigHandler = \req ->
       let toolDefs = [defs | Tools defs <- configs]
-      in if null toolDefs then req else setToolDefinitions (map toAnthropicToolDef (concat toolDefs)) req
+          -- Add cache control to the last tool definition
+          anthropicToolDefs = withToolCacheControl (map toAnthropicToolDef (concat toolDefs))
+      in if null toolDefs then req else setToolDefinitions anthropicToolDefs req
   , cpFromResponse = parseToolResponse
   , cpSerializeMessage = serializeToolMessages
   , cpDeserializeMessage = deserializeToolMessages
@@ -181,7 +227,7 @@ anthropicTools _p _m configs _s = noopHandler
       error $ "Anthropic API error: " ++ show (errorType err) ++ ": " ++ show (errorMessage err)
     parseToolResponse (AnthropicSuccess resp) =
       case responseContent resp of
-        (AnthropicToolUseBlock tid tname tinput : rest) ->
+        (AnthropicToolUseBlock tid tname tinput _ : rest) ->
           -- First block is a tool call, extract it
           Just (AssistantTool (ToolCall tid tname tinput), AnthropicSuccess resp { responseContent = rest })
         _ -> Nothing  -- First block is not a tool call, let another provider handle it
@@ -210,7 +256,7 @@ anthropicReasoning _p _m configs _s = noopHandler
     parseReasoningResponse (AnthropicError _) = Nothing
     parseReasoningResponse (AnthropicSuccess resp) =
       case responseContent resp of
-        (AnthropicThinkingBlock thinking : rest) ->
+        (AnthropicThinkingBlock thinking _ : rest) ->
           -- First block is thinking, extract it
           Just (AssistantReasoning thinking, AnthropicSuccess resp { responseContent = rest })
         _ -> Nothing  -- First block is not thinking, let another provider handle it
@@ -222,7 +268,7 @@ anthropicReasoning _p _m configs _s = noopHandler
 -- Prepends the Claude Code authentication prompt to user's system prompts
 withMagicSystemPrompt :: AnthropicRequest -> AnthropicRequest
 withMagicSystemPrompt request =
-  let magicBlock = AnthropicSystemBlock "You are Claude Code, Anthropic's official CLI for Claude." "text"
+  let magicBlock = AnthropicSystemBlock "You are Claude Code, Anthropic's official CLI for Claude." "text" Nothing
       combinedSystem = case system request of
         Nothing -> [magicBlock]
         Just userBlocks -> magicBlock : userBlocks

@@ -68,10 +68,17 @@ data AnthropicMessage = AnthropicMessage
   , content :: [AnthropicContentBlock]
   } deriving (Generic, Show, Eq)
 
+-- Cache control configuration
+data CacheControl = CacheControl
+  { cacheType :: Text  -- "ephemeral"
+  , cacheTTL :: Text   -- "5m" or "1h"
+  } deriving (Generic, Show, Eq)
+
 -- System prompt blocks
 data AnthropicSystemBlock = AnthropicSystemBlock
   { systemText :: Text
   , systemType :: Text  -- Always "text"
+  , systemCacheControl :: Maybe CacheControl
   } deriving (Generic, Show, Eq)
 
 -- Type aliases for AnthropicContentBlock parameters (for documentation)
@@ -83,16 +90,17 @@ type ToolResultId = Text
 type ToolResultContent = Text
 
 data AnthropicContentBlock
-  = AnthropicTextBlock TextContent
-  | AnthropicToolUseBlock ToolUseId ToolUseName ToolUseInput
-  | AnthropicToolResultBlock ToolResultId ToolResultContent
-  | AnthropicThinkingBlock Text
+  = AnthropicTextBlock TextContent (Maybe CacheControl)
+  | AnthropicToolUseBlock ToolUseId ToolUseName ToolUseInput (Maybe CacheControl)
+  | AnthropicToolResultBlock ToolResultId ToolResultContent (Maybe CacheControl)
+  | AnthropicThinkingBlock Text (Maybe CacheControl)
   deriving (Generic, Show, Eq)
 
 data AnthropicToolDefinition = AnthropicToolDefinition
   { anthropicToolName :: Text
   , anthropicToolDescription :: Text
   , anthropicToolInputSchema :: Value
+  , anthropicToolCacheControl :: Maybe CacheControl
   } deriving (Generic, Show, Eq)
 
 -- Response structure
@@ -126,11 +134,18 @@ data AnthropicErrorDetail = AnthropicErrorDetail
   } deriving (Generic, Show, Eq)
 
 -- Codec instances
+instance HasCodec CacheControl where
+  codec = object "CacheControl" $
+    CacheControl
+      <$> requiredField "type" "Cache type (ephemeral)" .= cacheType
+      <*> requiredField "ttl" "Cache TTL (5m or 1h)" .= cacheTTL
+
 instance HasCodec AnthropicSystemBlock where
   codec = object "AnthropicSystemBlock" $
     AnthropicSystemBlock
       <$> requiredField "text" "System prompt text" .= systemText
       <*> requiredField "type" "Block type (always 'text')" .= systemType
+      <*> optionalField "cache_control" "Cache control configuration" .= systemCacheControl
 
 instance HasCodec AnthropicThinkingConfig where
   codec = object "AnthropicThinkingConfig" $
@@ -157,36 +172,42 @@ instance HasCodec AnthropicContentBlock where
         (possiblyJointEitherCodec toolUseBlockCodec
           (possiblyJointEitherCodec toolResultBlockCodec thinkingBlockCodec))
     where
-      fromEither (Left txt) = AnthropicTextBlock txt
-      fromEither (Right (Left (tid, tname, tinput))) = AnthropicToolUseBlock tid tname tinput
-      fromEither (Right (Right (Left (rid, rcontent)))) = AnthropicToolResultBlock rid rcontent
-      fromEither (Right (Right (Right thinking))) = AnthropicThinkingBlock thinking
+      fromEither (Left (txt, cc)) = AnthropicTextBlock txt cc
+      fromEither (Right (Left (tid, tname, tinput, cc))) = AnthropicToolUseBlock tid tname tinput cc
+      fromEither (Right (Right (Left (rid, rcontent, cc)))) = AnthropicToolResultBlock rid rcontent cc
+      fromEither (Right (Right (Right (thinking, cc)))) = AnthropicThinkingBlock thinking cc
 
-      toEither (AnthropicTextBlock txt) = Left txt
-      toEither (AnthropicToolUseBlock tid tname tinput) = Right (Left (tid, tname, tinput))
-      toEither (AnthropicToolResultBlock rid rcontent) = Right (Right (Left (rid, rcontent)))
-      toEither (AnthropicThinkingBlock thinking) = Right (Right (Right thinking))
+      toEither (AnthropicTextBlock txt cc) = Left (txt, cc)
+      toEither (AnthropicToolUseBlock tid tname tinput cc) = Right (Left (tid, tname, tinput, cc))
+      toEither (AnthropicToolResultBlock rid rcontent cc) = Right (Right (Left (rid, rcontent, cc)))
+      toEither (AnthropicThinkingBlock thinking cc) = Right (Right (Right (thinking, cc)))
 
       textBlockCodec =
         requiredField "type" "Block type" .= const ("text" :: Text)
-        *> requiredField "text" "Text content" .= id
+        *> ((,)
+          <$> requiredField "text" "Text content" .= fst
+          <*> optionalField "cache_control" "Cache control configuration" .= snd)
 
       toolUseBlockCodec =
         requiredField "type" "Block type" .= const ("tool_use" :: Text)
-        *> ((,,)
-          <$> requiredField "id" "Tool use ID" .= (\(tid, _, _) -> tid)
-          <*> requiredField "name" "Tool name" .= (\(_, tname, _) -> tname)
-          <*> requiredField "input" "Tool input" .= (\(_, _, tinput) -> tinput))
+        *> ((,,,)
+          <$> requiredField "id" "Tool use ID" .= (\(tid, _, _, _) -> tid)
+          <*> requiredField "name" "Tool name" .= (\(_, tname, _, _) -> tname)
+          <*> requiredField "input" "Tool input" .= (\(_, _, tinput, _) -> tinput)
+          <*> optionalField "cache_control" "Cache control configuration" .= (\(_, _, _, cc) -> cc))
 
       toolResultBlockCodec =
         requiredField "type" "Block type" .= const ("tool_result" :: Text)
-        *> ((,)
-          <$> requiredField "tool_use_id" "Tool use ID" .= fst
-          <*> requiredField "content" "Result content" .= snd)
+        *> ((,,)
+          <$> requiredField "tool_use_id" "Tool use ID" .= (\(a, _, _) -> a)
+          <*> requiredField "content" "Result content" .= (\(_, b, _) -> b)
+          <*> optionalField "cache_control" "Cache control configuration" .= (\(_, _, c) -> c))
 
       thinkingBlockCodec =
         requiredField "type" "Block type" .= const ("thinking" :: Text)
-        *> requiredField "thinking" "Thinking content" .= id
+        *> ((,)
+          <$> requiredField "thinking" "Thinking content" .= fst
+          <*> optionalField "cache_control" "Cache control configuration" .= snd)
 
 instance HasCodec AnthropicMessage where
   codec = object "AnthropicMessage" $
@@ -200,6 +221,7 @@ instance HasCodec AnthropicToolDefinition where
       <$> requiredField "name" "Tool name" .= anthropicToolName
       <*> requiredField "description" "Tool description" .= anthropicToolDescription
       <*> requiredField "input_schema" "Input schema" .= anthropicToolInputSchema
+      <*> optionalField "cache_control" "Cache control configuration" .= anthropicToolCacheControl
 
 instance HasCodec AnthropicResponse where
   codec = dimapCodec fromEither toEither $ eitherCodec (codec @AnthropicSuccessResponse) (codec @AnthropicErrorResponse)
@@ -247,12 +269,20 @@ instance HasCodec AnthropicErrorResponse where
         }
 
 -- Helper: Convert ToolDefinition to Anthropic wire format
+-- Cache control is set to Nothing by default, will be added by provider layer
 toAnthropicToolDef :: ToolDefinition -> AnthropicToolDefinition
 toAnthropicToolDef toolDef = AnthropicToolDefinition
   { anthropicToolName = toolDefName toolDef
   , anthropicToolDescription = toolDefDescription toolDef
   , anthropicToolInputSchema = toolDefParameters toolDef
+  , anthropicToolCacheControl = Nothing
   }
+
+-- Helper: Add cache control to the last tool definition (for caching tool list)
+withToolCacheControl :: [AnthropicToolDefinition] -> [AnthropicToolDefinition]
+withToolCacheControl [] = []
+withToolCacheControl tools = init tools ++ [lastTool { anthropicToolCacheControl = Just (CacheControl "ephemeral" "5m") }]
+  where lastTool = last tools
 
 -- Tool call conversion - handled via ProtocolHandleTools typeclass
 -- This allows models without tool support to still parse text responses
@@ -319,28 +349,28 @@ mergeAnthropicDelta acc chunk =
     appendTextAt idx resp text =
         resp { responseContent = updateBlockAt idx (appendToText text) (responseContent resp) }
       where
-        appendToText t (AnthropicTextBlock existing) = AnthropicTextBlock (existing <> t)
+        appendToText t (AnthropicTextBlock existing cc) = AnthropicTextBlock (existing <> t) cc
         appendToText _ block = block
 
     appendThinkingAt :: Int -> AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
     appendThinkingAt idx resp thinking =
         resp { responseContent = updateBlockAt idx (appendToThinking thinking) (responseContent resp) }
       where
-        appendToThinking t (AnthropicThinkingBlock existing) = AnthropicThinkingBlock (existing <> t)
+        appendToThinking t (AnthropicThinkingBlock existing cc) = AnthropicThinkingBlock (existing <> t) cc
         appendToThinking _ block = block
 
     appendToolInputAt :: Int -> AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
     appendToolInputAt idx resp jsonDelta =
         resp { responseContent = updateBlockAt idx (appendToTool jsonDelta) (responseContent resp) }
       where
-        appendToTool jd (AnthropicToolUseBlock toolId toolName currentInput) =
+        appendToTool jd (AnthropicToolUseBlock toolId toolName currentInput cc) =
             let accumulatedJson = case currentInput of
                     Aeson.String s -> s <> jd
                     _ -> jd
                 parsedInput = case Aeson.decode (BSL.fromStrict (encodeUtf8 accumulatedJson)) of
                     Just val -> val
                     Nothing -> Aeson.String accumulatedJson
-            in AnthropicToolUseBlock toolId toolName parsedInput
+            in AnthropicToolUseBlock toolId toolName parsedInput cc
         appendToTool _ block = block
 
     updateBlockAt :: Int -> (AnthropicContentBlock -> AnthropicContentBlock) -> [AnthropicContentBlock] -> [AnthropicContentBlock]
@@ -356,12 +386,12 @@ mergeAnthropicDelta acc chunk =
     appendText :: AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
     appendText resp text =
         case responseContent resp of
-            [] -> resp { responseContent = [AnthropicTextBlock text] }
+            [] -> resp { responseContent = [AnthropicTextBlock text Nothing] }
             blocks -> resp { responseContent = updateTextBlock blocks }
       where
         updateTextBlock [] = []
-        updateTextBlock (AnthropicTextBlock existing : rest) =
-            AnthropicTextBlock (existing <> text) : rest
+        updateTextBlock (AnthropicTextBlock existing cc : rest) =
+            AnthropicTextBlock (existing <> text) cc : rest
         updateTextBlock (block : rest) =
             block : updateTextBlock rest
 
@@ -377,16 +407,16 @@ mergeAnthropicDelta acc chunk =
                 Aeson.String toolId <- KM.lookup "id" contentBlock
                 Aeson.String toolName <- KM.lookup "name" contentBlock
                 -- Initial tool input is empty object at block start
-                return $ AnthropicToolUseBlock toolId toolName (Aeson.Object KM.empty)
+                return $ AnthropicToolUseBlock toolId toolName (Aeson.Object KM.empty) Nothing
             "text" -> do
                 Aeson.String text <- KM.lookup "text" contentBlock
-                return $ AnthropicTextBlock text
+                return $ AnthropicTextBlock text Nothing
             "thinking" -> do
                 -- Thinking blocks may have "thinking" field but start empty
                 let thinkingText = case KM.lookup "thinking" contentBlock of
                       Just (Aeson.String t) -> t
                       _ -> ""
-                return $ AnthropicThinkingBlock thinkingText
+                return $ AnthropicThinkingBlock thinkingText Nothing
             _ -> Nothing
     extractContentBlock _ = Nothing
 
@@ -406,7 +436,7 @@ mergeAnthropicDelta acc chunk =
         case responseContent resp of
             [] -> resp  -- No tool block to append to
             blocks -> case last blocks of
-                AnthropicToolUseBlock toolId toolName currentInput ->
+                AnthropicToolUseBlock toolId toolName currentInput cc ->
                     -- Accumulate the JSON delta string
                     let accumulatedJson = case currentInput of
                             Aeson.String s -> s <> jsonDelta
@@ -416,7 +446,7 @@ mergeAnthropicDelta acc chunk =
                         parsedInput = case Aeson.decode (BSL.fromStrict (encodeUtf8 accumulatedJson)) of
                             Just val -> val
                             Nothing -> Aeson.String accumulatedJson  -- Keep as string if not yet valid JSON
-                        updatedBlocks = init blocks ++ [AnthropicToolUseBlock toolId toolName parsedInput]
+                        updatedBlocks = init blocks ++ [AnthropicToolUseBlock toolId toolName parsedInput cc]
                     in resp { responseContent = updatedBlocks }
                 _ -> resp  -- Not a tool use block
 
@@ -432,9 +462,9 @@ mergeAnthropicDelta acc chunk =
         case responseContent resp of
             [] -> resp  -- No thinking block to append to
             blocks -> case last blocks of
-                AnthropicThinkingBlock currentThinking ->
+                AnthropicThinkingBlock currentThinking cc ->
                     -- Accumulate the thinking deltas
                     let accumulatedThinking = currentThinking <> thinkingDelta
-                        updatedBlocks = init blocks ++ [AnthropicThinkingBlock accumulatedThinking]
+                        updatedBlocks = init blocks ++ [AnthropicThinkingBlock accumulatedThinking cc]
                     in resp { responseContent = updatedBlocks }
                 _ -> resp  -- Not a thinking block
