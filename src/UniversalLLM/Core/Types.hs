@@ -306,6 +306,18 @@ instance Show (Message model provider) where
   show (SystemText _) = "SystemText"
   show (ToolResultMsg _) = "ToolResultMsg"
 
+instance Eq (Message model provider) where
+  UserText t1 == UserText t2 = t1 == t2
+  UserImage url1 desc1 == UserImage url2 desc2 = url1 == url2 && desc1 == desc2
+  UserRequestJSON q1 s1 == UserRequestJSON q2 s2 = q1 == q2 && s1 == s2
+  AssistantText t1 == AssistantText t2 = t1 == t2
+  AssistantReasoning t1 == AssistantReasoning t2 = t1 == t2
+  AssistantTool tc1 == AssistantTool tc2 = tc1 == tc2
+  AssistantJSON v1 == AssistantJSON v2 = v1 == v2
+  SystemText t1 == SystemText t2 = t1 == t2
+  ToolResultMsg tr1 == ToolResultMsg tr2 = tr1 == tr2
+  _ == _ = False
+
 -- Message direction (User vs Assistant) - useful for providers that need alternating roles
 data MessageDirection = User | Assistant
   deriving (Eq, Show)
