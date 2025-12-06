@@ -95,6 +95,7 @@ test-suite universal-llm-tests
     TestModels
     TestCache
     TestHTTP
+    TestHelpers
     CachedIntegrationSpec
     ModelRegistry
     StandardTests
@@ -116,7 +117,8 @@ test-suite universal-llm-tests
     temporary,
     http-conduit,
     case-insensitive,
-    vector
+    vector,
+    data-default
 
 executable simple-example
   import: shared-properties
