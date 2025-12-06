@@ -141,7 +141,7 @@ spec getResponse = do
           length blocks `shouldSatisfy` (>= 2)
           -- Check that user's system prompt is included
           any (\b -> case b of
-                       AnthropicSystemBlock txt _ -> txt == sysPrompt
+                       AnthropicSystemBlock txt _ _ -> txt == sysPrompt
                        _ -> False) blocks `shouldBe` True
         Nothing -> expectationFailure "Expected system prompt in request"
 
@@ -249,7 +249,7 @@ spec getResponse = do
           -- Should have 3 text blocks
           length blocks `shouldBe` 3
           all (\b -> case b of
-                       AnthropicTextBlock _ -> True
+                       AnthropicTextBlock _ _ -> True
                        _ -> False) blocks `shouldBe` True
         _ -> expectationFailure "Expected user message with multiple blocks"
 
@@ -514,21 +514,21 @@ spec getResponse = do
   describe "Anthropic Provider - Content Block Types" $ do
     it "correctly creates all content block types" $ do
       -- Test thinking block
-      let thinkingBlock = AnthropicThinkingBlock "Some reasoning"
+      let thinkingBlock = AnthropicThinkingBlock "Some reasoning" Nothing
       case thinkingBlock of
-        AnthropicThinkingBlock txt -> txt `shouldBe` "Some reasoning"
+        AnthropicThinkingBlock txt _ -> txt `shouldBe` "Some reasoning"
         _ -> expectationFailure "Should be thinking block"
 
       -- Test text block
-      let textBlock = AnthropicTextBlock "Some text response"
+      let textBlock = AnthropicTextBlock "Some text response" Nothing
       case textBlock of
-        AnthropicTextBlock txt -> txt `shouldBe` "Some text response"
+        AnthropicTextBlock txt _ -> txt `shouldBe` "Some text response"
         _ -> expectationFailure "Should be text block"
 
       -- Test tool use block
-      let toolBlock = AnthropicToolUseBlock "tool_id_123" "get_weather" (object ["location" .= ("Paris" :: Text)])
+      let toolBlock = AnthropicToolUseBlock "tool_id_123" "get_weather" (object ["location" .= ("Paris" :: Text)]) Nothing
       case toolBlock of
-        AnthropicToolUseBlock bid bname binput -> do
+        AnthropicToolUseBlock bid bname binput _ -> do
           bid `shouldBe` "tool_id_123"
           bname `shouldBe` "get_weather"
         _ -> expectationFailure "Should be tool use block"
@@ -540,10 +540,10 @@ spec getResponse = do
             , Proto.responseModel = "claude-sonnet"
             , Proto.responseRole = "assistant"
             , Proto.responseContent =
-                [ AnthropicThinkingBlock "First thinking"
-                , AnthropicTextBlock "First text"
-                , AnthropicThinkingBlock "Second thinking"
-                , AnthropicTextBlock "Second text"
+                [ AnthropicThinkingBlock "First thinking" Nothing
+                , AnthropicTextBlock "First text" Nothing
+                , AnthropicThinkingBlock "Second thinking" Nothing
+                , AnthropicTextBlock "Second text" Nothing
                 ]
             , Proto.responseStopReason = Just "end_turn"
             , Proto.responseUsage = AnthropicUsage 100 200
@@ -554,6 +554,6 @@ spec getResponse = do
 
       -- Verify each block type
       case Proto.responseContent resp of
-        [AnthropicThinkingBlock _, AnthropicTextBlock _, AnthropicThinkingBlock _, AnthropicTextBlock _] ->
+        [AnthropicThinkingBlock _ _, AnthropicTextBlock _ _, AnthropicThinkingBlock _ _, AnthropicTextBlock _ _] ->
           return ()
         _ -> expectationFailure "Should have thinking, text, thinking, text blocks in that order"

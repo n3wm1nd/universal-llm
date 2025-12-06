@@ -232,7 +232,7 @@ prop_anthropicSystemPrompt = forAll genNonEmptyText $ \sysPrompt ->
       msgs = [UserText "test"]
       req = toProviderRequestSonnet45 configs msgs
   in case AP.system req of
-       Just blocks -> property $ any (\(AP.AnthropicSystemBlock txt _) -> txt == sysPrompt) blocks
+       Just blocks -> property $ any (\(AP.AnthropicSystemBlock txt _ _) -> txt == sysPrompt) blocks
        Nothing -> property False
 
 -- ============================================================================
@@ -354,9 +354,9 @@ prop_anthropicRequestIsValid = forAll genMessages $ \msgs ->
     genMessages = listOf genMessageAnthropicTools
 
     isValidContentBlock :: AP.AnthropicContentBlock -> Bool
-    isValidContentBlock (AP.AnthropicTextBlock txt) = not (T.null txt)
-    isValidContentBlock (AP.AnthropicToolResultBlock _ _) = True  -- Tool results can be empty
-    isValidContentBlock (AP.AnthropicThinkingBlock txt) = not (T.null txt)
+    isValidContentBlock (AP.AnthropicTextBlock txt _) = not (T.null txt)
+    isValidContentBlock (AP.AnthropicToolResultBlock _ _ _) = True  -- Tool results can be empty
+    isValidContentBlock (AP.AnthropicThinkingBlock txt _) = not (T.null txt)
     isValidContentBlock _ = True  -- Tool use blocks don't have the same constraint
 
 -- | Property: OpenAI with multiple reasoning messages handles all of them correctly
@@ -428,7 +428,7 @@ prop_anthropicReasoningMessages = forAll reasoningMessage $ \msgs ->
                      ", Thinking blocks in request: " ++ show (length thinkingBlocks))
        (not (null thinkingBlocks))
   where
-    isThinkingBlock (AP.AnthropicThinkingBlock _) = True
+    isThinkingBlock (AP.AnthropicThinkingBlock _ _) = True
     isThinkingBlock _ = False
 
     reasoningMessage = do
@@ -470,7 +470,7 @@ prop_anthropicMultipleReasoningMessages = forAll reasoningSequence $ \msgs ->
                      ", Thinking enabled: " ++ show thinkingEnabled)
        (length thinkingBlocks >= 1 .&&. thinkingEnabled)  -- Reasoning must be processed and config must be set
   where
-    isThinkingBlock (AP.AnthropicThinkingBlock _) = True
+    isThinkingBlock (AP.AnthropicThinkingBlock _ _) = True
     isThinkingBlock _ = False
 
     reasoningSequence = do
@@ -585,9 +585,9 @@ prop_anthropicResponseParsingWithToolsAndReasoning = forAll genResponse $ \(msgs
       msgs <- listOf1 genMessageAnthropicReasoningTools
       -- Create a mock response with various content block types
       contentBlocks <- listOf1 $ oneof
-        [ AP.AnthropicTextBlock <$> genNonEmptyText
-        , AP.AnthropicThinkingBlock <$> genNonEmptyText
-        , AP.AnthropicToolUseBlock <$> genNonEmptyText <*> genNonEmptyText <*> genSimpleValue
+        [ AP.AnthropicTextBlock <$> genNonEmptyText <*> pure Nothing
+        , AP.AnthropicThinkingBlock <$> genNonEmptyText <*> pure Nothing
+        , AP.AnthropicToolUseBlock <$> genNonEmptyText <*> genNonEmptyText <*> genSimpleValue <*> pure Nothing
         ]
       let successResp = AP.AnthropicSuccessResponse
             { AP.responseId = "test-response-id"
