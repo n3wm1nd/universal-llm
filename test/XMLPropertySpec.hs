@@ -11,7 +11,7 @@ import Data.Aeson (Value)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
-import Data.List (sort)
+import Data.List (sort, nub)
 import UniversalLLM.ToolCall.XML
 import UniversalLLM.Core.Types (ToolCall(..), ToolResult(..), ToolDefinition(..))
 
@@ -171,19 +171,24 @@ prop_extractAndRemovePreservesText = forAll arbitrary $ \(xmlCall :: XMLToolCall
 prop_xmlToToolCallConversion :: Property
 prop_xmlToToolCallConversion = forAll arbitrary $ \(xmlCall :: XMLToolCall) ->
   let toolCall = xmlToolCallToToolCall xmlCall
+      argKeys = map argKey (toolArgs xmlCall)
+      hasDuplicateKeys = length argKeys /= length (nub argKeys)
   in case toolCall of
        ToolCall tcId tcName tcParams ->
-         -- ID should be deterministic and start with "xml-"
-         T.isPrefixOf "xml-" tcId
+         -- Should only be valid ToolCall if there are no duplicate keys
+         not hasDuplicateKeys
+         .&&. T.isPrefixOf "xml-" tcId
          .&&. tcName === toolName xmlCall
          -- Params should be a JSON object with the same keys (order-independent)
          .&&. case tcParams of
                 Aeson.Object obj ->
                   let keys = sort $ map (Key.toText . fst) (KeyMap.toList obj)
-                      expectedKeys = sort $ map argKey (toolArgs xmlCall)
+                      expectedKeys = sort $ nub argKeys
                   in keys === expectedKeys
                 _ -> property False
-       InvalidToolCall _ _ _ _ -> property False  -- Should not produce invalid
+       InvalidToolCall _ _ _ _ ->
+         -- Should be InvalidToolCall if and only if there are duplicate keys
+         property hasDuplicateKeys
 
 -- | Property: Converting ToolCall->XML->ToolCall should preserve tool name and structure
 -- Note: Tool names are normalized (whitespace stripped) during parsing

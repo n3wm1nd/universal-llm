@@ -34,6 +34,7 @@ import UniversalLLM.Core.Types (ToolCall(..), ToolResult(..), ToolDefinition(..)
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Text.Encoding as TE
 import Data.Hashable (hash)
+import Data.List (nub, (\\))
 
 -- ============================================================================
 -- Types
@@ -223,13 +224,18 @@ encodeXMLToolResult (XMLToolResult callId name output) =
 -- ============================================================================
 
 -- | Convert XMLToolCall to ToolCall (generates deterministic ID from content)
+-- Returns InvalidToolCall if there are duplicate parameter names (even with same values)
 xmlToolCallToToolCall :: XMLToolCall -> ToolCall
 xmlToolCallToToolCall xmlCall@(XMLToolCall name args) =
-  let -- Generate deterministic ID from hash of the tool call
-      callId = "xml-" <> T.pack (show (abs (hash (encodeXMLToolCall xmlCall))))
-      -- Convert args to JSON
-      jsonParams = argsToJSON args
-  in ToolCall callId name jsonParams
+  let callId = "xml-" <> T.pack (show (abs (hash (encodeXMLToolCall xmlCall))))
+      keys = map argKey args
+      uniqueKeys = nub keys
+      duplicates = keys \\ uniqueKeys
+      hasDuplicates = not (null duplicates)
+  in if hasDuplicates
+     then InvalidToolCall callId name (encodeXMLToolCall xmlCall)
+          ("Duplicate parameter names in XML tool call: " <> T.intercalate ", " duplicates)
+     else ToolCall callId name (argsToJSON args)
   where
     argsToJSON :: [XMLArgPair] -> Value
     argsToJSON pairs = Aeson.object [Key.fromText (argKey p) Aeson..= argValue p | p <- pairs]
