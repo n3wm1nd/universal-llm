@@ -56,7 +56,7 @@ parseOpenAIResponseGeneric :: forall model s. ComposableProvider OpenAI model s
                            -> OpenAIResponse
                            -> [Message model OpenAI]
 parseOpenAIResponseGeneric composableProvider model configs s resp =
-  snd $ fromProviderResponse composableProvider OpenAI model configs s resp
+  either (error . show) snd $ fromProviderResponse composableProvider OpenAI model configs s resp
 
 spec :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 spec getResponse = do

@@ -172,8 +172,11 @@ type ConfigEncoder provider model =
 
 -- Handler for unfolding response into individual provider messages
 -- Returns one message at a time, plus remaining response
+-- Left err: API error or parse failure
+-- Right Nothing: Successfully processed, no more messages to extract
+-- Right (Just (msg, rest)): Successfully extracted message, continue with rest
 type ResponseUnfolder provider model =
-  ProviderResponse provider -> Maybe (Message model provider, ProviderResponse provider)
+  ProviderResponse provider -> Either LLMError (Maybe (Message model provider, ProviderResponse provider))
 
 -- Collection of handlers for a specific provider/model/config combination
 data ComposableProviderHandlers provider model state = ComposableProviderHandlers
@@ -205,7 +208,7 @@ noopHandler = ComposableProviderHandlers
   , cpConfigHandler = id
   , cpPreRequest = \_ -> id
   , cpPostResponse = \_ -> id
-  , cpFromResponse = \_ -> Nothing
+  , cpFromResponse = \_ -> Right Nothing
   , cpPureMessageResponse = id
   , cpSerializeMessage = \_ -> Nothing
   , cpDeserializeMessage = \_ -> Nothing
@@ -220,8 +223,9 @@ chainProvidersAt h1 h2 = ComposableProviderHandlers
   , cpPreRequest = \req (s, s') -> (cpPreRequest h1 req s, cpPreRequest h2 req s')
   , cpPostResponse = \resp (s, s') -> (cpPostResponse h1 resp s, cpPostResponse h2 resp s')
   , cpFromResponse = \resp -> case cpFromResponse h2 resp of
-      Just (msg, resp') -> Just (msg, resp')
-      Nothing -> cpFromResponse h1 resp
+      Right (Just (msg, resp')) -> Right (Just (msg, resp'))
+      Right Nothing -> cpFromResponse h1 resp
+      Left err -> Left err  -- Propagate errors immediately
   , cpPureMessageResponse = cpPureMessageResponse h1 . cpPureMessageResponse h2
   , cpSerializeMessage = \msg -> cpSerializeMessage h1 msg <|> cpSerializeMessage h2 msg
   , cpDeserializeMessage = \val -> cpDeserializeMessage h1 val <|> cpDeserializeMessage h2 val
@@ -267,21 +271,26 @@ fromProviderResponse :: ()
                      -> [ModelConfig provider model]
                      -> providerstackstate
                      -> ProviderResponse provider
-                     -> (providerstackstate, [Message model provider])
+                     -> Either LLMError (providerstackstate, [Message model provider])
 fromProviderResponse composableProvider provider model configs s resp =
   let handlers = composableProvider provider model configs s
-      -- Unfold response into messages
-      messages = unfoldMessages (cpFromResponse handlers) resp
-      -- Apply pure message transformations
-      pureMessages = cpPureMessageResponse handlers messages
-      -- Update state
-      s' = cpPostResponse handlers resp s
-  in (s', pureMessages)
+  in case unfoldMessages (cpFromResponse handlers) resp of
+      Left err -> Left err
+      Right messages ->
+        let -- Apply pure message transformations
+            pureMessages = cpPureMessageResponse handlers messages
+            -- Update state
+            s' = cpPostResponse handlers resp s
+        in Right (s', pureMessages)
   where
+    unfoldMessages :: ResponseUnfolder provider model -> ProviderResponse provider -> Either LLMError [Message model provider]
     unfoldMessages unfolder response =
       case unfolder response of
-        Just (msg, resp') -> msg : unfoldMessages unfolder resp'
-        Nothing -> []
+        Left err -> Left err
+        Right Nothing -> Right []
+        Right (Just (msg, resp')) -> do
+          rest <- unfoldMessages unfolder resp'
+          return (msg : rest)
 
 -- GADT Messages with capability constraints
 data Message model provider where

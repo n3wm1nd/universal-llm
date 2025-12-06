@@ -201,13 +201,13 @@ baseComposableProvider p m configs _s = noopHandler
         (m1:_) -> if messageDirection m1 == User then msgs else UserText " " : msgs
 
     parseTextResponse (AnthropicError err) =
-      error $ "Anthropic API error: " ++ show (errorType err) ++ ": " ++ show (errorMessage err)
+      Left $ ModelError $ errorMessage err
     parseTextResponse (AnthropicSuccess resp) =
       case responseContent resp of
         (AnthropicTextBlock txt _ : rest) ->
           -- First block is text, extract it
-          Just (AssistantText txt, AnthropicSuccess resp { responseContent = rest })
-        _ -> Nothing  -- First block is not text, let another provider handle it
+          Right (Just (AssistantText txt, AnthropicSuccess resp { responseContent = rest }))
+        _ -> Right Nothing  -- First block is not text, let another provider handle it
 
 -- Standalone tools provider
 anthropicTools :: forall model s . (HasTools model Anthropic) => ComposableProvider Anthropic model s
@@ -224,13 +224,13 @@ anthropicTools _p _m configs _s = noopHandler
   }
   where
     parseToolResponse (AnthropicError err) =
-      error $ "Anthropic API error: " ++ show (errorType err) ++ ": " ++ show (errorMessage err)
+      Left $ ModelError $ errorMessage err
     parseToolResponse (AnthropicSuccess resp) =
       case responseContent resp of
         (AnthropicToolUseBlock tid tname tinput _ : rest) ->
           -- First block is a tool call, extract it
-          Just (AssistantTool (ToolCall tid tname tinput), AnthropicSuccess resp { responseContent = rest })
-        _ -> Nothing  -- First block is not a tool call, let another provider handle it
+          Right (Just (AssistantTool (ToolCall tid tname tinput), AnthropicSuccess resp { responseContent = rest }))
+        _ -> Right Nothing  -- First block is not a tool call, let another provider handle it
 
 -- Standalone reasoning provider
 anthropicReasoning :: forall model s. (HasReasoning model Anthropic) => ComposableProvider Anthropic model s
@@ -253,13 +253,14 @@ anthropicReasoning _p _m configs _s = noopHandler
     isReasoningFalse (Reasoning False) = True
     isReasoningFalse _ = False
 
-    parseReasoningResponse (AnthropicError _) = Nothing
+    parseReasoningResponse (AnthropicError err) =
+      Left $ ModelError $ errorMessage err
     parseReasoningResponse (AnthropicSuccess resp) =
       case responseContent resp of
         (AnthropicThinkingBlock thinking _ : rest) ->
           -- First block is thinking, extract it
-          Just (AssistantReasoning thinking, AnthropicSuccess resp { responseContent = rest })
-        _ -> Nothing  -- First block is not thinking, let another provider handle it
+          Right (Just (AssistantReasoning thinking, AnthropicSuccess resp { responseContent = rest }))
+        _ -> Right Nothing  -- First block is not thinking, let another provider handle it
 
 -- These are removed - use the typeclass methods withTools and withReasoning instead
 -- They're defined in the HasTools/HasReasoning instances

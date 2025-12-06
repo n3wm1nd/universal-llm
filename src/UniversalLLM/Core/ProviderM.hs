@@ -79,7 +79,7 @@ toRequest composableProvider provider model configs messages =
 -- | Parse a provider response into messages.
 -- State is threaded implicitly through the monad.
 fromResponse :: forall provider model s m.
-                (Monad m)
+                (MonadFail m)
              => ComposableProvider provider model s
              -> provider
              -> model
@@ -89,16 +89,18 @@ fromResponse :: forall provider model s m.
 fromResponse composableProvider provider model configs response =
   ProviderM $ do
     state <- get
-    let (newState, messages) = fromProviderResponse composableProvider provider model configs state response
-    put newState
-    pure messages
+    case fromProviderResponse composableProvider provider model configs state response of
+      Left err -> fail $ "LLM error: " ++ show err
+      Right (newState, messages) -> do
+        put newState
+        pure messages
 
 -- | Run with a query function that handles request/response directly.
 -- The query function takes messages and returns response messages.
 -- Usage: resp <- query [UserText "question"]
 --        resp2 <- query (resp <> [UserText "followup"])
 withProviderCall :: forall provider model s m a.
-                    (Monad m, Default s, Monoid (ProviderRequest provider))
+                    (MonadFail m, Default s, Monoid (ProviderRequest provider))
                  => ComposableProvider provider model s
                  -> provider
                  -> model

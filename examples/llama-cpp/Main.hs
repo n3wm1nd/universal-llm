@@ -121,10 +121,12 @@ agentLoop composableProvider provider model state tools callLLM configs messages
   response <- callLLM request
 
   -- Parse response (provider-agnostic)
-  let msgs = snd $ fromProviderResponse composableProvider provider model configs' state response
-  responses <- if null msgs
-               then except $ Left $ ParseError "No messages parsed from response"
-               else return msgs
+  responses <- case fromProviderResponse composableProvider provider model configs' state response of
+    Left err -> except $ Left err
+    Right (_state, msgs) ->
+      if null msgs
+      then except $ Left $ ParseError "No messages parsed from response"
+      else return msgs
 
   newMsgs <- liftIO $ concat <$> mapM (handleResponse tools) responses
   -- Continue loop only if there are tool results to send back

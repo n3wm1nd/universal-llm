@@ -47,7 +47,7 @@ text = StandardTest $ \cp provider model initialState getResponse -> do
 
       resp <- getResponse req
 
-      let (_, parsedMsgs) = fromProviderResponse cp provider model configs initialState resp
+      let parsedMsgs = either (error . show) snd $ fromProviderResponse cp provider model configs initialState resp
 
       -- Should get back at least one assistant message
       length parsedMsgs `shouldSatisfy` (> 0)
@@ -59,7 +59,7 @@ text = StandardTest $ \cp provider model initialState getResponse -> do
           (state1, req1) = toProviderRequest cp provider model configs initialState msgs1
 
       resp1 <- getResponse req1
-      let (state2, parsedMsgs1) = fromProviderResponse cp provider model configs state1 resp1
+      let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp provider model configs state1 resp1
 
       -- First response should contain messages
       length parsedMsgs1 `shouldSatisfy` (> 0)
@@ -69,7 +69,7 @@ text = StandardTest $ \cp provider model initialState getResponse -> do
           (_, req2) = toProviderRequest cp provider model configs state2 msgs2
 
       resp2 <- getResponse req2
-      let (_, parsedMsgs2) = fromProviderResponse cp provider model configs state2 resp2
+      let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp provider model configs state2 resp2
 
       -- Second response should also contain messages
       length parsedMsgs2 `shouldSatisfy` (> 0)

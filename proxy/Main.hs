@@ -134,12 +134,14 @@ handleProxy apiKey reqBody = do
   liftIO $ putStrLn "📨 Received response from backend"
 
   -- 5. Parse backend response to universal messages
-  let universalMessages = snd $ fromProviderResponse gpt4oComposableProvider
-                                                       backendProvider
-                                                       backendModel
-                                                       (proxyConfigs proxyConfig)
-                                                       ((), ())
-                                                       response
+  universalMessages <- case fromProviderResponse gpt4oComposableProvider
+                                                 backendProvider
+                                                 backendModel
+                                                 (proxyConfigs proxyConfig)
+                                                 ((), ())
+                                                 response of
+    Left err -> throwE $ ParseError $ "Failed to parse backend response: " <> T.pack (show err)
+    Right (_state, messages) -> return messages
 
   liftIO $ putStrLn $ "🔄 Converted to " <> show (length universalMessages) <> " universal messages"
 

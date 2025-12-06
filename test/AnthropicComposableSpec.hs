@@ -74,7 +74,7 @@ parseResponseGeneric :: forall model s. ComposableProvider Provider.Anthropic mo
                      -> AnthropicResponse
                      -> [Message model Provider.Anthropic]
 parseResponseGeneric composableProvider model configs s resp =
-  snd $ fromProviderResponse composableProvider Provider.Anthropic model configs s resp
+  either (error . show) snd $ fromProviderResponse composableProvider Provider.Anthropic model configs s resp
 
 spec :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 spec getResponse = do

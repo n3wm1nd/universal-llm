@@ -89,7 +89,7 @@ parseResponseGeneric :: ComposableProvider provider model s
                     -> ProviderResponse provider
                     -> [Message model provider]
 parseResponseGeneric composableProvider provider model configs s history resp =
-  let msgs = snd $ fromProviderResponse composableProvider provider model configs s resp
+  let msgs = either (error . show) snd $ fromProviderResponse composableProvider provider model configs s resp
   in msgs
 
 -- TypeClass to support parseResponse with implicit composable provider/state
@@ -107,7 +107,7 @@ instance ParseResponse OpenAI.LlamaCpp MockXMLResponseModel where
     let base = OpenAI.baseComposableProvider @OpenAI.LlamaCpp @MockXMLResponseModel
         withToolsProvider = chainProviders OpenAI.openAITools base
         composableProvider = withXMLResponseParsing withToolsProvider
-    in snd $ fromProviderResponse composableProvider provider model configs ((), ((), ())) resp
+    in either (error . show) snd $ fromProviderResponse composableProvider provider model configs ((), ((), ())) resp
 
 -- Instance for MockFullXMLModel
 instance ParseResponse OpenAI.OpenAICompatible MockFullXMLModel where
@@ -115,7 +115,7 @@ instance ParseResponse OpenAI.OpenAICompatible MockFullXMLModel where
     let base = OpenAI.baseComposableProvider @OpenAI.OpenAICompatible @MockFullXMLModel
         withToolsProvider = chainProviders OpenAI.openAITools base
         composableProvider = withFullXMLToolSupport withToolsProvider
-    in snd $ fromProviderResponse composableProvider provider model configs ((), ((), ())) resp
+    in either (error . show) snd $ fromProviderResponse composableProvider provider model configs ((), ((), ())) resp
 
 -- Create a mock OpenAI response with text content
 mockTextResponse :: Text -> OpenAIResponse

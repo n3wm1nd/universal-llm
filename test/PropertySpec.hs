@@ -144,8 +144,8 @@ toProviderRequestGLM45 msg = fmap snd $ toProviderRequest openAIGLM45 OpenAIProv
 toProviderRequestGLM45WithReasoning msg = fmap snd $ toProviderRequest openAIGLM45 OpenAIProvider.OpenAI GLM45 msg ((), ((), ((), ())))
 
 -- fromProviderResponse signature: composableProvider -> provider -> model -> configs -> state -> response -> (state, messages)
-fromProviderResponseGLM45 configs resp = snd $ fromProviderResponse openAIGLM45 OpenAIProvider.OpenAI GLM45 configs ((), ((), ((), ()))) resp
-fromProviderResponseSonnet45WithReasoning configs resp = snd $ fromProviderResponse anthropicSonnet45Reasoning Anthropic ClaudeSonnet45WithReasoning configs ((),((),())) resp
+fromProviderResponseGLM45 configs resp = either (error . show) snd $ fromProviderResponse openAIGLM45 OpenAIProvider.OpenAI GLM45 configs ((), ((), ((), ()))) resp
+fromProviderResponseSonnet45WithReasoning configs resp = either (error . show) snd $ fromProviderResponse anthropicSonnet45Reasoning Anthropic ClaudeSonnet45WithReasoning configs ((),((),())) resp
 
 -- ============================================================================
 -- Property tests for Anthropic

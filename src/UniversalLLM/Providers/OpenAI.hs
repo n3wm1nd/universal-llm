@@ -275,11 +275,8 @@ baseComposableProvider _p m configs _s = noopHandler
     getFirst [] = Nothing
     getFirst (x:_) = Just x
 
-    -- FIXME: Using 'error' here is too aggressive - API errors (rate limits, temporary failures, etc.)
-    -- shouldn't crash the whole program. We need a proper error handling mechanism that can surface
-    -- errors to the caller without killing everything. For now, this at least makes errors visible in tests.
     parseTextResponse (OpenAIError err) =
-      error $ "OpenAI API error: " ++ show (errorType (errorDetail err)) ++ ": " ++ show (errorMessage (errorDetail err))
+      Left $ ModelError $ errorMessage (errorDetail err)
     parseTextResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
         (OpenAIChoice msg:rest) ->
@@ -288,9 +285,9 @@ baseComposableProvider _p m configs _s = noopHandler
               -- Extract text but preserve reasoning_content and other fields in the choice
               let updatedMsg = msg { content = Nothing }
                   newChoices = OpenAIChoice updatedMsg : rest
-              in Just (AssistantText txt, OpenAISuccess (OpenAISuccessResponse newChoices))
-            Nothing -> Nothing
-        [] -> Nothing
+              in Right (Just (AssistantText txt, OpenAISuccess (OpenAISuccessResponse newChoices)))
+            Nothing -> Right Nothing
+        [] -> Right Nothing
 
 -- Standalone reasoning provider
 openAIReasoning :: forall provider model state. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model state
@@ -302,9 +299,8 @@ openAIReasoning _p _m _configs _s = noopHandler
   , cpDeserializeMessage = deserializeReasoningMessages
   }
   where
-    -- FIXME: Using 'error' here is too aggressive - see comment in parseTextResponse
     parseReasoningResponse (OpenAIError err) =
-      error $ "OpenAI API error: " ++ show (errorType (errorDetail err)) ++ ": " ++ show (errorMessage (errorDetail err))
+      Left $ ModelError $ errorMessage (errorDetail err)
     parseReasoningResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
         (OpenAIChoice msg:rest) ->
@@ -313,9 +309,9 @@ openAIReasoning _p _m _configs _s = noopHandler
               -- Extract reasoning but preserve content and other fields in the choice
               let updatedMsg = msg { reasoning_content = Nothing }
                   newChoices = OpenAIChoice updatedMsg : rest
-              in Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse newChoices))
-            Nothing -> Nothing
-        [] -> Nothing
+              in Right (Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse newChoices)))
+            Nothing -> Right Nothing
+        [] -> Right Nothing
 
     -- Move reasoning messages before text in the same sequence
     -- When we encounter reasoning after text, put reasoning first, then text
@@ -349,9 +345,8 @@ openAITools _p _m configs _s = noopHandler
   , cpDeserializeMessage = deserializeToolMessages
   }
   where
-    -- FIXME: Using 'error' here is too aggressive - see comment in parseTextResponse
     parseToolResponse (OpenAIError err) =
-      error $ "OpenAI API error: " ++ show (errorType (errorDetail err)) ++ ": " ++ show (errorMessage (errorDetail err))
+      Left $ ModelError $ errorMessage (errorDetail err)
     parseToolResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
         (OpenAIChoice msg:rest) ->
@@ -360,15 +355,15 @@ openAITools _p _m configs _s = noopHandler
               -- Extract first tool call but preserve remaining tool calls and other fields
               let updatedMsg = msg { tool_calls = if null remainingTCs then Nothing else Just remainingTCs }
                   newChoices = OpenAIChoice updatedMsg : rest
-              in Just (AssistantTool (convertToolCall tc), OpenAISuccess (OpenAISuccessResponse newChoices))
-            _ -> Nothing
-        [] -> Nothing
+              in Right (Just (AssistantTool (convertToolCall tc), OpenAISuccess (OpenAISuccessResponse newChoices)))
+            _ -> Right Nothing
+        [] -> Right Nothing
 
 -- Standalone JSON provider
 openAIJSON :: forall provider model . (HasJSON model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model ()
 openAIJSON _p _m _configs _s = noopHandler
   { cpToRequest = handleJSONMessage
-  , cpFromResponse = \_ -> Nothing  -- Let base handler parse it
+  , cpFromResponse = \_ -> Right Nothing  -- Let base handler parse it
   , cpPureMessageResponse = convertTextToJSON
   , cpSerializeMessage = serializeJSONMessages
   , cpDeserializeMessage = deserializeJSONMessages
