@@ -96,6 +96,8 @@ test-suite universal-llm-tests
     TestCache
     TestHTTP
     CachedIntegrationSpec
+    ModelRegistry
+    StandardTests
   hs-source-dirs: test
 
   build-depends:

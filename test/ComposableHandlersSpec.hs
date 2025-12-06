@@ -111,7 +111,7 @@ spec = do
 
       length (messages req) `shouldBe` 1
       case head (messages req) of
-        OpenAIMessage "assistant" Nothing (Just reasoning) Nothing Nothing ->
+        OpenAIMessage "assistant" (Just "") (Just reasoning) Nothing Nothing ->
           reasoning `shouldBe` "thinking about the problem..."
         _ -> expectationFailure "Expected assistant reasoning message"
 
@@ -129,7 +129,7 @@ spec = do
 
       length (messages req2) `shouldBe` 2
       case messages req2 of
-        [OpenAIMessage "assistant" Nothing (Just reasoning) Nothing Nothing,
+        [OpenAIMessage "assistant" (Just "") (Just reasoning) Nothing Nothing,
          OpenAIMessage "assistant" (Just content) Nothing Nothing Nothing] -> do
           reasoning `shouldBe` "let me think..."
           content `shouldBe` "Here's my answer"
@@ -197,7 +197,7 @@ spec = do
 
       length (messages req) `shouldBe` 1
       case head (messages req) of
-        OpenAIMessage "assistant" Nothing (Just reasoning) Nothing Nothing ->
+        OpenAIMessage "assistant" (Just "") (Just reasoning) Nothing Nothing ->
           reasoning `shouldBe` "thinking"
         _ -> expectationFailure "Expected reasoning message"
 

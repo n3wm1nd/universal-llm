@@ -71,10 +71,14 @@ systemMessage :: Text -> OpenAIMessage
 systemMessage txt = OpenAIMessage "system" (Just txt) Nothing Nothing Nothing
 
 -- | Create an assistant message with reasoning content
+-- OpenAI spec requires 'content' or 'tool_calls' to be present, so we provide empty content
+-- when there's only reasoning. The reasoning goes in the separate 'reasoning_content' field.
 reasoningMessage :: Text -> OpenAIMessage
-reasoningMessage txt = OpenAIMessage "assistant" Nothing (Just txt) Nothing Nothing
+reasoningMessage txt = OpenAIMessage "assistant" (Just "") (Just txt) Nothing Nothing
 
 -- | Create an assistant message with tool calls
+-- Per OpenAI spec, assistant messages with tool_calls should have null content (not omitted)
+-- This is different from reasoning messages which need empty string.
 toolCallMessage :: [OpenAIToolCall] -> OpenAIMessage
 toolCallMessage calls = OpenAIMessage "assistant" Nothing Nothing (Just calls) Nothing
 
@@ -271,6 +275,11 @@ baseComposableProvider _p m configs _s = noopHandler
     getFirst [] = Nothing
     getFirst (x:_) = Just x
 
+    -- FIXME: Using 'error' here is too aggressive - API errors (rate limits, temporary failures, etc.)
+    -- shouldn't crash the whole program. We need a proper error handling mechanism that can surface
+    -- errors to the caller without killing everything. For now, this at least makes errors visible in tests.
+    parseTextResponse (OpenAIError err) =
+      error $ "OpenAI API error: " ++ show (errorType (errorDetail err)) ++ ": " ++ show (errorMessage (errorDetail err))
     parseTextResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
         (OpenAIChoice msg:rest) ->
@@ -282,7 +291,6 @@ baseComposableProvider _p m configs _s = noopHandler
               in Just (AssistantText txt, OpenAISuccess (OpenAISuccessResponse newChoices))
             Nothing -> Nothing
         [] -> Nothing
-    parseTextResponse _ = Nothing
 
 -- Standalone reasoning provider
 openAIReasoning :: forall provider model state. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model state
@@ -294,6 +302,9 @@ openAIReasoning _p _m _configs _s = noopHandler
   , cpDeserializeMessage = deserializeReasoningMessages
   }
   where
+    -- FIXME: Using 'error' here is too aggressive - see comment in parseTextResponse
+    parseReasoningResponse (OpenAIError err) =
+      error $ "OpenAI API error: " ++ show (errorType (errorDetail err)) ++ ": " ++ show (errorMessage (errorDetail err))
     parseReasoningResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
         (OpenAIChoice msg:rest) ->
@@ -305,7 +316,6 @@ openAIReasoning _p _m _configs _s = noopHandler
               in Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse newChoices))
             Nothing -> Nothing
         [] -> Nothing
-    parseReasoningResponse _ = Nothing
 
     -- Move reasoning messages before text in the same sequence
     -- When we encounter reasoning after text, put reasoning first, then text
@@ -339,6 +349,9 @@ openAITools _p _m configs _s = noopHandler
   , cpDeserializeMessage = deserializeToolMessages
   }
   where
+    -- FIXME: Using 'error' here is too aggressive - see comment in parseTextResponse
+    parseToolResponse (OpenAIError err) =
+      error $ "OpenAI API error: " ++ show (errorType (errorDetail err)) ++ ": " ++ show (errorMessage (errorDetail err))
     parseToolResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
         (OpenAIChoice msg:rest) ->
@@ -350,7 +363,6 @@ openAITools _p _m configs _s = noopHandler
               in Just (AssistantTool (convertToolCall tc), OpenAISuccess (OpenAISuccessResponse newChoices))
             _ -> Nothing
         [] -> Nothing
-    parseToolResponse _ = Nothing
 
 -- Standalone JSON provider
 openAIJSON :: forall provider model . (HasJSON model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model ()

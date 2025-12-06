@@ -18,6 +18,7 @@ import qualified CompletionSpec
 import qualified ToolsSpec
 import qualified TestCache
 import qualified TestHTTP
+import qualified ModelRegistry
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse, OpenAICompletionRequest, OpenAICompletionResponse)
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
@@ -142,6 +143,9 @@ main = do
 
     -- Completion interface tests
     describe "OpenAI Completion Interface (cached)" $ CompletionSpec.spec completionProvider
+
+    -- Model Registry Tests (standardized tests for all models)
+    describe "Model Registry" $ ModelRegistry.modelTests anthropicProvider openaiProvider
 
     -- Cache infrastructure tests
     describe "Test Cache" CachedIntegrationSpec.spec
