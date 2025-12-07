@@ -217,6 +217,70 @@ toOpenAIToolDef toolDef = OpenAIToolDefinition
       }
   }
 
+-- ============================================================================
+-- Default Values for Record Updates
+-- ============================================================================
+
+-- | Default OpenAI request (use record update syntax to set fields)
+defaultOpenAIRequest :: OpenAIRequest
+defaultOpenAIRequest = OpenAIRequest
+  { model = ""
+  , messages = []
+  , temperature = Nothing
+  , max_tokens = Nothing
+  , seed = Nothing
+  , tools = Nothing
+  , response_format = Nothing
+  , stream = Nothing
+  }
+
+-- | Default OpenAI message (use record update syntax to set fields)
+defaultOpenAIMessage :: OpenAIMessage
+defaultOpenAIMessage = OpenAIMessage
+  { role = ""
+  , content = Nothing
+  , reasoning_content = Nothing
+  , tool_calls = Nothing
+  , tool_call_id = Nothing
+  }
+
+-- | Default OpenAI response format (use record update syntax to set fields)
+defaultOpenAIResponseFormat :: OpenAIResponseFormat
+defaultOpenAIResponseFormat = OpenAIResponseFormat
+  { responseType = ""
+  , json_schema = Nothing
+  }
+
+-- | Default OpenAI tool call (use record update syntax to set fields)
+defaultOpenAIToolCall :: OpenAIToolCall
+defaultOpenAIToolCall = OpenAIToolCall
+  { callId = ""
+  , toolCallType = ""
+  , toolFunction = OpenAIToolFunction
+      { toolFunctionName = ""
+      , toolFunctionArguments = ""
+      }
+  }
+
+-- | Default OpenAI tool function (use record update syntax to set fields)
+defaultOpenAIToolFunction :: OpenAIToolFunction
+defaultOpenAIToolFunction = OpenAIToolFunction
+  { toolFunctionName = ""
+  , toolFunctionArguments = ""
+  }
+
+-- | Default OpenAI success response (use record update syntax to set fields)
+defaultOpenAISuccessResponse :: OpenAISuccessResponse
+defaultOpenAISuccessResponse = OpenAISuccessResponse
+  { choices = []
+  }
+
+-- | Default OpenAI choice (use record update syntax to set fields)
+defaultOpenAIChoice :: OpenAIChoice
+defaultOpenAIChoice = OpenAIChoice
+  { message = defaultOpenAIMessage
+  }
+
 -- Helper: Convert OpenAI tool call to generic ToolCall
 convertToolCall :: OpenAIToolCall -> ToolCall
 convertToolCall tc =
@@ -417,14 +481,14 @@ mergeOpenAIDelta acc chunk =
 
     mergeContentDelta :: [OpenAIChoice] -> Text -> [OpenAIChoice]
     mergeContentDelta [] txt =
-        [OpenAIChoice (OpenAIMessage "assistant" (Just txt) Nothing Nothing Nothing)]
+        [OpenAIChoice (defaultOpenAIMessage { role = "assistant", content = Just txt })]
     mergeContentDelta [OpenAIChoice msg] txt =
         [OpenAIChoice (msg { content = Just $ maybe txt (<> txt) (content msg) })]
     mergeContentDelta xs _ = xs
 
     mergeReasoningContentDelta :: [OpenAIChoice] -> Text -> [OpenAIChoice]
     mergeReasoningContentDelta [] txt =
-        [OpenAIChoice (OpenAIMessage "assistant" Nothing (Just txt) Nothing Nothing)]
+        [OpenAIChoice (defaultOpenAIMessage { role = "assistant", reasoning_content = Just txt })]
     mergeReasoningContentDelta [OpenAIChoice msg] txt =
         [OpenAIChoice (msg { reasoning_content = Just $ maybe txt (<> txt) (reasoning_content msg), content = content msg })]
     mergeReasoningContentDelta xs _ = xs
@@ -433,7 +497,7 @@ mergeOpenAIDelta acc chunk =
     mergeToolCallsDelta [] indexedCalls =
         -- Initialize with tool calls at their indices
         let initialCalls = buildToolCallList indexedCalls
-        in [OpenAIChoice (OpenAIMessage "assistant" Nothing Nothing (Just initialCalls) Nothing)]
+        in [OpenAIChoice (defaultOpenAIMessage { role = "assistant", tool_calls = Just initialCalls })]
     mergeToolCallsDelta [OpenAIChoice msg] indexedCalls =
         [OpenAIChoice (msg { tool_calls = Just $ mergeToolCallsByIndex (tool_calls msg) indexedCalls })]
     mergeToolCallsDelta xs _ = xs

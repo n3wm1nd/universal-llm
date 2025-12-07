@@ -268,6 +268,66 @@ instance HasCodec AnthropicErrorResponse where
         , errorDetailMessage = errorMessage response
         }
 
+-- ============================================================================
+-- Default Values for Record Updates
+-- ============================================================================
+
+-- | Default Anthropic message (use record update syntax to set fields)
+defaultAnthropicMessage :: AnthropicMessage
+defaultAnthropicMessage = AnthropicMessage
+  { role = ""
+  , content = []
+  }
+
+-- | Default Anthropic system block (use record update syntax to set fields)
+defaultAnthropicSystemBlock :: AnthropicSystemBlock
+defaultAnthropicSystemBlock = AnthropicSystemBlock
+  { systemText = ""
+  , systemType = ""
+  , systemCacheControl = Nothing
+  }
+
+-- | Default cache control (use record update syntax to set fields)
+defaultCacheControl :: CacheControl
+defaultCacheControl = CacheControl
+  { cacheType = ""
+  , cacheTTL = ""
+  }
+
+-- | Default Anthropic thinking config (use record update syntax to set fields)
+defaultAnthropicThinkingConfig :: AnthropicThinkingConfig
+defaultAnthropicThinkingConfig = AnthropicThinkingConfig
+  { thinkingType = ""
+  , thinkingBudgetTokens = Nothing
+  }
+
+-- | Default Anthropic tool definition (use record update syntax to set fields)
+defaultAnthropicToolDefinition :: AnthropicToolDefinition
+defaultAnthropicToolDefinition = AnthropicToolDefinition
+  { anthropicToolName = ""
+  , anthropicToolDescription = ""
+  , anthropicToolInputSchema = Aeson.Object KM.empty
+  , anthropicToolCacheControl = Nothing
+  }
+
+-- | Default Anthropic success response (use record update syntax to set fields)
+defaultAnthropicSuccessResponse :: AnthropicSuccessResponse
+defaultAnthropicSuccessResponse = AnthropicSuccessResponse
+  { responseId = ""
+  , responseModel = ""
+  , responseRole = ""
+  , responseContent = []
+  , responseStopReason = Nothing
+  , responseUsage = AnthropicUsage 0 0
+  }
+
+-- | Default Anthropic usage (use record update syntax to set fields)
+defaultAnthropicUsage :: AnthropicUsage
+defaultAnthropicUsage = AnthropicUsage
+  { usageInputTokens = 0
+  , usageOutputTokens = 0
+  }
+
 -- Helper: Convert ToolDefinition to Anthropic wire format
 -- Cache control is set to Nothing by default, will be added by provider layer
 toAnthropicToolDef :: ToolDefinition -> AnthropicToolDefinition

@@ -535,7 +535,7 @@ spec getResponse = do
 
     it "handles response with multiple blocks" $ do
       -- Create a response with multiple content blocks
-      let resp = AnthropicSuccessResponse
+      let resp = defaultAnthropicSuccessResponse
             { Proto.responseId = "msg_123"
             , Proto.responseModel = "claude-sonnet"
             , Proto.responseRole = "assistant"

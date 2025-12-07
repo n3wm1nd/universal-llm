@@ -66,11 +66,9 @@ spec = do
           req = handleTextMessages provider model configs msg mempty
 
       length (messages req) `shouldBe` 1
-      case head (messages req) of
-        OpenAIMessage role (Just content) _ _ _ -> do
-          role `shouldBe` "user"
-          content `shouldBe` "Hello"
-        _ -> expectationFailure "Expected user message"
+      let msg = head (messages req)
+      role msg `shouldBe` "user"
+      content msg `shouldBe` Just "Hello"
 
     it "text handler merges consecutive user messages (BasicModel)" $ do
       let provider = OpenAI
@@ -82,10 +80,9 @@ spec = do
           req2 = handleTextMessages provider model configs msg2 req1
 
       length (messages req2) `shouldBe` 1
-      case head (messages req2) of
-        OpenAIMessage "user" (Just content) _ _ _ ->
-          content `shouldBe` "Hello\nWorld"
-        _ -> expectationFailure "Expected merged user message"
+      let msg = head (messages req2)
+      role msg `shouldBe` "user"
+      content msg `shouldBe` Just "Hello\nWorld"
 
     it "handlers compose manually (BasicModel)" $ do
       let provider = OpenAI
@@ -110,10 +107,10 @@ spec = do
           req = OpenAIProvider.handleReasoning provider model configs () msg mempty
 
       length (messages req) `shouldBe` 1
-      case head (messages req) of
-        OpenAIMessage "assistant" (Just "") (Just reasoning) Nothing Nothing ->
-          reasoning `shouldBe` "thinking about the problem..."
-        _ -> expectationFailure "Expected assistant reasoning message"
+      let msg = head (messages req)
+      role msg `shouldBe` "assistant"
+      content msg `shouldBe` Just ""
+      reasoning_content msg `shouldBe` Just "thinking about the problem..."
 
     it "reasoning handler composes with text handler (ReasoningModel)" $ do
       let provider = OpenAI
@@ -128,12 +125,12 @@ spec = do
           req2 = handleTextMessages provider model configs textMsg req1
 
       length (messages req2) `shouldBe` 2
-      case messages req2 of
-        [OpenAIMessage "assistant" (Just "") (Just reasoning) Nothing Nothing,
-         OpenAIMessage "assistant" (Just content) Nothing Nothing Nothing] -> do
-          reasoning `shouldBe` "let me think..."
-          content `shouldBe` "Here's my answer"
-        _ -> expectationFailure "Expected reasoning message followed by text message"
+      let [msg1, msg2] = messages req2
+      role msg1 `shouldBe` "assistant"
+      content msg1 `shouldBe` Just ""
+      reasoning_content msg1 `shouldBe` Just "let me think..."
+      role msg2 `shouldBe` "assistant"
+      content msg2 `shouldBe` Just "Here's my answer"
 
     it "handlers chain sequentially (BasicModel)" $ do
       let provider = OpenAI
@@ -148,10 +145,9 @@ spec = do
       OAI.model req `shouldBe` "basic-model"
       temperature req `shouldBe` Just 0.5
       length (messages req) `shouldBe` 1
-      case head (messages req) of
-        OpenAIMessage "user" (Just content) _ _ _ ->
-          content `shouldBe` "test"
-        _ -> expectationFailure "Expected user message"
+      let msg = head (messages req)
+      role msg `shouldBe` "user"
+      content msg `shouldBe` Just "test"
 
     it "handlers chain with reasoning (ReasoningModel)" $ do
       let provider = OpenAI
@@ -179,10 +175,9 @@ spec = do
           req = cpToRequest handlers msg mempty
 
       length (messages req) `shouldBe` 1
-      case head (messages req) of
-        OpenAIMessage "user" (Just content) _ _ _ ->
-          content `shouldBe` "Hello"
-        _ -> expectationFailure "Expected user message"
+      let msg = head (messages req)
+      role msg `shouldBe` "user"
+      content msg `shouldBe` Just "Hello"
 
     it "composable providers compose via <>" $ do
       let provider = OpenAI
@@ -196,10 +191,10 @@ spec = do
           req = cpToRequest handlers msg mempty
 
       length (messages req) `shouldBe` 1
-      case head (messages req) of
-        OpenAIMessage "assistant" (Just "") (Just reasoning) Nothing Nothing ->
-          reasoning `shouldBe` "thinking"
-        _ -> expectationFailure "Expected reasoning message"
+      let msg = head (messages req)
+      role msg `shouldBe` "assistant"
+      content msg `shouldBe` Just ""
+      reasoning_content msg `shouldBe` Just "thinking"
 
     -- This test demonstrates that type safety prevents using reasoning with non-reasoning models
     -- UNCOMMENT to verify it fails to compile with: No instance for 'HasReasoning BasicModel'

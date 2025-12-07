@@ -119,15 +119,34 @@ instance ParseResponse OpenAI.OpenAICompatible MockFullXMLModel where
 
 -- Create a mock OpenAI response with text content
 mockTextResponse :: Text -> OpenAIResponse
-mockTextResponse txt = OpenAISuccess $ OpenAISuccessResponse
-  [OpenAIChoice $ OpenAIMessage "assistant" (Just txt) Nothing Nothing Nothing]
+mockTextResponse txt = OpenAISuccess $ defaultOpenAISuccessResponse
+  { choices = [defaultOpenAIChoice
+      { message = defaultOpenAIMessage
+          { role = "assistant"
+          , content = Just txt
+          }
+      }]
+  }
 
 -- Create a mock OpenAI response with tool calls
 mockToolCallResponse :: [(Text, Text, Value)] -> OpenAIResponse
-mockToolCallResponse calls = OpenAISuccess $ OpenAISuccessResponse
-  [OpenAIChoice $ OpenAIMessage "assistant" Nothing Nothing (Just openAICalls) Nothing]
+mockToolCallResponse calls = OpenAISuccess $ defaultOpenAISuccessResponse
+  { choices = [defaultOpenAIChoice
+      { message = defaultOpenAIMessage
+          { role = "assistant"
+          , tool_calls = Just openAICalls
+          }
+      }]
+  }
   where
-    openAICalls = [OpenAIToolCall tcId "function" (OpenAIToolFunction tcName (T.pack $ show tcArgs))
+    openAICalls = [defaultOpenAIToolCall
+                    { callId = tcId
+                    , toolCallType = "function"
+                    , toolFunction = defaultOpenAIToolFunction
+                        { toolFunctionName = tcName
+                        , toolFunctionArguments = T.pack $ show tcArgs
+                        }
+                    }
                   | (tcId, tcName, tcArgs) <- calls]
 
 -- ============================================================================
@@ -209,11 +228,12 @@ spec = do
 
         -- Should have 3 messages, last one is tool result in OpenAI format
         length reqMsgs `shouldBe` 3
-        case last reqMsgs of
-          OpenAIMessage "tool" (Just content) _ _ (Just callId) -> do
-            callId `shouldBe` "call_123"
-            T.isInfixOf "hello" content `shouldBe` True
-          _ -> expectationFailure $ "Expected tool message, got: " ++ show (last reqMsgs)
+        let msg = last reqMsgs
+        role msg `shouldBe` "tool"
+        case content msg of
+          Just c -> T.isInfixOf "hello" c `shouldBe` True
+          Nothing -> expectationFailure "Expected content in tool message"
+        tool_call_id msg `shouldBe` Just "call_123"
 
     describe "Strategy B: withFullXMLToolSupport (no native tool support)" $ do
       it "converts tool definitions to system prompt text" $ do
@@ -227,12 +247,14 @@ spec = do
             reqMsgs = messages req
 
         -- First message should be system with tool definitions
-        case head reqMsgs of
-          OpenAIMessage "system" (Just sysContent) _ _ _ -> do
+        let msg = head reqMsgs
+        role msg `shouldBe` "system"
+        case content msg of
+          Just sysContent -> do
             T.isInfixOf "You are helpful" sysContent `shouldBe` True
             T.isInfixOf "search" sysContent `shouldBe` True
             T.isInfixOf "<tool_call>" sysContent `shouldBe` True
-          _ -> expectationFailure $ "Expected system message, got: " ++ show (head reqMsgs)
+          Nothing -> expectationFailure "Expected system message content"
 
       it "converts tool calls to XML text in assistant messages" $ do
         let provider = OpenAI.OpenAICompatible
@@ -248,13 +270,15 @@ spec = do
             reqMsgs = messages req
 
         -- Check that tool call is converted to XML in an assistant message
-        let assistantMsgs = [msg | msg@(OpenAIMessage "assistant" _ _ _ _) <- reqMsgs]
+        let assistantMsgs = [msg | msg <- reqMsgs, role msg == "assistant"]
         length assistantMsgs `shouldSatisfy` (>= 1)
-        case last assistantMsgs of
-          OpenAIMessage "assistant" (Just content) _ _ _ -> do
-            T.isInfixOf "<tool_call>" content `shouldBe` True
-            T.isInfixOf "multiply" content `shouldBe` True
-          _ -> expectationFailure $ "Expected assistant message with XML, got: " ++ show (last assistantMsgs)
+        let msg = last assistantMsgs
+        role msg `shouldBe` "assistant"
+        case content msg of
+          Just c -> do
+            T.isInfixOf "<tool_call>" c `shouldBe` True
+            T.isInfixOf "multiply" c `shouldBe` True
+          Nothing -> expectationFailure "Expected assistant message content"
 
       it "converts tool results to XML text in user messages" $ do
         let provider = OpenAI.OpenAICompatible
@@ -272,14 +296,16 @@ spec = do
             reqMsgs = messages req
 
         -- Check that tool result is converted to XML in a user message
-        let userMsgs = [msg | msg@(OpenAIMessage "user" _ _ _ _) <- reqMsgs]
+        let userMsgs = [msg | msg <- reqMsgs, role msg == "user"]
         length userMsgs `shouldSatisfy` (>= 2)  -- At least initial user + tool result
-        case last userMsgs of
-          OpenAIMessage "user" (Just content) _ _ _ -> do
-            T.isInfixOf "<tool_result>" content `shouldBe` True
-            T.isInfixOf "call_789" content `shouldBe` True
-            T.isInfixOf "divide" content `shouldBe` True
-          _ -> expectationFailure $ "Expected user message with XML result, got: " ++ show (last userMsgs)
+        let msg = last userMsgs
+        role msg `shouldBe` "user"
+        case content msg of
+          Just c -> do
+            T.isInfixOf "<tool_result>" c `shouldBe` True
+            T.isInfixOf "call_789" c `shouldBe` True
+            T.isInfixOf "divide" c `shouldBe` True
+          Nothing -> expectationFailure "Expected user message content"
 
       it "preserves full message history through transformations" $ do
         let provider = OpenAI.OpenAICompatible
@@ -303,7 +329,7 @@ spec = do
 
             -- System + 6 messages = 7 total
             -- (system with tools, then all 6 conversation messages)
-            contentTexts = [content | OpenAIMessage _ (Just content) _ _ _ <- reqMsgs]
+            contentTexts = [c | msg <- reqMsgs, Just c <- [content msg]]
 
         -- Check that messages are in order
         length reqMsgs `shouldSatisfy` (>= 6)  -- At least 6 conversation messages
@@ -349,10 +375,11 @@ spec = do
             reqMsgs = messages req
 
         -- Tool result should preserve error message
-        case last reqMsgs of
-          OpenAIMessage "tool" (Just content) _ _ _ ->
-            T.isInfixOf "Tool execution failed" content `shouldBe` True
-          _ -> expectationFailure "Expected tool message with error"
+        let msg = last reqMsgs
+        role msg `shouldBe` "tool"
+        case content msg of
+          Just c -> T.isInfixOf "Tool execution failed" c `shouldBe` True
+          Nothing -> expectationFailure "Expected tool message content"
 
       it "handles tool result errors correctly (Strategy B - XML format)" $ do
         let provider = OpenAI.OpenAICompatible
@@ -370,11 +397,13 @@ spec = do
             reqMsgs = messages req
 
         -- Tool result should be XML with error
-        case last reqMsgs of
-          OpenAIMessage "user" (Just content) _ _ _ -> do
-            T.isInfixOf "<tool_result>" content `shouldBe` True
-            T.isInfixOf "Error: Permission denied" content `shouldBe` True
-          _ -> expectationFailure $ "Expected user message with XML error, got: " ++ show (last reqMsgs)
+        let msg = last reqMsgs
+        role msg `shouldBe` "user"
+        case content msg of
+          Just c -> do
+            T.isInfixOf "<tool_result>" c `shouldBe` True
+            T.isInfixOf "Error: Permission denied" c `shouldBe` True
+          Nothing -> expectationFailure "Expected user message content"
 
       it "handles invalid tool calls (non-existent tool)" $ do
         -- For Strategy A (native OpenAI protocol)
@@ -398,10 +427,11 @@ spec = do
             reqMsgs2 = messages req2
 
         -- Should convert to text representation
-        case last reqMsgs2 of
-          OpenAIMessage "assistant" (Just content) _ _ _ ->
-            T.isInfixOf "nonexistent_tool" content `shouldBe` True
-          _ -> expectationFailure "Expected assistant message with error"
+        let msg = last reqMsgs2
+        role msg `shouldBe` "assistant"
+        case content msg of
+          Just c -> T.isInfixOf "nonexistent_tool" c `shouldBe` True
+          Nothing -> expectationFailure "Expected assistant message content"
 
       it "handles malformed XML in responses gracefully" $ do
         let provider = OpenAI.OpenAICompatible
@@ -475,7 +505,7 @@ spec = do
 
             req = buildRequest provider model configs history
             reqMsgs = messages req
-            roles = [role | OpenAIMessage role _ _ _ _ <- reqMsgs]
+            roles = [role msg | msg <- reqMsgs]
 
             -- Check alternating pattern (may have system first)
             conversationRoles = filter (/= "system") roles

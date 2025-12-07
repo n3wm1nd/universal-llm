@@ -14,18 +14,21 @@ spec = do
   describe "Test Cache" $ do
     it "stores and retrieves responses" $
       withSystemTempDirectory "test-cache" $ \cachePath -> do
-        let request = OpenAIRequest
+        let request = defaultOpenAIRequest
               { model = "test-model"
-              , messages = [OpenAIMessage "user" (Just "test") Nothing Nothing Nothing]
-              , temperature = Nothing
-              , max_tokens = Nothing
-              , seed = Nothing
-              , tools = Nothing
-              , response_format = Nothing
-              , stream = Nothing
+              , messages = [defaultOpenAIMessage
+                  { role = "user"
+                  , content = Just "test"
+                  }]
               }
-            response = OpenAISuccess $ OpenAISuccessResponse
-              [ OpenAIChoice $ OpenAIMessage "assistant" (Just "test response") Nothing Nothing Nothing ]
+            response = OpenAISuccess $ defaultOpenAISuccessResponse
+              { choices = [defaultOpenAIChoice
+                  { message = defaultOpenAIMessage
+                      { role = "assistant"
+                      , content = Just "test response"
+                      }
+                  }]
+              }
 
         -- Record the response
         recordResponse cachePath request response
@@ -36,15 +39,12 @@ spec = do
 
     it "returns Nothing for cache miss" $
       withSystemTempDirectory "test-cache" $ \cachePath -> do
-        let request = OpenAIRequest
+        let request = defaultOpenAIRequest
               { model = "nonexistent-model"
-              , messages = [OpenAIMessage "user" (Just "uncached") Nothing Nothing Nothing]
-              , temperature = Nothing
-              , max_tokens = Nothing
-              , seed = Nothing
-              , tools = Nothing
-              , response_format = Nothing
-              , stream = Nothing
+              , messages = [defaultOpenAIMessage
+                  { role = "user"
+                  , content = Just "uncached"
+                  }]
               }
 
         (result :: Maybe OpenAIResponse) <- lookupResponse cachePath request
@@ -52,16 +52,7 @@ spec = do
 
     it "errors when cache directory does not exist" $ do
       let cachePath = "/nonexistent/cache/path"
-          request = OpenAIRequest
-            { model = "test"
-            , messages = []
-            , temperature = Nothing
-            , max_tokens = Nothing
-            , seed = Nothing
-            , tools = Nothing
-            , response_format = Nothing
-            , stream = Nothing
-            }
-          response = OpenAISuccess $ OpenAISuccessResponse []
+          request = defaultOpenAIRequest { model = "test" }
+          response = OpenAISuccess $ defaultOpenAISuccessResponse
 
       recordResponse cachePath request response `shouldThrow` anyException

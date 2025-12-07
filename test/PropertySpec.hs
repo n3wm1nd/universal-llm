@@ -557,16 +557,24 @@ prop_openaiResponseParsingWithToolsAndReasoning = forAll genResponse $ \(msgs, r
       -- Create a mock response with text, reasoning, or tool calls
       responseMsg <- oneof
         [ -- Text response
-          OP.OpenAIMessage "assistant" <$> (Just <$> genNonEmptyText) <*> pure Nothing <*> pure Nothing <*> pure Nothing
+          (\txt -> OP.defaultOpenAIMessage { OP.role = "assistant", OP.content = Just txt }) <$> genNonEmptyText
         , -- Reasoning response
-          OP.OpenAIMessage "assistant" <$> pure Nothing <*> (Just <$> genNonEmptyText) <*> pure Nothing <*> pure Nothing
+          (\reasoning -> OP.defaultOpenAIMessage { OP.role = "assistant", OP.reasoning_content = Just reasoning }) <$> genNonEmptyText
         , -- Tool call response
           do tcId <- genNonEmptyText
              tcName <- genNonEmptyText
-             let tc = OP.OpenAIToolCall tcId "function" (OP.OpenAIToolFunction tcName "{}")
-             return $ OP.OpenAIMessage "assistant" Nothing Nothing (Just [tc]) Nothing
+             let tc = OP.defaultOpenAIToolCall
+                   { OP.callId = tcId
+                   , OP.toolCallType = "function"
+                   , OP.toolFunction = OP.defaultOpenAIToolFunction
+                       { OP.toolFunctionName = tcName
+                       , OP.toolFunctionArguments = "{}"
+                       }
+                   }
+             return $ OP.defaultOpenAIMessage { OP.role = "assistant", OP.tool_calls = Just [tc] }
         ]
-      let resp = OP.OpenAISuccess (OP.OpenAISuccessResponse [OP.OpenAIChoice responseMsg])
+      let resp = OP.OpenAISuccess (OP.defaultOpenAISuccessResponse
+            { OP.choices = [OP.defaultOpenAIChoice { OP.message = responseMsg }] })
       return (msgs, resp)
 
 -- | Full-stack response parsing test: Parse Anthropic responses through composable provider pipeline
@@ -589,7 +597,7 @@ prop_anthropicResponseParsingWithToolsAndReasoning = forAll genResponse $ \(msgs
         , AP.AnthropicThinkingBlock <$> genNonEmptyText <*> pure Nothing
         , AP.AnthropicToolUseBlock <$> genNonEmptyText <*> genNonEmptyText <*> genSimpleValue <*> pure Nothing
         ]
-      let successResp = AP.AnthropicSuccessResponse
+      let successResp = AP.defaultAnthropicSuccessResponse
             { AP.responseId = "test-response-id"
             , AP.responseModel = "claude-sonnet-4.5"
             , AP.responseRole = "assistant"
@@ -605,7 +613,7 @@ prop_anthropicResponseParsingWithToolsAndReasoning = forAll genResponse $ \(msgs
 prop_openaiComposableProviderPipeline :: Property
 prop_openaiComposableProviderPipeline = forAll genMessages $ \msgs ->
   let -- Apply the provider's message handler to each message sequentially
-      emptyReq = OP.OpenAIRequest "" [] Nothing Nothing Nothing Nothing Nothing Nothing
+      emptyReq = mempty :: OP.OpenAIRequest
       finalReq = foldl (\req msg -> OpenAIProvider.handleTextMessage msg req) emptyReq msgs
       -- Verify messages were accumulated (only text messages are handled)
       msgCount = length (OP.messages finalReq)
@@ -628,7 +636,7 @@ prop_openaiComposableProviderPipeline = forAll genMessages $ \msgs ->
 prop_anthropicComposableProviderPipeline :: Property
 prop_anthropicComposableProviderPipeline = forAll genMessages $ \msgs ->
   let -- Apply the provider's message handler to each message sequentially
-      emptyReq = AP.AnthropicRequest "" [] 2048 Nothing Nothing Nothing Nothing Nothing
+      emptyReq = mempty :: AP.AnthropicRequest
       finalReq = foldl (\req msg -> AnthropicProvider.handleTextMessage msg req) emptyReq msgs
       -- Verify messages were accumulated and alternation is maintained
       msgCount = length (AP.messages finalReq)

@@ -102,10 +102,9 @@ spec getResponse = do
 
       -- Should merge into single user message
       length (messages req) `shouldBe` 1
-      case head (messages req) of
-        OpenAIMessage "user" (Just content) _ _ _ ->
-          content `shouldBe` "First part\nSecond part"
-        _ -> expectationFailure "Expected merged user message"
+      let msg = head (messages req)
+      role msg `shouldBe` "user"
+      content msg `shouldBe` Just "First part\nSecond part"
 
   describe "OpenAI Composable Provider - Tool Calling" $ do
 
@@ -300,36 +299,34 @@ spec getResponse = do
   describe "OpenAI Provider - Message Structure" $ do
     it "correctly structures OpenAI messages with all optional fields" $ do
       -- Test that we can create messages with various combinations of fields
-      let msg1 = OpenAIMessage
+      let msg1 = defaultOpenAIMessage
             { role = "assistant"
             , content = Just "Hello"
-            , reasoning_content = Nothing
-            , tool_calls = Nothing
-            , tool_call_id = Nothing
             }
       role msg1 `shouldBe` "assistant"
       content msg1 `shouldBe` Just "Hello"
 
       -- Test with reasoning content
-      let msg2 = OpenAIMessage
+      let msg2 = defaultOpenAIMessage
             { role = "assistant"
             , content = Just "The answer is 42"
             , reasoning_content = Just "Let me think..."
-            , tool_calls = Nothing
-            , tool_call_id = Nothing
             }
       reasoning_content msg2 `shouldBe` Just "Let me think..."
       content msg2 `shouldBe` Just "The answer is 42"
 
       -- Test with tool calls
-      let toolFunc = OpenAIToolFunction "get_weather" "{\"location\": \"Paris\"}"
-          toolCall = OpenAIToolCall "call1" "function" toolFunc
-          msg3 = OpenAIMessage
+      let toolFunc = defaultOpenAIToolFunction
+            { toolFunctionName = "get_weather"
+            , toolFunctionArguments = "{\"location\": \"Paris\"}"
+            }
+          toolCall = defaultOpenAIToolCall
+            { callId = "call1"
+            , toolFunction = toolFunc
+            }
+          msg3 = defaultOpenAIMessage
             { role = "assistant"
-            , content = Nothing
-            , reasoning_content = Nothing
             , tool_calls = Just [toolCall]
-            , tool_call_id = Nothing
             }
       tool_calls msg3 `shouldBe` Just [toolCall]
 

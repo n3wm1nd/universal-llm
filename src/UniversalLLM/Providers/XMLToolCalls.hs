@@ -151,13 +151,13 @@ withFullXMLToolSupport = chainProviders xmlFullSupport
              let toolPrompt = formatToolDefinitionsAsXML toolDefs
                  (sysMsgs, otherMsgs) = span isSystemMessage (messages req)
                  updatedSysMsg = case sysMsgs of
-                   [] -> [OpenAIMessage "system" (Just toolPrompt) Nothing Nothing Nothing]
-                   (OpenAIMessage msgRole (Just existingContent) rc tc tcid : rest) ->
-                     OpenAIMessage msgRole (Just (existingContent <> "\n\n" <> toolPrompt)) rc tc tcid : rest
+                   [] -> [defaultOpenAIMessage { role = "system", content = Just toolPrompt }]
+                   (msg@OpenAIMessage{ content = Just existingContent } : rest) ->
+                     msg { content = Just (existingContent <> "\n\n" <> toolPrompt) } : rest
                    (first:rest) -> first : rest
              in req { messages = updatedSysMsg <> otherMsgs }
       where
-        isSystemMessage (OpenAIMessage "system" _ _ _ _) = True
+        isSystemMessage OpenAIMessage{ role = "system" } = True
         isSystemMessage _ = False
 
     -- Extract XML tool calls from parsed text messages

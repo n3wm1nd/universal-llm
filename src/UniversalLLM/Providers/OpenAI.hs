@@ -60,42 +60,62 @@ setResponseFormat fmt req = req { response_format = Just fmt }
 
 -- | Create a user message with text content
 userMessage :: Text -> OpenAIMessage
-userMessage txt = OpenAIMessage "user" (Just txt) Nothing Nothing Nothing
+userMessage txt = defaultOpenAIMessage
+  { role = "user"
+  , content = Just txt
+  }
 
 -- | Create an assistant message with text content
 assistantMessage :: Text -> OpenAIMessage
-assistantMessage txt = OpenAIMessage "assistant" (Just txt) Nothing Nothing Nothing
+assistantMessage txt = defaultOpenAIMessage
+  { role = "assistant"
+  , content = Just txt
+  }
 
 -- | Create a system message with text content
 systemMessage :: Text -> OpenAIMessage
-systemMessage txt = OpenAIMessage "system" (Just txt) Nothing Nothing Nothing
+systemMessage txt = defaultOpenAIMessage
+  { role = "system"
+  , content = Just txt
+  }
 
 -- | Create an assistant message with reasoning content
 -- OpenAI spec requires 'content' or 'tool_calls' to be present, so we provide empty content
 -- when there's only reasoning. The reasoning goes in the separate 'reasoning_content' field.
 reasoningMessage :: Text -> OpenAIMessage
-reasoningMessage txt = OpenAIMessage "assistant" (Just "") (Just txt) Nothing Nothing
+reasoningMessage txt = defaultOpenAIMessage
+  { role = "assistant"
+  , content = Just ""
+  , reasoning_content = Just txt
+  }
 
 -- | Create an assistant message with tool calls
 -- Per OpenAI spec, assistant messages with tool_calls should have null content (not omitted)
 -- This is different from reasoning messages which need empty string.
 toolCallMessage :: [OpenAIToolCall] -> OpenAIMessage
-toolCallMessage calls = OpenAIMessage "assistant" Nothing Nothing (Just calls) Nothing
+toolCallMessage calls = defaultOpenAIMessage
+  { role = "assistant"
+  , tool_calls = Just calls
+  }
 
 -- | Create a tool result message
 toolResultMessage :: Text -> Text -> OpenAIMessage
-toolResultMessage tcId contentTxt = OpenAIMessage "tool" (Just contentTxt) Nothing Nothing (Just tcId)
+toolResultMessage tcId contentTxt = defaultOpenAIMessage
+  { role = "tool"
+  , content = Just contentTxt
+  , tool_call_id = Just tcId
+  }
 
 -- | Append text to a message's content (only if roles match and message has text content)
 appendToMessageIfSameRole :: Text -> Text -> OpenAIMessage -> Maybe OpenAIMessage
-appendToMessageIfSameRole targetRole txt (OpenAIMessage msgRole (Just existingContent) Nothing Nothing Nothing)
-  | msgRole == targetRole = Just $ OpenAIMessage msgRole (Just (existingContent <> "\n" <> txt)) Nothing Nothing Nothing
+appendToMessageIfSameRole targetRole txt msg@OpenAIMessage{ role = msgRole, content = Just existingContent, reasoning_content = Nothing, tool_calls = Nothing, tool_call_id = Nothing }
+  | msgRole == targetRole = Just $ msg { content = Just (existingContent <> "\n" <> txt) }
 appendToMessageIfSameRole _ _ _ = Nothing
 
 -- | Append a tool call to a message's tool calls
 appendToolCallToMessage :: OpenAIToolCall -> OpenAIMessage -> Maybe OpenAIMessage
-appendToolCallToMessage tc (OpenAIMessage "assistant" msgContent reasoning (Just existingCalls) tcid) =
-  Just $ OpenAIMessage "assistant" msgContent reasoning (Just (existingCalls <> [tc])) tcid
+appendToolCallToMessage tc msg@OpenAIMessage{ role = "assistant", tool_calls = Just existingCalls } =
+  Just $ msg { tool_calls = Just (existingCalls <> [tc]) }
 appendToolCallToMessage _ _ = Nothing
 
 -- ============================================================================
