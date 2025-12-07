@@ -8,7 +8,7 @@
 -- Usage:
 --   describe "My New Model" $ testModel MyProvider MyModel getResponse [text, tools, reasoning]
 --
-module ModelRegistry (modelTests) where
+module ModelRegistry (modelTests, Providers(..)) where
 
 import Test.Hspec
 import qualified TestModels
@@ -16,6 +16,7 @@ import qualified StandardTests as ST
 import TestHelpers (testModel)
 import UniversalLLM.Providers.Anthropic (Anthropic(..))
 import qualified UniversalLLM.Providers.OpenAI as OpenAIProvider
+import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import TestCache (ResponseProvider)
@@ -26,21 +27,34 @@ import TestCache (ResponseProvider)
 --
 -- Add your model here! Each is a single describe + testModel call.
 
-modelTests :: ResponseProvider AnthropicRequest AnthropicResponse
-           -> ResponseProvider OpenAIRequest OpenAIResponse
-           -> Spec
-modelTests anthropicProvider openaiProvider = do
+data Providers = Providers
+  { anthropicProvider :: ResponseProvider AnthropicRequest AnthropicResponse
+  , openaiProvider :: ResponseProvider OpenAIRequest OpenAIResponse
+  , openrouterProvider :: ResponseProvider OpenAIRequest OpenAIResponse
+  , llamacppProvider :: ResponseProvider OpenAIRequest OpenAIResponse
+  , openaiCompatProvider :: ResponseProvider OpenAIRequest OpenAIResponse
+  }
+
+modelTests :: Providers -> Spec
+modelTests providers = do
 
   -- Anthropic Models
   describe "Claude Sonnet 4.5" $
-    testModel TestModels.anthropicSonnet45 Anthropic TestModels.ClaudeSonnet45 anthropicProvider
+    testModel TestModels.anthropicSonnet45 Anthropic TestModels.ClaudeSonnet45 (anthropicProvider providers)
       [ ST.text, ST.tools ]
 
   describe "Claude Sonnet 4.5 with Reasoning" $
-    testModel TestModels.anthropicSonnet45Reasoning Anthropic TestModels.ClaudeSonnet45WithReasoning anthropicProvider
+    testModel TestModels.anthropicSonnet45Reasoning Anthropic TestModels.ClaudeSonnet45WithReasoning (anthropicProvider providers)
       [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
-  -- OpenAI-Compatible Models
-  describe "GLM 4.5" $
-    testModel TestModels.openAIGLM45 OpenAIProvider.OpenAI TestModels.GLM45 openaiProvider
+  -- LlamaCpp Models
+  -- GLM 4.5 via llama.cpp - Test against llama.cpp server when the model is loaded
+  describe "GLM 4.5 (llama.cpp)" $
+    testModel TestModels.llamaCppGLM45 LlamaCpp TestModels.GLM45 (llamacppProvider providers)
+      [ ST.text, ST.tools ]
+
+  -- OpenRouter Models
+  -- GLM 4.5 via OpenRouter
+  describe "GLM 4.5 (OpenRouter)" $
+    testModel TestModels.openRouterGLM45 OpenRouter TestModels.GLM45 (openrouterProvider providers)
       [ ST.text, ST.tools ]

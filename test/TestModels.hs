@@ -9,7 +9,7 @@ import UniversalLLM.Core.Types
 import qualified UniversalLLM.Providers.Anthropic as Anthropic
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
 import UniversalLLM.Providers.Anthropic (Anthropic(..))
-import UniversalLLM.Providers.OpenAI (OpenAI(..))
+import UniversalLLM.Providers.OpenAI (OpenAI(..), LlamaCpp(..), OpenRouter(..))
 
 -- ============================================================================
 -- Anthropic Models
@@ -43,15 +43,24 @@ anthropicSonnet45Reasoning :: ComposableProvider   Anthropic ClaudeSonnet45WithR
 anthropicSonnet45Reasoning = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @ClaudeSonnet45WithReasoning
 
 -- ============================================================================
--- OpenAI-Compatible Models (for testing with llama.cpp/GLM4.5)
+-- OpenAI-Compatible Models (GLM4.5 available via multiple backends)
 -- ============================================================================
 
--- GLM4.5 via llama.cpp - supports tools, reasoning, and JSON
+-- GLM4.5 - supports tools, reasoning, and JSON
+-- Available via llama.cpp, OpenRouter, and other OpenAI-compatible providers
 data GLM45 = GLM45 deriving (Show, Eq)
 
+-- Model name varies by provider
 instance ModelName OpenAI GLM45 where
-  modelName _ = "glm-4-plus"
+  modelName _ = "glm-4-plus"  -- Generic fallback
 
+instance ModelName LlamaCpp GLM45 where
+  modelName _ = "GLM-4.5-Air"  -- Canonicalized from GGUF filename
+
+instance ModelName OpenRouter GLM45 where
+  modelName _ = "z-ai/glm-4.5-air:free"
+
+-- Capability instances (same across all providers)
 instance HasTools GLM45 OpenAI where
   withTools = OpenAI.openAITools
 
@@ -61,8 +70,33 @@ instance HasReasoning GLM45 OpenAI where
 instance HasJSON GLM45 OpenAI where
   withJSON = OpenAI.openAIJSON
 
+instance HasTools GLM45 LlamaCpp where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning GLM45 LlamaCpp where
+  withReasoning = OpenAI.openAIReasoning
+
+instance HasJSON GLM45 LlamaCpp where
+  withJSON = OpenAI.openAIJSON
+
+instance HasTools GLM45 OpenRouter where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning GLM45 OpenRouter where
+  withReasoning = OpenAI.openAIReasoning
+
+instance HasJSON GLM45 OpenRouter where
+  withJSON = OpenAI.openAIJSON
+
+-- Composable providers for each backend
 openAIGLM45 :: ComposableProvider OpenAI GLM45 ((), ((), ((), ())))
 openAIGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @OpenAI @GLM45
+
+llamaCppGLM45 :: ComposableProvider LlamaCpp GLM45 ((), ((), ((), ())))
+llamaCppGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @LlamaCpp @GLM45
+
+openRouterGLM45 :: ComposableProvider OpenRouter GLM45 ((), ((), ((), ())))
+openRouterGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @OpenRouter @GLM45
 
 -- Basic text-only model (for compile-time safety tests)
 data BasicTextModel = BasicTextModel deriving (Show, Eq)

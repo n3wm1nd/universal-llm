@@ -4,6 +4,7 @@
 module TestHTTP
   ( httpCall
   , httpCallStreaming
+  , httpGet
   ) where
 
 import qualified Data.Text as T
@@ -47,4 +48,11 @@ httpCallStreaming endpoint headers request = do
            $ setRequestBodyLBS (Aeson.encode $ toJSONViaCodec request) req
 
   response <- httpLBS req'
+  return $ getResponseBody response
+
+-- HTTP GET call for raw JSON responses
+httpGet :: String -> IO BSL.ByteString
+httpGet endpoint = do
+  req <- parseRequest $ "GET " ++ endpoint
+  response <- httpLBS req
   return $ getResponseBody response
