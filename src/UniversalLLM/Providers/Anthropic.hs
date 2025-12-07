@@ -249,7 +249,14 @@ anthropicReasoning _p _m configs state = noopHandler
             (t:_) -> t
             [] -> 2048
           thinkingBudget = max 1024 (min 5000 (maxTokensFromConfig `div` 2))
-      in if reasoningEnabled
+          -- Check if we're in a tool call sequence that requires signature chain
+          needsSignatureChain = isInToolCallSequence req
+          hasCompleteChain = hasCompleteSignatureChain req state
+          -- Only enable reasoning if either:
+          -- 1. We're not in a tool call sequence, OR
+          -- 2. We're in a tool call sequence AND have complete signature chain
+          canEnableReasoning = reasoningEnabled && (not needsSignatureChain || hasCompleteChain)
+      in if canEnableReasoning
          then req { thinking = Just $ AnthropicThinkingConfig "enabled" (Just thinkingBudget) }
          else req
   , cpPostResponse = storeSignatureFromResponse
@@ -260,6 +267,39 @@ anthropicReasoning _p _m configs state = noopHandler
   where
     isReasoningFalse (Reasoning False) = True
     isReasoningFalse _ = False
+
+    -- Check if we're in an active tool call sequence
+    -- This is true when the most recent assistant message contains tool calls
+    -- and we're about to send tool results
+    isInToolCallSequence :: AnthropicRequest -> Bool
+    isInToolCallSequence req =
+      case reverse (messages req) of
+        -- If last message is user with tool results, check if previous assistant had tool calls
+        (userMsg : assistantMsg : _) | role userMsg == "user" && role assistantMsg == "assistant" ->
+          -- Check if user message has tool results
+          let hasToolResults = any isToolResult (content userMsg)
+              -- Check if assistant message has tool calls
+              hasToolCalls = any isToolUse (content assistantMsg)
+          in hasToolResults && hasToolCalls
+        _ -> False
+      where
+        isToolResult (AnthropicToolResultBlock _ _ _) = True
+        isToolResult _ = False
+        isToolUse (AnthropicToolUseBlock _ _ _ _) = True
+        isToolUse _ = False
+
+    -- Check if the current tool call sequence has complete signature chain
+    -- This means all thinking blocks from the assistant message have signatures in state
+    hasCompleteSignatureChain :: AnthropicRequest -> AnthropicReasoningState -> Bool
+    hasCompleteSignatureChain req st =
+      case reverse (messages req) of
+        (_ : assistantMsg : _) | role assistantMsg == "assistant" ->
+          -- Get all thinking blocks from assistant message
+          let thinkingBlocks = [txt | AnthropicThinkingBlock txt _ _ <- content assistantMsg]
+              -- Check if all have signatures in state
+              allHaveSignatures = all (\txt -> Map.member txt (signatureMap st)) thinkingBlocks
+          in null thinkingBlocks || allHaveSignatures  -- Empty is OK, or all must have sigs
+        _ -> True  -- No tool call sequence, so no constraint
 
     -- Store signature in state after receiving response
     storeSignatureFromResponse :: ProviderResponse Anthropic -> AnthropicReasoningState -> AnthropicReasoningState
