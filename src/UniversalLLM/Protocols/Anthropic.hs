@@ -6,6 +6,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RecordWildCards #-}
 
 
 module UniversalLLM.Protocols.Anthropic where
@@ -93,7 +94,11 @@ data AnthropicContentBlock
   = AnthropicTextBlock TextContent (Maybe CacheControl)
   | AnthropicToolUseBlock ToolUseId ToolUseName ToolUseInput (Maybe CacheControl)
   | AnthropicToolResultBlock ToolResultId ToolResultContent (Maybe CacheControl)
-  | AnthropicThinkingBlock Text (Maybe CacheControl)
+  | AnthropicThinkingBlock
+      { thinkingText :: Text
+      , thinkingSignature :: Maybe Value  -- Signature metadata from API
+      , thinkingCacheControl :: Maybe CacheControl
+      }
   deriving (Generic, Show, Eq)
 
 data AnthropicToolDefinition = AnthropicToolDefinition
@@ -175,12 +180,12 @@ instance HasCodec AnthropicContentBlock where
       fromEither (Left (txt, cc)) = AnthropicTextBlock txt cc
       fromEither (Right (Left (tid, tname, tinput, cc))) = AnthropicToolUseBlock tid tname tinput cc
       fromEither (Right (Right (Left (rid, rcontent, cc)))) = AnthropicToolResultBlock rid rcontent cc
-      fromEither (Right (Right (Right (thinking, cc)))) = AnthropicThinkingBlock thinking cc
+      fromEither (Right (Right (Right (thinking, sig, cc)))) = AnthropicThinkingBlock thinking sig cc
 
       toEither (AnthropicTextBlock txt cc) = Left (txt, cc)
       toEither (AnthropicToolUseBlock tid tname tinput cc) = Right (Left (tid, tname, tinput, cc))
       toEither (AnthropicToolResultBlock rid rcontent cc) = Right (Right (Left (rid, rcontent, cc)))
-      toEither (AnthropicThinkingBlock thinking cc) = Right (Right (Right (thinking, cc)))
+      toEither (AnthropicThinkingBlock{..}) = Right (Right (Right (thinkingText, thinkingSignature, thinkingCacheControl)))
 
       textBlockCodec =
         requiredField "type" "Block type" .= const ("text" :: Text)
@@ -205,9 +210,10 @@ instance HasCodec AnthropicContentBlock where
 
       thinkingBlockCodec =
         requiredField "type" "Block type" .= const ("thinking" :: Text)
-        *> ((,)
-          <$> requiredField "thinking" "Thinking content" .= fst
-          <*> optionalField "cache_control" "Cache control configuration" .= snd)
+        *> ((,,)
+          <$> requiredField "thinking" "Thinking content" .= (\(t, _, _) -> t)
+          <*> optionalField "signature" "Thinking signature metadata" .= (\(_, s, _) -> s)
+          <*> optionalField "cache_control" "Cache control configuration" .= (\(_, _, cc) -> cc))
 
 instance HasCodec AnthropicMessage where
   codec = object "AnthropicMessage" $
@@ -416,7 +422,8 @@ mergeAnthropicDelta acc chunk =
     appendThinkingAt idx resp thinking =
         resp { responseContent = updateBlockAt idx (appendToThinking thinking) (responseContent resp) }
       where
-        appendToThinking t (AnthropicThinkingBlock existing cc) = AnthropicThinkingBlock (existing <> t) cc
+        appendToThinking t block@AnthropicThinkingBlock{..} =
+            block { thinkingText = thinkingText <> t }
         appendToThinking _ block = block
 
     appendToolInputAt :: Int -> AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
@@ -473,10 +480,14 @@ mergeAnthropicDelta acc chunk =
                 return $ AnthropicTextBlock text Nothing
             "thinking" -> do
                 -- Thinking blocks may have "thinking" field but start empty
-                let thinkingText = case KM.lookup "thinking" contentBlock of
+                let thinking = case KM.lookup "thinking" contentBlock of
                       Just (Aeson.String t) -> t
                       _ -> ""
-                return $ AnthropicThinkingBlock thinkingText Nothing
+                return $ AnthropicThinkingBlock
+                    { thinkingText = thinking
+                    , thinkingSignature = Nothing
+                    , thinkingCacheControl = Nothing
+                    }
             _ -> Nothing
     extractContentBlock _ = Nothing
 
@@ -522,9 +533,10 @@ mergeAnthropicDelta acc chunk =
         case responseContent resp of
             [] -> resp  -- No thinking block to append to
             blocks -> case last blocks of
-                AnthropicThinkingBlock currentThinking cc ->
+                block@AnthropicThinkingBlock{..} ->
                     -- Accumulate the thinking deltas
-                    let accumulatedThinking = currentThinking <> thinkingDelta
-                        updatedBlocks = init blocks ++ [AnthropicThinkingBlock accumulatedThinking cc]
+                    let accumulatedThinking = thinkingText <> thinkingDelta
+                        updatedBlock = block { thinkingText = accumulatedThinking }
+                        updatedBlocks = init blocks ++ [updatedBlock]
                     in resp { responseContent = updatedBlocks }
                 _ -> resp  -- Not a thinking block

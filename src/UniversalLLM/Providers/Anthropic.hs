@@ -7,6 +7,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module UniversalLLM.Providers.Anthropic where
 
@@ -76,8 +77,8 @@ addConversationCacheControl req =
       AnthropicToolUseBlock tid tname tinput (Just (CacheControl "ephemeral" "5m"))
     addCacheControlToBlock (AnthropicToolResultBlock rid rcontent _) =
       AnthropicToolResultBlock rid rcontent (Just (CacheControl "ephemeral" "5m"))
-    addCacheControlToBlock (AnthropicThinkingBlock thinking _) =
-      AnthropicThinkingBlock thinking (Just (CacheControl "ephemeral" "5m"))
+    addCacheControlToBlock block@AnthropicThinkingBlock{..} =
+      block { thinkingCacheControl = Just (CacheControl "ephemeral" "5m") }
     addCacheControlToBlock block = block
 
 -- | Append a content block to messages, grouping with last message if same role
@@ -156,7 +157,12 @@ handleToolMessage msg req = case msg of
 -- Reasoning message encoder
 handleReasoningMessage :: MessageEncoder Anthropic model
 handleReasoningMessage msg req = case msg of
-  AssistantReasoning thinking -> appendContentBlock "assistant" (AnthropicThinkingBlock thinking Nothing) req
+  AssistantReasoning thinking -> appendContentBlock "assistant"
+    (AnthropicThinkingBlock
+      { thinkingText = thinking
+      , thinkingSignature = Nothing
+      , thinkingCacheControl = Nothing
+      }) req
   _ -> req
 
 
@@ -257,9 +263,9 @@ anthropicReasoning _p _m configs _s = noopHandler
       Left $ ModelError $ errorMessage err
     parseReasoningResponse (AnthropicSuccess resp) =
       case responseContent resp of
-        (AnthropicThinkingBlock thinking _ : rest) ->
+        (AnthropicThinkingBlock{..} : rest) ->
           -- First block is thinking, extract it
-          Right (Just (AssistantReasoning thinking, AnthropicSuccess resp { responseContent = rest }))
+          Right (Just (AssistantReasoning thinkingText, AnthropicSuccess resp { responseContent = rest }))
         _ -> Right Nothing  -- First block is not thinking, let another provider handle it
 
 -- These are removed - use the typeclass methods withTools and withReasoning instead

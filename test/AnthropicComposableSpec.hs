@@ -514,9 +514,9 @@ spec getResponse = do
   describe "Anthropic Provider - Content Block Types" $ do
     it "correctly creates all content block types" $ do
       -- Test thinking block
-      let thinkingBlock = AnthropicThinkingBlock "Some reasoning" Nothing
+      let thinkingBlock = AnthropicThinkingBlock "Some reasoning" Nothing Nothing
       case thinkingBlock of
-        AnthropicThinkingBlock txt _ -> txt `shouldBe` "Some reasoning"
+        AnthropicThinkingBlock txt _ _ -> txt `shouldBe` "Some reasoning"
         _ -> expectationFailure "Should be thinking block"
 
       -- Test text block
@@ -540,9 +540,9 @@ spec getResponse = do
             , Proto.responseModel = "claude-sonnet"
             , Proto.responseRole = "assistant"
             , Proto.responseContent =
-                [ AnthropicThinkingBlock "First thinking" Nothing
+                [ AnthropicThinkingBlock "First thinking" Nothing Nothing
                 , AnthropicTextBlock "First text" Nothing
-                , AnthropicThinkingBlock "Second thinking" Nothing
+                , AnthropicThinkingBlock "Second thinking" Nothing Nothing
                 , AnthropicTextBlock "Second text" Nothing
                 ]
             , Proto.responseStopReason = Just "end_turn"
@@ -554,6 +554,6 @@ spec getResponse = do
 
       -- Verify each block type
       case Proto.responseContent resp of
-        [AnthropicThinkingBlock _ _, AnthropicTextBlock _ _, AnthropicThinkingBlock _ _, AnthropicTextBlock _ _] ->
+        [AnthropicThinkingBlock _ _ _, AnthropicTextBlock _ _, AnthropicThinkingBlock _ _ _, AnthropicTextBlock _ _] ->
           return ()
         _ -> expectationFailure "Should have thinking, text, thinking, text blocks in that order"
