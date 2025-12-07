@@ -20,6 +20,7 @@ import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
 import qualified UniversalLLM.Providers.OpenAI as OpenAIProvider
 import TestModels
 import UniversalLLM.Providers.Anthropic (Anthropic(Anthropic))
+import Data.Default (Default(..))
 
 -- ============================================================================
 -- Arbitrary instances
@@ -138,14 +139,14 @@ genConfigOpenAI = oneof
 
 
 toProviderRequestSonnet45 msg = fmap snd $ toProviderRequest anthropicSonnet45 Anthropic ClaudeSonnet45 msg ((), ())
-toProviderRequestSonnet45WithReasoning msg = fmap snd $ toProviderRequest anthropicSonnet45Reasoning Anthropic ClaudeSonnet45WithReasoning msg ((), ((), ()))
+toProviderRequestSonnet45WithReasoning msg = fmap snd $ toProviderRequest anthropicSonnet45Reasoning Anthropic ClaudeSonnet45WithReasoning msg (def, ((), ()))
 
 toProviderRequestGLM45 msg = fmap snd $ toProviderRequest openAIGLM45 OpenAIProvider.OpenAI GLM45 msg ((), ((), ((), ())))
 toProviderRequestGLM45WithReasoning msg = fmap snd $ toProviderRequest openAIGLM45 OpenAIProvider.OpenAI GLM45 msg ((), ((), ((), ())))
 
 -- fromProviderResponse signature: composableProvider -> provider -> model -> configs -> state -> response -> (state, messages)
 fromProviderResponseGLM45 configs resp = either (error . show) snd $ fromProviderResponse openAIGLM45 OpenAIProvider.OpenAI GLM45 configs ((), ((), ((), ()))) resp
-fromProviderResponseSonnet45WithReasoning configs resp = either (error . show) snd $ fromProviderResponse anthropicSonnet45Reasoning Anthropic ClaudeSonnet45WithReasoning configs ((),((),())) resp
+fromProviderResponseSonnet45WithReasoning configs resp = either (error . show) snd $ fromProviderResponse anthropicSonnet45Reasoning Anthropic ClaudeSonnet45WithReasoning configs (def, ((), ())) resp
 
 -- ============================================================================
 -- Property tests for Anthropic
@@ -417,19 +418,20 @@ prop_openaiMultipleToolCalls = forAll toolCallSequence $ \msgs ->
       return (tool1 : tool2 : remaining)
 
 -- | Property: Anthropic with reasoning messages handles them correctly
--- Reasoning messages (thinking blocks) should be processed and included in the request
+-- AssistantReasoning messages without signatures are converted to regular text blocks
+-- (You can't create thinking blocks without signatures from the API)
 prop_anthropicReasoningMessages :: Property
 prop_anthropicReasoningMessages = forAll reasoningMessage $ \msgs ->
   let configs = [MaxTokens 16000]  -- Higher tokens for reasoning
       req = toProviderRequestSonnet45WithReasoning configs msgs
-      -- Check for thinking blocks in any message
-      thinkingBlocks = [block | msg <- AP.messages req, block <- AP.content msg, isThinkingBlock block]
+      -- AssistantReasoning messages without signatures become text blocks
+      textBlocks = [block | msg <- AP.messages req, block <- AP.content msg, isTextBlock block]
   in counterexample ("Generated messages: " ++ show (length msgs) ++
-                     ", Thinking blocks in request: " ++ show (length thinkingBlocks))
-       (not (null thinkingBlocks))
+                     ", Text blocks in request: " ++ show (length textBlocks))
+       (not (null textBlocks))
   where
-    isThinkingBlock (AP.AnthropicThinkingBlock _ _ _) = True
-    isThinkingBlock _ = False
+    isTextBlock (AP.AnthropicTextBlock _ _) = True
+    isTextBlock _ = False
 
     reasoningMessage = do
       -- Ensure at least one reasoning message
@@ -455,23 +457,22 @@ genMessageAnthropicReasoningTools = oneof
       ]
 
 -- | Property: Anthropic with multiple reasoning messages handles all of them correctly
--- Multiple consecutive reasoning messages should all be processed
--- This tests the extraction of reasoning blocks from responses
+-- Multiple consecutive reasoning messages become text blocks (no signatures), but thinking config is set
 prop_anthropicMultipleReasoningMessages :: Property
 prop_anthropicMultipleReasoningMessages = forAll reasoningSequence $ \msgs ->
   let configs = [MaxTokens 16000]
       req = toProviderRequestSonnet45WithReasoning configs msgs
-      -- Count thinking blocks
-      thinkingBlocks = [block | msg <- AP.messages req, block <- AP.content msg, isThinkingBlock block]
+      -- Count text blocks (reasoning messages without signatures become text)
+      textBlocks = [block | msg <- AP.messages req, block <- AP.content msg, isTextBlock block]
       -- Also verify thinking is enabled in config
       thinkingEnabled = AP.thinking req /= Nothing
   in counterexample ("Generated messages: " ++ show (length msgs) ++
-                     ", Thinking blocks in request: " ++ show (length thinkingBlocks) ++
+                     ", Text blocks in request: " ++ show (length textBlocks) ++
                      ", Thinking enabled: " ++ show thinkingEnabled)
-       (length thinkingBlocks >= 1 .&&. thinkingEnabled)  -- Reasoning must be processed and config must be set
+       (length textBlocks >= 1 .&&. thinkingEnabled)  -- Reasoning must be processed and config must be set
   where
-    isThinkingBlock (AP.AnthropicThinkingBlock _ _ _) = True
-    isThinkingBlock _ = False
+    isTextBlock (AP.AnthropicTextBlock _ _) = True
+    isTextBlock _ = False
 
     reasoningSequence = do
       -- Generate multiple reasoning messages to thoroughly exercise the code path
@@ -594,7 +595,7 @@ prop_anthropicResponseParsingWithToolsAndReasoning = forAll genResponse $ \(msgs
       -- Create a mock response with various content block types
       contentBlocks <- listOf1 $ oneof
         [ AP.AnthropicTextBlock <$> genNonEmptyText <*> pure Nothing
-        , AP.AnthropicThinkingBlock <$> genNonEmptyText <*> pure Nothing <*> pure Nothing
+        , AP.AnthropicThinkingBlock <$> genNonEmptyText <*> genSimpleValue <*> pure Nothing
         , AP.AnthropicToolUseBlock <$> genNonEmptyText <*> genNonEmptyText <*> genSimpleValue <*> pure Nothing
         ]
       let successResp = AP.defaultAnthropicSuccessResponse

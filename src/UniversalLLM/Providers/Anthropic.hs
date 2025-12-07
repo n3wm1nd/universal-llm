@@ -16,9 +16,22 @@ import UniversalLLM.Core.Serialization
 import UniversalLLM.Protocols.Anthropic
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Data.Aeson (Value)
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
+import Data.Default (Default(..))
 
 -- Anthropic provider (phantom type)
 data Anthropic = Anthropic deriving (Show, Eq)
+
+-- | State for managing thinking block signatures
+-- Maps thinking text to its signature metadata so we can echo it back verbatim
+newtype AnthropicReasoningState = AnthropicReasoningState
+  { signatureMap :: Map Text Value
+  } deriving (Show, Eq)
+
+instance Default AnthropicReasoningState where
+  def = AnthropicReasoningState Map.empty
 
 -- ============================================================================
 -- Helper Functions for AnthropicRequest Manipulation
@@ -154,18 +167,6 @@ handleToolMessage msg req = case msg of
   ToolResultMsg result -> appendContentBlock "user" (fromToolResult result) req
   _ -> req
 
--- Reasoning message encoder
-handleReasoningMessage :: MessageEncoder Anthropic model
-handleReasoningMessage msg req = case msg of
-  AssistantReasoning thinking -> appendContentBlock "assistant"
-    (AnthropicThinkingBlock
-      { thinkingText = thinking
-      , thinkingSignature = Nothing
-      , thinkingCacheControl = Nothing
-      }) req
-  _ -> req
-
-
 -- Composable providers for Anthropic
 
 -- Base provider: handles text messages and basic configuration
@@ -239,9 +240,9 @@ anthropicTools _p _m configs _s = noopHandler
         _ -> Right Nothing  -- First block is not a tool call, let another provider handle it
 
 -- Standalone reasoning provider
-anthropicReasoning :: forall model s. (HasReasoning model Anthropic) => ComposableProvider Anthropic model s
-anthropicReasoning _p _m configs _s = noopHandler
-  { cpToRequest = handleReasoningMessage
+anthropicReasoning :: forall model. (HasReasoning model Anthropic) => ComposableProvider Anthropic model AnthropicReasoningState
+anthropicReasoning _p _m configs state = noopHandler
+  { cpToRequest = handleReasoningMessageWithState state
   , cpConfigHandler = \req ->
       let reasoningEnabled = not $ any isReasoningFalse configs
           maxTokensFromConfig = case [t | MaxTokens t <- configs] of
@@ -251,6 +252,7 @@ anthropicReasoning _p _m configs _s = noopHandler
       in if reasoningEnabled
          then req { thinking = Just $ AnthropicThinkingConfig "enabled" (Just thinkingBudget) }
          else req
+  , cpPostResponse = storeSignatureFromResponse
   , cpFromResponse = parseReasoningResponse
   , cpSerializeMessage = UniversalLLM.Core.Serialization.serializeReasoningMessages
   , cpDeserializeMessage = UniversalLLM.Core.Serialization.deserializeReasoningMessages
@@ -259,14 +261,47 @@ anthropicReasoning _p _m configs _s = noopHandler
     isReasoningFalse (Reasoning False) = True
     isReasoningFalse _ = False
 
+    -- Store signature in state after receiving response
+    storeSignatureFromResponse :: ProviderResponse Anthropic -> AnthropicReasoningState -> AnthropicReasoningState
+    storeSignatureFromResponse (AnthropicError _) st = st
+    storeSignatureFromResponse (AnthropicSuccess resp) st =
+      case responseContent resp of
+        (AnthropicThinkingBlock{..} : _) ->
+          -- Store the signature in state for this thinking text
+          AnthropicReasoningState $ Map.insert thinkingText thinkingSignature (signatureMap st)
+        _ -> st
+
+    -- Parse response and extract thinking block (no state modification here)
     parseReasoningResponse (AnthropicError err) =
       Left $ ModelError $ errorMessage err
     parseReasoningResponse (AnthropicSuccess resp) =
       case responseContent resp of
         (AnthropicThinkingBlock{..} : rest) ->
-          -- First block is thinking, extract it
+          -- Extract thinking text, signature is stored via cpPostResponse
           Right (Just (AssistantReasoning thinkingText, AnthropicSuccess resp { responseContent = rest }))
         _ -> Right Nothing  -- First block is not thinking, let another provider handle it
+
+    -- Lookup signature when creating request
+    handleReasoningMessageWithState :: AnthropicReasoningState -> MessageEncoder Anthropic model
+    handleReasoningMessageWithState st msg req = case msg of
+      AssistantReasoning thinking ->
+        -- Lookup signature from state map
+        case Map.lookup thinking (signatureMap st) of
+          Just signature ->
+            -- Found signature in state - this is an echoed thinking block from a previous API response
+            -- Create a proper thinking block with the signature
+            appendContentBlock "assistant"
+              (AnthropicThinkingBlock
+                { thinkingText = thinking
+                , thinkingSignature = signature
+                , thinkingCacheControl = Nothing
+                }) req
+          Nothing ->
+            -- No signature found - this is a reasoning message that wasn't from the API
+            -- (e.g., deserialized from storage or created programmatically)
+            -- Since we can't create thinking blocks without signatures, convert to regular text
+            appendContentBlock "assistant" (AnthropicTextBlock thinking Nothing) req
+      _ -> req
 
 -- These are removed - use the typeclass methods withTools and withReasoning instead
 -- They're defined in the HasTools/HasReasoning instances

@@ -17,6 +17,7 @@ import UniversalLLM.Core.Types
 import UniversalLLM.Protocols.Anthropic
 import qualified UniversalLLM.Protocols.Anthropic as Proto
 import qualified UniversalLLM.Providers.Anthropic as Provider
+import Data.Default (Default(..))
 
 -- Helper to build streaming request - uses ClaudeSonnet45 with basic composition
 -- (Wrapper around the generic version that provides the specific model and composable provider)
@@ -29,7 +30,7 @@ buildStreamingRequest = buildStreamingRequestGeneric TestModels.anthropicSonnet4
 buildStreamingRequestWithReasoning :: [ModelConfig Provider.Anthropic TestModels.ClaudeSonnet45WithReasoning]
                                  -> [Message TestModels.ClaudeSonnet45WithReasoning Provider.Anthropic]
                                  -> AnthropicRequest
-buildStreamingRequestWithReasoning = buildStreamingRequestGeneric TestModels.anthropicSonnet45Reasoning TestModels.ClaudeSonnet45WithReasoning ((), ((), ()))
+buildStreamingRequestWithReasoning = buildStreamingRequestGeneric TestModels.anthropicSonnet45Reasoning TestModels.ClaudeSonnet45WithReasoning (def, ((), ()))
 
 -- Generic helper to build streaming request with explicit composable provider
 buildStreamingRequestGeneric :: forall model s. ComposableProvider Provider.Anthropic model s

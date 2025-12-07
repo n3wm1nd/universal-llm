@@ -96,7 +96,7 @@ data AnthropicContentBlock
   | AnthropicToolResultBlock ToolResultId ToolResultContent (Maybe CacheControl)
   | AnthropicThinkingBlock
       { thinkingText :: Text
-      , thinkingSignature :: Maybe Value  -- Signature metadata from API
+      , thinkingSignature :: Value  -- Required signature metadata from API
       , thinkingCacheControl :: Maybe CacheControl
       }
   deriving (Generic, Show, Eq)
@@ -212,7 +212,7 @@ instance HasCodec AnthropicContentBlock where
         requiredField "type" "Block type" .= const ("thinking" :: Text)
         *> ((,,)
           <$> requiredField "thinking" "Thinking content" .= (\(t, _, _) -> t)
-          <*> optionalField "signature" "Thinking signature metadata" .= (\(_, s, _) -> s)
+          <*> requiredField "signature" "Thinking signature metadata" .= (\(_, s, _) -> s)
           <*> optionalField "cache_control" "Cache control configuration" .= (\(_, _, cc) -> cc))
 
 instance HasCodec AnthropicMessage where
@@ -483,9 +483,11 @@ mergeAnthropicDelta acc chunk =
                 let thinking = case KM.lookup "thinking" contentBlock of
                       Just (Aeson.String t) -> t
                       _ -> ""
+                -- Signature is required, look it up in content_block
+                signature <- KM.lookup "signature" contentBlock
                 return $ AnthropicThinkingBlock
                     { thinkingText = thinking
-                    , thinkingSignature = Nothing
+                    , thinkingSignature = signature
                     , thinkingCacheControl = Nothing
                     }
             _ -> Nothing

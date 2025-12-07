@@ -18,6 +18,7 @@ import UniversalLLM.Core.Types
 import UniversalLLM.Protocols.Anthropic
 import qualified UniversalLLM.Protocols.Anthropic as Proto
 import qualified UniversalLLM.Providers.Anthropic as Provider
+import Data.Default (Default(..))
 
 -- Helper to build request for ClaudeSonnet45
 buildRequest :: TestModels.ClaudeSonnet45
@@ -31,7 +32,7 @@ buildRequestWithReasoning :: TestModels.ClaudeSonnet45WithReasoning
                           -> [ModelConfig Provider.Anthropic TestModels.ClaudeSonnet45WithReasoning]
                           -> [Message TestModels.ClaudeSonnet45WithReasoning Provider.Anthropic]
                           -> AnthropicRequest
-buildRequestWithReasoning _model = buildRequestGeneric TestModels.anthropicSonnet45Reasoning TestModels.ClaudeSonnet45WithReasoning ((), ((), ()))
+buildRequestWithReasoning _model = buildRequestGeneric TestModels.anthropicSonnet45Reasoning TestModels.ClaudeSonnet45WithReasoning (def, ((), ()))
 
 -- Generic helper to build request with explicit composable provider
 buildRequestGeneric :: forall model s. ComposableProvider Provider.Anthropic model s
@@ -61,7 +62,7 @@ parseResponseWithReasoning :: TestModels.ClaudeSonnet45WithReasoning
                            -> AnthropicResponse
                            -> Either LLMError [Message TestModels.ClaudeSonnet45WithReasoning Provider.Anthropic]
 parseResponseWithReasoning _model configs _history resp =
-  let msgs = parseResponseGeneric TestModels.anthropicSonnet45Reasoning TestModels.ClaudeSonnet45WithReasoning configs ((), ((), ())) resp
+  let msgs = parseResponseGeneric TestModels.anthropicSonnet45Reasoning TestModels.ClaudeSonnet45WithReasoning configs (def, ((), ())) resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs
@@ -514,7 +515,7 @@ spec getResponse = do
   describe "Anthropic Provider - Content Block Types" $ do
     it "correctly creates all content block types" $ do
       -- Test thinking block
-      let thinkingBlock = AnthropicThinkingBlock "Some reasoning" Nothing Nothing
+      let thinkingBlock = AnthropicThinkingBlock "Some reasoning" (object ["test" .= ("sig" :: Text)]) Nothing
       case thinkingBlock of
         AnthropicThinkingBlock txt _ _ -> txt `shouldBe` "Some reasoning"
         _ -> expectationFailure "Should be thinking block"
@@ -540,9 +541,9 @@ spec getResponse = do
             , Proto.responseModel = "claude-sonnet"
             , Proto.responseRole = "assistant"
             , Proto.responseContent =
-                [ AnthropicThinkingBlock "First thinking" Nothing Nothing
+                [ AnthropicThinkingBlock "First thinking" (object ["sig" .= (1 :: Int)]) Nothing
                 , AnthropicTextBlock "First text" Nothing
-                , AnthropicThinkingBlock "Second thinking" Nothing Nothing
+                , AnthropicThinkingBlock "Second thinking" (object ["sig" .= (2 :: Int)]) Nothing
                 , AnthropicTextBlock "Second text" Nothing
                 ]
             , Proto.responseStopReason = Just "end_turn"

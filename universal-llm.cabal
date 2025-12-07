@@ -55,7 +55,8 @@ library
     vector,
     transformers,
     mtl,
-    data-default
+    data-default,
+    containers
 
 library examples-helper
   import: shared-properties

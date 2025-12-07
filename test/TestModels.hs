@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module TestModels where
 
@@ -37,9 +38,10 @@ instance HasTools ClaudeSonnet45WithReasoning Anthropic where
   withTools = Anthropic.anthropicTools
 
 instance HasReasoning ClaudeSonnet45WithReasoning Anthropic where
+  type ReasoningState ClaudeSonnet45WithReasoning Anthropic = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicReasoning
 
-anthropicSonnet45Reasoning :: ComposableProvider   Anthropic ClaudeSonnet45WithReasoning ((), ((), ()))
+anthropicSonnet45Reasoning :: ComposableProvider Anthropic ClaudeSonnet45WithReasoning (Anthropic.AnthropicReasoningState, ((), ()))
 anthropicSonnet45Reasoning = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @ClaudeSonnet45WithReasoning
 
 -- ============================================================================
