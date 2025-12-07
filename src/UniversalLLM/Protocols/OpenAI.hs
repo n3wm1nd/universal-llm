@@ -73,6 +73,7 @@ data OpenAIMessage = OpenAIMessage
   { role :: Text
   , content :: Maybe Text
   , reasoning_content :: Maybe Text
+  , reasoning_details :: Maybe Value  -- OpenRouter reasoning metadata (must be preserved)
   , tool_calls :: Maybe [OpenAIToolCall]
   , tool_call_id :: Maybe Text
   } deriving (Generic, Show, Eq)
@@ -146,6 +147,7 @@ instance HasCodec OpenAIMessage where
       <$> requiredField "role" "Role" .= role
       <*> optionalFieldOrNull "content" "Content" .= content
       <*> optionalFieldOrNull "reasoning_content" "Reasoning Content" .= reasoning_content
+      <*> optionalField "reasoning_details" "OpenRouter reasoning metadata" .= reasoning_details
       <*> optionalField "tool_calls" "Tool calls" .= tool_calls
       <*> optionalField "tool_call_id" "Tool call ID for tool results" .= tool_call_id
 
@@ -240,6 +242,7 @@ defaultOpenAIMessage = OpenAIMessage
   { role = ""
   , content = Nothing
   , reasoning_content = Nothing
+  , reasoning_details = Nothing
   , tool_calls = Nothing
   , tool_call_id = Nothing
   }

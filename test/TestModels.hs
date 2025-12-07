@@ -100,6 +100,26 @@ llamaCppGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withToo
 openRouterGLM45 :: ComposableProvider OpenRouter GLM45 ((), ((), ((), ())))
 openRouterGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @OpenRouter @GLM45
 
+-- ============================================================================
+-- OpenRouter-specific Models
+-- ============================================================================
+
+-- Amazon Nova 2 Lite - supports tools and reasoning with reasoning_details
+data Nova2Lite = Nova2Lite deriving (Show, Eq)
+
+instance ModelName OpenRouter Nova2Lite where
+  modelName _ = "amazon/nova-2-lite-v1:free"
+
+instance HasTools Nova2Lite OpenRouter where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning Nova2Lite OpenRouter where
+  type ReasoningState Nova2Lite OpenRouter = OpenAI.OpenRouterReasoningState
+  withReasoning = OpenAI.openRouterReasoning
+
+openRouterNova2Lite :: ComposableProvider OpenRouter Nova2Lite (OpenAI.OpenRouterReasoningState, ((), ()))
+openRouterNova2Lite = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @OpenRouter @Nova2Lite
+
 -- Basic text-only model (for compile-time safety tests)
 data BasicTextModel = BasicTextModel deriving (Show, Eq)
 

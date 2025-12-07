@@ -88,18 +88,63 @@ tools = StandardTest $ \cp provider model initialState getResponse -> do
 -- Reasoning Tests
 -- ============================================================================
 
-reasoning :: StandardTest provider model state
+reasoning :: ( Monoid (ProviderRequest provider)
+             , SupportsMaxTokens provider
+             )
+          => StandardTest provider model state
 reasoning = StandardTest $ \cp provider model initialState getResponse -> do
   describe "Reasoning" $ do
-    it "handles reasoning messages" $
-      pending -- TODO: Implement generic reasoning test
+    it "handles reasoning messages" $ do
+      let configs = [MaxTokens 4096]
+          msgs = [UserText "Think step by step: What is 15 * 23?"]
+          (state1, req) = toProviderRequest cp provider model configs initialState msgs
+
+      resp <- getResponse req
+
+      let (state2, parsedMsgs) = either (error . show) id $ fromProviderResponse cp provider model configs state1 resp
+
+      -- Should get back at least one message
+      length parsedMsgs `shouldSatisfy` (> 0)
+
+      -- Should handle reasoning in round-trip
+      let msgs2 = msgs ++ parsedMsgs ++ [UserText "Now what is 20 * 30?"]
+          (_, req2) = toProviderRequest cp provider model configs state2 msgs2
+
+      resp2 <- getResponse req2
+      let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp provider model configs state2 resp2
+
+      length parsedMsgs2 `shouldSatisfy` (> 0)
 
 -- ============================================================================
 -- Combined Tests
 -- ============================================================================
 
-reasoningWithTools :: StandardTest provider model state
+reasoningWithTools :: ( Monoid (ProviderRequest provider)
+                      , SupportsMaxTokens provider
+                      )
+                   => StandardTest provider model state
 reasoningWithTools = StandardTest $ \cp provider model initialState getResponse -> do
   describe "Reasoning + Tools" $ do
-    it "handles reasoning with tool calls" $
-      pending -- TODO: Implement generic reasoning+tools test
+    it "handles reasoning with tool calls" $ do
+      -- First request: Ask a question that requires reasoning and tool use
+      let configs = [MaxTokens 4096]
+          msgs = [UserText "Think carefully: What files match the pattern '*.md'? Use the available tools."]
+          (state1, req1) = toProviderRequest cp provider model configs initialState msgs
+
+      resp1 <- getResponse req1
+
+      let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp provider model configs state1 resp1
+
+      -- Should get back messages (reasoning and/or tool calls)
+      length parsedMsgs1 `shouldSatisfy` (> 0)
+
+      -- Continue conversation with tool results
+      -- This is where reasoning_details preservation is critical
+      let msgs2 = msgs ++ parsedMsgs1 ++ [UserText "Thank you, now tell me more about those files."]
+          (_, req2) = toProviderRequest cp provider model configs state2 msgs2
+
+      resp2 <- getResponse req2
+      let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp provider model configs state2 resp2
+
+      -- Should successfully handle the continuation
+      length parsedMsgs2 `shouldSatisfy` (> 0)

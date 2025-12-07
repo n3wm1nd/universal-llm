@@ -58,3 +58,8 @@ modelTests providers = do
   describe "GLM 4.5 (OpenRouter)" $
     testModel TestModels.openRouterGLM45 OpenRouter TestModels.GLM45 (openrouterProvider providers)
       [ ST.text, ST.tools ]
+
+  -- Amazon Nova 2 Lite via OpenRouter - Test reasoning_details support
+  describe "Amazon Nova 2 Lite (OpenRouter)" $
+    testModel TestModels.openRouterNova2Lite OpenRouter TestModels.Nova2Lite (openrouterProvider providers)
+      [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]

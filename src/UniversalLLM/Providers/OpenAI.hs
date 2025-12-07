@@ -18,10 +18,24 @@ import UniversalLLM.Protocols.OpenAI
 import Data.Text (Text)
 import qualified Data.Text.Encoding as TE
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson as Value
 import qualified Data.ByteString.Lazy as BSL
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
+import Data.Default (Default(..))
 
 -- OpenAI provider (official OpenAI API)
 data OpenAI = OpenAI deriving (Show, Eq)
+
+-- | State for managing OpenRouter reasoning_details
+-- Maps assistant message content to its reasoning_details metadata so we can echo it back verbatim
+-- This is required by OpenRouter for models like Nova and Gemini when using tool calls with reasoning
+newtype OpenRouterReasoningState = OpenRouterReasoningState
+  { reasoningDetailsMap :: Map Text Value.Value
+  } deriving (Show, Eq)
+
+instance Default OpenRouterReasoningState where
+  def = OpenRouterReasoningState Map.empty
 
 -- ============================================================================
 -- Helper Functions for OpenAIRequest Manipulation
@@ -332,6 +346,89 @@ openAIReasoning _p _m _configs _s = noopHandler
               in Right (Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse newChoices)))
             Nothing -> Right Nothing
         [] -> Right Nothing
+
+    -- Move reasoning messages before text in the same sequence
+    -- When we encounter reasoning after text, put reasoning first, then text
+    orderReasoningBeforeText :: [Message model provider] -> [Message model provider]
+    orderReasoningBeforeText = go [] []
+      where
+        go accum reasoning [] = reasoning ++ accum
+        go accum reasoning (m@(AssistantReasoning _) : rest) =
+          let hasText = any isAssistantText accum
+          in if hasText
+             -- Text comes before reasoning, so put reasoning first in output
+             then [m] ++ reasoning ++ accum ++ go [] [] rest
+             else go accum (reasoning ++ [m]) rest
+        go accum reasoning (m@(AssistantText _) : rest) =
+          go (accum ++ [m]) reasoning rest
+        go accum reasoning (m : rest) =
+          go (accum ++ [m]) reasoning rest
+
+    isAssistantText (AssistantText _) = True
+    isAssistantText _ = False
+
+-- OpenRouter reasoning provider - handles reasoning_details preservation
+-- This is specifically for OpenRouter which requires reasoning_details to be preserved
+-- across multi-turn conversations, especially when using tool calls with reasoning models
+openRouterReasoning :: forall provider model. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse, ReasoningState model provider ~ OpenRouterReasoningState) => ComposableProvider provider model OpenRouterReasoningState
+openRouterReasoning _p _m _configs state = noopHandler
+  { cpToRequest = handleReasoningMessageWithState state
+  , cpFromResponse = parseReasoningResponse
+  , cpPostResponse = storeReasoningDetailsFromResponse
+  , cpPureMessageResponse = orderReasoningBeforeText
+  , cpSerializeMessage = serializeReasoningMessages
+  , cpDeserializeMessage = deserializeReasoningMessages
+  }
+  where
+    parseReasoningResponse (OpenAIError err) =
+      Left $ ModelError $ errorMessage (errorDetail err)
+    parseReasoningResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
+      case respChoices of
+        (OpenAIChoice msg:rest) ->
+          case reasoning_content msg of
+            Just txt ->
+              -- Extract reasoning but preserve content and other fields in the choice
+              let updatedMsg = msg { reasoning_content = Nothing }
+                  newChoices = OpenAIChoice updatedMsg : rest
+              in Right (Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse newChoices)))
+            Nothing -> Right Nothing
+        [] -> Right Nothing
+
+    -- Store reasoning_details from response for later echo-back
+    storeReasoningDetailsFromResponse :: ProviderResponse provider -> OpenRouterReasoningState -> OpenRouterReasoningState
+    storeReasoningDetailsFromResponse (OpenAIError _) st = st
+    storeReasoningDetailsFromResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) st =
+      case respChoices of
+        (OpenAIChoice msg:_) ->
+          case (reasoning_content msg, reasoning_details msg) of
+            (Just reasoningText, Just details) ->
+              -- Store the mapping from reasoning text to its details
+              OpenRouterReasoningState $ Map.insert reasoningText details (reasoningDetailsMap st)
+            _ -> st
+        [] -> st
+
+    -- Lookup reasoning_details when creating request
+    handleReasoningMessageWithState :: OpenRouterReasoningState -> MessageEncoder provider model
+    handleReasoningMessageWithState st msg req = case msg of
+      AssistantReasoning reasoning ->
+        -- Lookup reasoning_details from state map
+        case Map.lookup reasoning (reasoningDetailsMap st) of
+          Just details ->
+            -- Found details in state - this is an echoed reasoning from a previous API response
+            -- Create a proper message with the reasoning_details preserved
+            appendMessage
+              (defaultOpenAIMessage
+                { role = "assistant"
+                , content = Just ""  -- Empty content when there's only reasoning
+                , reasoning_content = Just reasoning
+                , reasoning_details = Just details  -- Preserve the details!
+                }) req
+          Nothing ->
+            -- No details found - this is a reasoning message that wasn't from the API
+            -- (e.g., deserialized from storage or created programmatically)
+            -- Just use reasoning_content without details
+            appendMessage (reasoningMessage reasoning) req
+      _ -> req
 
     -- Move reasoning messages before text in the same sequence
     -- When we encounter reasoning after text, put reasoning first, then text
