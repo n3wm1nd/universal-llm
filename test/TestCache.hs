@@ -17,6 +17,7 @@ module TestCache
   , recordModeRaw
   , updateModeRaw
   , playbackModeRaw
+  , CacheMissException(..)
   ) where
 
 import qualified Data.ByteString as BS
@@ -27,9 +28,16 @@ import qualified Data.ByteString.Base16 as Base16
 import System.Directory (doesDirectoryExist, doesFileExist)
 import System.FilePath ((</>))
 import Control.Monad (unless)
+import Control.Exception (Exception, throwIO)
 import Autodocodec (HasCodec, toJSONViaCodec, parseJSONViaCodec)
 import Data.Aeson.Types (parseEither)
 import qualified Data.Aeson as Aeson
+
+-- | Exception thrown when a cache miss occurs in playback mode
+data CacheMissException = CacheMissException String
+  deriving (Show)
+
+instance Exception CacheMissException
 
 type CachePath = FilePath
 
@@ -104,7 +112,7 @@ updateMode cachePath apiCall req = do
   recordResponse cachePath req response
   return response
 
--- Playback mode: only use cache, error if not found (ensures no unexpected API calls)
+-- Playback mode: only use cache, throw CacheMissException if not found (ensures no unexpected API calls)
 playbackMode :: (HasCodec req, HasCodec resp)
              => CachePath
              -> ResponseProvider req resp
@@ -112,7 +120,7 @@ playbackMode cachePath req = do
   cached <- lookupResponse cachePath req
   case cached of
     Just response -> return response
-    Nothing -> error $ "Playback mode: no cached response found for request hash: " ++ hashRequest req
+    Nothing -> throwIO $ CacheMissException $ "No cached response for request hash: " ++ hashRequest req
 
 -- Live mode: always make real request, ignore cache
 liveMode :: (req -> IO resp) -> ResponseProvider req resp
@@ -170,7 +178,7 @@ updateModeRaw cachePath apiCall req = do
   recordRawResponse cachePath req response
   return response
 
--- Raw playback mode: only use cache, error if not found
+-- Raw playback mode: only use cache, throw CacheMissException if not found
 playbackModeRaw :: HasCodec req
                 => CachePath
                 -> ResponseProvider req BSL.ByteString
@@ -178,4 +186,4 @@ playbackModeRaw cachePath req = do
   cached <- lookupRawResponse cachePath req
   case cached of
     Just response -> return response
-    Nothing -> error $ "Playback mode: no cached response found for request hash: " ++ hashRequest req
+    Nothing -> throwIO $ CacheMissException $ "No cached response for request hash: " ++ hashRequest req
