@@ -20,6 +20,8 @@ import qualified ToolsSpec
 import qualified TestCache
 import qualified TestHTTP
 import qualified ModelRegistry
+import qualified Nova2DebugSpec
+import qualified ReasoningConfigSpec
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse, OpenAICompletionRequest, OpenAICompletionResponse)
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
@@ -159,6 +161,23 @@ main = do
             TestHTTP.httpCall "https://openrouter.ai/api/v1/chat/completions" headers
         _ -> TestCache.playbackMode cachePath
 
+  -- Build OpenRouter streaming response provider (for SSE responses)
+  let openrouterStreamingProvider :: TestCache.ResponseProvider OpenAIRequest BSL.ByteString
+      openrouterStreamingProvider = case mode of
+        Just "record" | Just apiKey <- openrouterApiKey ->
+          let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+          in TestCache.recordModeRaw cachePath $
+            TestHTTP.httpCallStreaming "https://openrouter.ai/api/v1/chat/completions" headers
+        Just "update" | Just apiKey <- openrouterApiKey ->
+          let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+          in TestCache.updateModeRaw cachePath $
+            TestHTTP.httpCallStreaming "https://openrouter.ai/api/v1/chat/completions" headers
+        Just "live" | Just apiKey <- openrouterApiKey ->
+          let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+          in TestCache.liveMode $
+            TestHTTP.httpCallStreaming "https://openrouter.ai/api/v1/chat/completions" headers
+        _ -> TestCache.playbackModeRaw cachePath
+
   -- Query llama.cpp server for loaded model (if URL is set)
   llamacppLoadedModel <- case llamacppUrl of
     Just url -> queryLlamaCppModel url
@@ -294,8 +313,8 @@ main = do
     XMLProvidersSpec.spec
 
     -- Composable provider integration tests
-    describe "OpenAI Composable Provider (cached)" $ OpenAIComposableSpec.spec openaiProvider
-    describe "OpenAI Streaming Provider (cached)" $ OpenAIStreamingSpec.spec openaiStreamingProvider
+    describe "OpenAI Composable Provider (cached)" $ OpenAIComposableSpec.spec openrouterProvider
+    describe "OpenAI Streaming Provider (cached)" $ OpenAIStreamingSpec.spec openrouterStreamingProvider
     describe "Anthropic Composable Provider (cached)" $ AnthropicComposableSpec.spec anthropicProvider
     describe "Anthropic Streaming Provider (cached)" $ AnthropicStreamingSpec.spec anthropicStreamingProvider
 
@@ -311,6 +330,12 @@ main = do
           , ModelRegistry.openaiCompatProvider = openaiCompatProvider
           }
     describe "Model Registry" $ ModelRegistry.modelTests providers
+
+    -- Debug tests
+    describe "Nova 2 Lite Debug" $ Nova2DebugSpec.spec openrouterProvider
+
+    -- Reasoning config tests (unit tests)
+    describe "Reasoning Config" ReasoningConfigSpec.spec
 
     -- Cache infrastructure tests
     describe "Test Cache" CachedIntegrationSpec.spec

@@ -120,6 +120,22 @@ instance HasReasoning Nova2Lite OpenRouter where
 openRouterNova2Lite :: ComposableProvider OpenRouter Nova2Lite (OpenAI.OpenRouterReasoningState, ((), ()))
 openRouterNova2Lite = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @OpenRouter @Nova2Lite
 
+-- Google Gemini 3 Pro Preview via OpenRouter
+data Gemini3ProPreview = Gemini3ProPreview deriving (Show, Eq)
+
+instance ModelName OpenRouter Gemini3ProPreview where
+  modelName _ = "google/gemini-3-pro-preview"
+
+instance HasTools Gemini3ProPreview OpenRouter where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning Gemini3ProPreview OpenRouter where
+  type ReasoningState Gemini3ProPreview OpenRouter = OpenAI.OpenRouterReasoningState
+  withReasoning = OpenAI.openRouterReasoning
+
+openRouterGemini3ProPreview :: ComposableProvider OpenRouter Gemini3ProPreview (OpenAI.OpenRouterReasoningState, ((), ()))
+openRouterGemini3ProPreview = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @OpenRouter @Gemini3ProPreview
+
 -- Basic text-only model (for compile-time safety tests)
 data BasicTextModel = BasicTextModel deriving (Show, Eq)
 

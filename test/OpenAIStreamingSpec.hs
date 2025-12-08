@@ -18,21 +18,27 @@ import UniversalLLM.Protocols.OpenAI
 import qualified UniversalLLM.Protocols.OpenAI as Proto
 import qualified UniversalLLM.Providers.OpenAI as Provider
 
--- Helper to build streaming request - uses GLM45 with full composition
+-- Type aliases for easier provider/model switching
+type TestProvider = Provider.OpenRouter
+type TestModel = GLM45
+
+-- Helper to build streaming request - uses the test model with full composition
 -- (Wrapper around the generic version that provides the specific model and composable provider)
-buildStreamingRequest :: [ModelConfig Provider.OpenAI GLM45]
-                     -> [Message GLM45 Provider.OpenAI]
+buildStreamingRequest :: [ModelConfig TestProvider TestModel]
+                     -> [Message TestModel TestProvider]
                      -> OpenAIRequest
-buildStreamingRequest = buildStreamingRequestGeneric TestModels.openAIGLM45 GLM45 ((), ((), ((), ())))
+buildStreamingRequest = buildStreamingRequestGeneric TestModels.openRouterGLM45 Provider.OpenRouter GLM45 ((), ((), ((), ())))
 
 -- Generic helper to build streaming request with explicit composable provider
-buildStreamingRequestGeneric :: forall model s. ComposableProvider Provider.OpenAI model s
+buildStreamingRequestGeneric :: forall provider model s. (ProviderRequest provider ~ OpenAIRequest)
+                           => ComposableProvider provider model s
+                           -> provider
                            -> model
                            -> s
-                           -> [ModelConfig Provider.OpenAI model]
-                           -> [Message model Provider.OpenAI]
+                           -> [ModelConfig provider model]
+                           -> [Message model provider]
                            -> OpenAIRequest
-buildStreamingRequestGeneric composableProvider model s configs = snd . toProviderRequest composableProvider Provider.OpenAI model configs s
+buildStreamingRequestGeneric composableProvider provider model s configs = snd . toProviderRequest composableProvider provider model configs s
 
 spec :: ResponseProvider OpenAIRequest BSL.ByteString -> Spec
 spec getResponse = do
@@ -53,9 +59,14 @@ spec getResponse = do
       -- Validate basic SSE structure: should be non-empty
       BSL.null sseBody `shouldBe` False
 
-      -- Check that it contains SSE event markers
       let bodyStr = BSLC.unpack sseBody
-      T.isInfixOf "data:" (T.pack bodyStr) `shouldBe` True
+
+      -- Check if response is an error
+      if T.isInfixOf "\"error\"" (T.pack bodyStr)
+        then expectationFailure $ "Provider returned error: " ++ take 200 bodyStr
+        else do
+          -- Check that it contains SSE event markers
+          T.isInfixOf "data:" (T.pack bodyStr) `shouldBe` True
 
     it "sends streaming request with tools and receives SSE response with tool_calls" $ do
       let model = GLM45
@@ -91,8 +102,12 @@ spec getResponse = do
 
       let bodyStr = BSLC.unpack sseBody
 
-      -- Check for SSE data markers
-      T.isInfixOf "data:" (T.pack bodyStr) `shouldBe` True
+      -- Check if response is an error
+      if T.isInfixOf "\"error\"" (T.pack bodyStr)
+        then expectationFailure $ "Provider returned error: " ++ take 200 bodyStr
+        else do
+          -- Check for SSE data markers
+          T.isInfixOf "data:" (T.pack bodyStr) `shouldBe` True
 
     it "sends streaming request with reasoning and receives SSE response with reasoning_content" $ do
       let model = GLM45
@@ -112,8 +127,12 @@ spec getResponse = do
 
       let bodyStr = BSLC.unpack sseBody
 
-      -- Check for SSE data markers
-      T.isInfixOf "data:" (T.pack bodyStr) `shouldBe` True
+      -- Check if response is an error
+      if T.isInfixOf "\"error\"" (T.pack bodyStr)
+        then expectationFailure $ "Provider returned error: " ++ take 200 bodyStr
+        else do
+          -- Check for SSE data markers
+          T.isInfixOf "data:" (T.pack bodyStr) `shouldBe` True
 
     it "sends streaming request with reasoning and tools, receives SSE response with both" $ do
       let model = GLM45
@@ -149,5 +168,9 @@ spec getResponse = do
 
       let bodyStr = BSLC.unpack sseBody
 
-      -- Check for SSE data markers
-      T.isInfixOf "data:" (T.pack bodyStr) `shouldBe` True
+      -- Check if response is an error
+      if T.isInfixOf "\"error\"" (T.pack bodyStr)
+        then expectationFailure $ "Provider returned error: " ++ take 200 bodyStr
+        else do
+          -- Check for SSE data markers
+          T.isInfixOf "data:" (T.pack bodyStr) `shouldBe` True

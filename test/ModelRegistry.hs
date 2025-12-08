@@ -62,4 +62,9 @@ modelTests providers = do
   -- Amazon Nova 2 Lite via OpenRouter - Test reasoning_details support
   describe "Amazon Nova 2 Lite (OpenRouter)" $
     testModel TestModels.openRouterNova2Lite OpenRouter TestModels.Nova2Lite (openrouterProvider providers)
-      [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+      [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+
+  -- Google Gemini 3 Pro Preview via OpenRouter - Test reasoning_details preservation with tool calls
+  describe "Gemini 3 Pro Preview (OpenRouter)" $
+    testModel TestModels.openRouterGemini3ProPreview OpenRouter TestModels.Gemini3ProPreview (openrouterProvider providers)
+      [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]

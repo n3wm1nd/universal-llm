@@ -29,9 +29,10 @@ httpCall endpoint headers request = do
            $ setRequestBodyLBS (Aeson.encode $ toJSONViaCodec request) req
 
   response <- httpLBS req'
-  case eitherDecodeJSONViaCodec (getResponseBody response) of
+  let responseBody = getResponseBody response
+  case eitherDecodeJSONViaCodec responseBody of
     Right resp -> return resp
-    Left err -> error $ "Failed to parse response: " ++ err
+    Left err -> error $ "Failed to parse response: " ++ err ++ "\nResponse body: " ++ show responseBody
 
 -- HTTP POST call for streaming responses that returns raw response body as ByteString
 -- Used for SSE (Server-Sent Events) responses which can't be parsed as JSON
