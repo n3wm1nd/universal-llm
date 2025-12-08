@@ -122,7 +122,8 @@ test-suite universal-llm-tests
     case-insensitive,
     vector,
     data-default,
-    containers
+    containers,
+    exceptions
 
 executable simple-example
   import: shared-properties

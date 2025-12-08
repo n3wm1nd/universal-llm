@@ -2,6 +2,9 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Standard Test Suites
 --
@@ -20,10 +23,13 @@ module StandardTests
 import Test.Hspec
 import qualified Data.Text as T
 import Data.Text (Text)
-import Data.Aeson (object, (.=))
-import Autodocodec (toJSONVia, codec)
+import Data.Aeson (object, (.=), Value)
+import Autodocodec (toJSONVia, codec, HasCodec(..))
+import qualified Autodocodec
 import Control.Monad (when)
+import Control.Monad.Catch (MonadCatch, SomeException, catch)
 import UniversalLLM.Core.Types
+import UniversalLLM.Core.Tools (LLMTool(..), llmToolToDefinition, executeToolCallFromList, ToolFunction(..), ToolParameter(..))
 import TestCache (ResponseProvider)
 import qualified UniversalLLM.Protocols.OpenAI as OpenAI
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse(..), OpenAISuccessResponse(..), OpenAIChoice(..), OpenAIMessage(role, content, reasoning_content, reasoning_details, tool_calls), OpenAIReasoningConfig(..), OpenAIToolCall(callId))
@@ -88,11 +94,159 @@ text = StandardTest $ \cp provider model initialState getResponse -> do
 -- Tool Tests
 -- ============================================================================
 
-tools :: StandardTest provider model state
+-- | Safe wrapper for executing tools that catches exceptions
+-- Similar to how Runix.LLM.ToolExecution uses runFail for Sem (Fail effect)
+-- This wraps executeToolCallFromList to catch runtime exceptions:
+-- - error calls
+-- - fail calls (which throw exceptions in IO and similar monads)
+-- - pattern match failures
+-- - any other runtime exceptions from tools
+-- Works for any monad with MonadCatch (IO, ExceptT, etc.)
+safeExecuteTool :: MonadCatch m => [LLMTool m] -> ToolCall -> m ToolResult
+safeExecuteTool tools tc =
+  catch (executeToolCallFromList tools tc) $ \(e :: SomeException) ->
+    return $ ToolResult tc (Left $ T.pack $ show e)
+
+-- Test tool types and implementations
+
+-- Parameter types
+newtype Location = Location Text
+  deriving stock (Show, Eq)
+  deriving (HasCodec) via Text
+
+instance ToolParameter Location where
+  paramName _ _ = "location"
+  paramDescription _ = "City name"
+
+-- Result types
+data WeatherResult = WeatherResult
+  { weatherTemp :: Int
+  , weatherCondition :: Text
+  } deriving stock (Show, Eq)
+
+instance HasCodec WeatherResult where
+  codec = Autodocodec.object "WeatherResult" $
+    WeatherResult
+      <$> Autodocodec.requiredField "temperature" "Temperature in Celsius" Autodocodec..= weatherTemp
+      <*> Autodocodec.requiredField "condition" "Weather condition" Autodocodec..= weatherCondition
+
+instance ToolParameter WeatherResult where
+  paramName _ _ = "weather_result"
+  paramDescription _ = "weather information"
+
+instance ToolFunction WeatherResult where
+  toolFunctionName _ = "get_weather"
+  toolFunctionDescription _ = "Get current weather for a location"
+
+-- Success tool - returns weather data
+getWeatherSuccess :: Location -> IO WeatherResult
+getWeatherSuccess (Location _location) = do
+  return $ WeatherResult 20 "sunny"
+
+-- Failure result type
+newtype FailingToolResult = FailingToolResult Text
+  deriving stock (Show, Eq)
+  deriving (HasCodec) via Text
+
+instance ToolParameter FailingToolResult where
+  paramName _ _ = "result"
+  paramDescription _ = "tool result (will always fail)"
+
+instance ToolFunction FailingToolResult where
+  toolFunctionName _ = "always_fail"
+  toolFunctionDescription _ = "A tool that always fails for testing error handling"
+
+-- Failure tool - always fails using monadic fail
+alwaysFail :: Location -> IO FailingToolResult
+alwaysFail (Location _location) = do
+  fail "This tool intentionally fails"
+
+tools :: ( Monoid (ProviderRequest provider)
+         , SupportsMaxTokens provider
+         , HasTools model provider
+         )
+      => StandardTest provider model state
 tools = StandardTest $ \cp provider model initialState getResponse -> do
   describe "Tool Calling" $ do
-    it "completes tool calling flow" $
-      pending -- TODO: Implement generic tool calling test
+    it "completes tool calling flow with successful tool execution" $ do
+      -- Define tools using Approach A (ToolFunction)
+      let tools = [LLMTool getWeatherSuccess]
+          toolDefs = map llmToolToDefinition tools
+          configs = [MaxTokens 2048, Tools toolDefs]
+          msgs = [UserText "What's the weather in London?"]
+          (state1, req1) = toProviderRequest cp provider model configs initialState msgs
+
+      -- First request should trigger tool use
+      resp1 <- getResponse req1
+
+      let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp provider model configs state1 resp1
+
+      -- Should get back at least one message
+      length parsedMsgs1 `shouldSatisfy` (> 0)
+
+      -- Extract tool calls if any
+      let toolCalls = [ tc | AssistantTool tc <- parsedMsgs1 ]
+
+      -- If we got tool calls, execute them and complete the flow
+      when (not $ null toolCalls) $ do
+        -- Execute tools - safeExecuteTool catches exceptions and returns them as Left
+        toolResults <- mapM (safeExecuteTool tools) toolCalls
+        let toolResultMsgs = map ToolResultMsg toolResults
+
+        -- For this test, verify all tools succeeded
+        let successCount = length [() | ToolResult _ (Right _) <- toolResults]
+            failures = [err | ToolResult _ (Left err) <- toolResults]
+        if successCount /= length toolResults
+          then expectationFailure $ "Expected all " ++ show (length toolResults) ++ " tools to succeed, but " ++ show successCount ++ " succeeded. Failures: " ++ show failures
+          else successCount `shouldBe` length toolResults
+
+        -- Send tool results back to LLM (exactly the same whether success or failure)
+        let msgs2 = msgs ++ parsedMsgs1 ++ toolResultMsgs
+            (_, req2) = toProviderRequest cp provider model configs state2 msgs2
+
+        resp2 <- getResponse req2
+        let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp provider model configs state2 resp2
+
+        -- LLM should respond after receiving tool results
+        length parsedMsgs2 `shouldSatisfy` (> 0)
+
+    it "handles tool execution failures gracefully" $ do
+      -- Define a tool that always fails
+      let tools = [LLMTool alwaysFail]
+          toolDefs = map llmToolToDefinition tools
+          configs = [MaxTokens 2048, Tools toolDefs]
+          msgs = [UserText "Use the always_fail tool with location 'test'"]
+          (state1, req1) = toProviderRequest cp provider model configs initialState msgs
+
+      resp1 <- getResponse req1
+
+      let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp provider model configs state1 resp1
+
+      -- Extract tool calls if any
+      let toolCalls = [ tc | AssistantTool tc <- parsedMsgs1 ]
+
+      -- If we got tool calls, execute them and complete the flow (IDENTICAL to success test)
+      when (not $ null toolCalls) $ do
+        -- Execute tools - safeExecuteTool catches exceptions and returns them as Left
+        toolResults <- mapM (safeExecuteTool tools) toolCalls
+        let toolResultMsgs = map ToolResultMsg toolResults
+
+        -- For this test, verify all tools failed
+        let failures = [err | ToolResult _ (Left err) <- toolResults]
+        length failures `shouldSatisfy` (> 0)
+        -- The error message should be present
+        let hasErrorMessage = any (T.isInfixOf "fail") failures
+        hasErrorMessage `shouldBe` True
+
+        -- Send tool results back to LLM (exactly the same whether success or failure)
+        let msgs2 = msgs ++ parsedMsgs1 ++ toolResultMsgs
+            (_, req2) = toProviderRequest cp provider model configs state2 msgs2
+
+        resp2 <- getResponse req2
+        let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp provider model configs state2 resp2
+
+        -- LLM should respond after receiving tool results (even if they're errors)
+        length parsedMsgs2 `shouldSatisfy` (> 0)
 
 -- ============================================================================
 -- Reasoning Tests
