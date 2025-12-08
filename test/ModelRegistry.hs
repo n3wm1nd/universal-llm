@@ -17,6 +17,7 @@ import TestHelpers (testModel)
 import UniversalLLM.Providers.Anthropic (Anthropic(..))
 import qualified UniversalLLM.Providers.OpenAI as OpenAIProvider
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
+import TestModels (ZAI(..))
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import TestCache (ResponseProvider)
@@ -33,6 +34,7 @@ data Providers = Providers
   , openrouterProvider :: ResponseProvider OpenAIRequest OpenAIResponse
   , llamacppProvider :: ResponseProvider OpenAIRequest OpenAIResponse
   , openaiCompatProvider :: ResponseProvider OpenAIRequest OpenAIResponse
+  , zaiProvider :: ResponseProvider OpenAIRequest OpenAIResponse
   }
 
 modelTests :: Providers -> Spec
@@ -68,3 +70,9 @@ modelTests providers = do
   describe "Gemini 3 Pro Preview (OpenRouter)" $
     testModel TestModels.openRouterGemini3ProPreview OpenRouter TestModels.Gemini3ProPreview (openrouterProvider providers)
       [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+
+  -- ZAI Models
+  -- GLM 4.5 via ZAI coding endpoint
+  describe "GLM 4.5 (ZAI)" $
+    testModel TestModels.zaiGLM45 ZAI TestModels.GLM45 (zaiProvider providers)
+      [ ST.text, ST.tools, ST.reasoning ]

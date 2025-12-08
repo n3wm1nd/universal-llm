@@ -100,6 +100,8 @@ test-suite universal-llm-tests
     CachedIntegrationSpec
     ModelRegistry
     StandardTests
+    Nova2DebugSpec
+    ReasoningConfigSpec
   hs-source-dirs: test
 
   build-depends:
@@ -119,7 +121,8 @@ test-suite universal-llm-tests
     http-conduit,
     case-insensitive,
     vector,
-    data-default
+    data-default,
+    containers
 
 executable simple-example
   import: shared-properties

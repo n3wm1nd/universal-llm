@@ -13,6 +13,7 @@ import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Aeson as Aeson
 import Autodocodec (toJSONViaCodec, eitherDecodeJSONViaCodec, HasCodec)
 import Network.HTTP.Simple
+import Network.HTTP.Client.Conduit (responseTimeoutMicro)
 import qualified Data.CaseInsensitive as CI
 
 -- Generic HTTP POST call that encodes request and decodes response via autodocodec
@@ -26,7 +27,9 @@ httpCall endpoint headers request = do
 
   let headerList = [(CI.mk $ TE.encodeUtf8 k, TE.encodeUtf8 v) | (k, v) <- headers]
   let req' = setRequestHeaders headerList
-           $ setRequestBodyLBS (Aeson.encode $ toJSONViaCodec request) req
+           $ setRequestBodyLBS (Aeson.encode $ toJSONViaCodec request)
+           $ setRequestResponseTimeout (responseTimeoutMicro 300000000)  -- 5 minutes timeout
+           $ req
 
   response <- httpLBS req'
   let responseBody = getResponseBody response
@@ -46,7 +49,9 @@ httpCallStreaming endpoint headers request = do
 
   let headerList = [(CI.mk $ TE.encodeUtf8 k, TE.encodeUtf8 v) | (k, v) <- headers]
   let req' = setRequestHeaders headerList
-           $ setRequestBodyLBS (Aeson.encode $ toJSONViaCodec request) req
+           $ setRequestBodyLBS (Aeson.encode $ toJSONViaCodec request)
+           $ setRequestResponseTimeout (responseTimeoutMicro 300000000)  -- 5 minutes timeout
+           $ req
 
   response <- httpLBS req'
   return $ getResponseBody response

@@ -16,26 +16,31 @@ import UniversalLLM.Core.Types
 import UniversalLLM.Core.Serialization
 import UniversalLLM.Protocols.OpenAI
 import Data.Text (Text)
+import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Aeson as Aeson
+import Data.Aeson (object, (.=))
 import qualified Data.Aeson as Value
 import qualified Data.ByteString.Lazy as BSL
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Default (Default(..))
+import Data.Maybe (isJust)
+import Control.Applicative ((<|>))
 
 -- OpenAI provider (official OpenAI API)
 data OpenAI = OpenAI deriving (Show, Eq)
 
 -- | State for managing OpenRouter reasoning_details
--- Maps assistant message content to its reasoning_details metadata so we can echo it back verbatim
+-- Stores reasoning_details from API responses so we can echo them back verbatim
 -- This is required by OpenRouter for models like Nova and Gemini when using tool calls with reasoning
-newtype OpenRouterReasoningState = OpenRouterReasoningState
-  { reasoningDetailsMap :: Map Text Value.Value
+data OpenRouterReasoningState = OpenRouterReasoningState
+  { reasoningTextToDetails :: Map Text Value.Value  -- Map from reasoning text to its details
+  , toolCallToDetails :: Map Text Value.Value       -- Map from tool call ID to reasoning_details
   } deriving (Show, Eq)
 
 instance Default OpenRouterReasoningState where
-  def = OpenRouterReasoningState Map.empty
+  def = OpenRouterReasoningState Map.empty Map.empty
 
 -- ============================================================================
 -- Helper Functions for OpenAIRequest Manipulation
@@ -109,6 +114,7 @@ reasoningMessage txt = defaultOpenAIMessage
 toolCallMessage :: [OpenAIToolCall] -> OpenAIMessage
 toolCallMessage calls = defaultOpenAIMessage
   { role = "assistant"
+  , content = Just ""  -- Must include empty content for verbatim preservation
   , tool_calls = Just calls
   }
 
@@ -120,16 +126,25 @@ toolResultMessage tcId contentTxt = defaultOpenAIMessage
   , tool_call_id = Just tcId
   }
 
--- | Append text to a message's content (only if roles match and message has text content)
+-- | Append text to a message's content (only if roles match)
+-- Allows merging text with messages that have tool_calls (for combined responses)
 appendToMessageIfSameRole :: Text -> Text -> OpenAIMessage -> Maybe OpenAIMessage
-appendToMessageIfSameRole targetRole txt msg@OpenAIMessage{ role = msgRole, content = Just existingContent, reasoning_content = Nothing, tool_calls = Nothing, tool_call_id = Nothing }
-  | msgRole == targetRole = Just $ msg { content = Just (existingContent <> "\n" <> txt) }
+appendToMessageIfSameRole targetRole txt msg@OpenAIMessage{ role = msgRole, content = existingContent, reasoning_content = Nothing, tool_call_id = Nothing }
+  | msgRole == targetRole =
+      let newContent = case existingContent of
+            Just existing -> Just (existing <> "\n" <> txt)
+            Nothing -> Just txt
+      in Just $ msg { content = newContent }
 appendToMessageIfSameRole _ _ _ = Nothing
 
 -- | Append a tool call to a message's tool calls
+-- Allows adding tool calls to messages that have text content (for combined responses)
 appendToolCallToMessage :: OpenAIToolCall -> OpenAIMessage -> Maybe OpenAIMessage
-appendToolCallToMessage tc msg@OpenAIMessage{ role = "assistant", tool_calls = Just existingCalls } =
-  Just $ msg { tool_calls = Just (existingCalls <> [tc]) }
+appendToolCallToMessage tc msg@OpenAIMessage{ role = "assistant", tool_calls = existingCalls } =
+  let newCalls = case existingCalls of
+        Just existing -> Just (existing <> [tc])
+        Nothing -> Just [tc]
+  in Just $ msg { tool_calls = newCalls }
 appendToolCallToMessage _ _ = Nothing
 
 -- ============================================================================
@@ -266,8 +281,13 @@ handleToolMessage msg req = case msg of
 handleJSONMessage :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageEncoder provider model
 handleJSONMessage msg req = case msg of
   UserRequestJSON txt schema ->
-    appendMessage (userMessage txt) req
-      & setResponseFormat (OpenAIResponseFormat "json_schema" (Just schema))
+    let wrappedSchema = object
+          [ "name" .= ("response" :: Text)
+          , "strict" .= True
+          , "schema" .= schema
+          ]
+    in appendMessage (userMessage txt) req
+      & setResponseFormat (OpenAIResponseFormat "json_schema" (Just wrappedSchema))
   AssistantJSON jsonVal ->
     let jsonText = TE.decodeUtf8 . BSL.toStrict . Aeson.encode $ jsonVal
     in appendMessage (assistantMessage jsonText) req
@@ -315,18 +335,35 @@ baseComposableProvider _p m configs _s = noopHandler
       case respChoices of
         (OpenAIChoice msg:rest) ->
           case content msg of
-            Just txt ->
+            Just txt | not (T.null txt) ->
               -- Extract text but preserve reasoning_content and other fields in the choice
+              -- Skip empty content entirely (prevents duplicate assistant messages)
               let updatedMsg = msg { content = Nothing }
                   newChoices = OpenAIChoice updatedMsg : rest
               in Right (Just (AssistantText txt, OpenAISuccess (OpenAISuccessResponse newChoices)))
-            Nothing -> Right Nothing
+            _ -> Right Nothing
         [] -> Right Nothing
 
 -- Standalone reasoning provider
 openAIReasoning :: forall provider model state. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model state
-openAIReasoning _p _m _configs _s = noopHandler
+openAIReasoning _p _m configs _s = noopHandler
   { cpToRequest = handleReasoningMessage
+  , cpConfigHandler = \req ->
+      let -- Only enable reasoning if the last message is from the user
+          lastMessageIsUser = case reverse (messages req) of
+            (msg:_) -> role msg == "user"
+            [] -> False
+
+          -- Only set reasoning field if last message is from user
+          reasoningConfig = case [r | Reasoning r <- configs] of
+            (True:_) | lastMessageIsUser -> Just OpenAIReasoningConfig
+              { reasoning_enabled = Just True
+              , reasoning_max_tokens = Nothing
+              , reasoning_effort = Just "low"
+              , reasoning_exclude = Just False
+              }
+            _ -> Nothing
+      in req { reasoning = reasoningConfig }
   , cpFromResponse = parseReasoningResponse
   , cpPureMessageResponse = orderReasoningBeforeText
   , cpSerializeMessage = serializeReasoningMessages
@@ -371,8 +408,38 @@ openAIReasoning _p _m _configs _s = noopHandler
 -- This is specifically for OpenRouter which requires reasoning_details to be preserved
 -- across multi-turn conversations, especially when using tool calls with reasoning models
 openRouterReasoning :: forall provider model. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse, ReasoningState model provider ~ OpenRouterReasoningState) => ComposableProvider provider model OpenRouterReasoningState
-openRouterReasoning _p _m _configs state = noopHandler
+openRouterReasoning _p _m configs state = noopHandler
   { cpToRequest = handleReasoningMessageWithState state
+  , cpConfigHandler = \req ->
+      let -- Verify and add reasoning_details based on chain-of-thought verification
+          req1 = verifyAndAddReasoningDetails state req
+
+          -- Check if any message has reasoning_details (after verification)
+          hasReasoningDetails = any (\msg -> case reasoning_details msg of
+                                       Just _ -> True
+                                       Nothing -> False) (messages req1)
+
+          -- Check if last message is a user message
+          lastMessageRole = case reverse (messages req1) of
+            (msg:_) -> role msg
+            [] -> ""
+          isUserMessage = lastMessageRole == "user"
+
+          -- Set reasoning field only if:
+          -- 1. Reasoning True in configs
+          -- 2. Last message is a user message (we're requesting new reasoning)
+          -- 3. No messages have reasoning_details (not continuing a reasoning conversation)
+          reasoningConfig = case [r | Reasoning r <- configs] of
+            (True:_) | isUserMessage && not hasReasoningDetails -> Just OpenAIReasoningConfig
+              { reasoning_enabled = Just True
+              , reasoning_max_tokens = Nothing
+              , reasoning_effort = Just "low"
+              , reasoning_exclude = Just False
+              }
+            _ -> Nothing
+
+          req2 = req1 { reasoning = reasoningConfig }
+      in req2
   , cpFromResponse = parseReasoningResponse
   , cpPostResponse = storeReasoningDetailsFromResponse
   , cpPureMessageResponse = orderReasoningBeforeText
@@ -400,19 +467,26 @@ openRouterReasoning _p _m _configs state = noopHandler
     storeReasoningDetailsFromResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) st =
       case respChoices of
         (OpenAIChoice msg:_) ->
-          case (reasoning_content msg, reasoning_details msg) of
-            (Just reasoningText, Just details) ->
-              -- Store the mapping from reasoning text to its details
-              OpenRouterReasoningState $ Map.insert reasoningText details (reasoningDetailsMap st)
-            _ -> st
+          case reasoning_details msg of
+            Just details ->
+              let -- Store by reasoning text if present
+                  st1 = case reasoning_content msg of
+                    Just reasoningText -> st { reasoningTextToDetails = Map.insert reasoningText details (reasoningTextToDetails st) }
+                    Nothing -> st
+                  -- Store by tool call ID(s) if present
+                  st2 = case tool_calls msg of
+                    Just tcs -> foldl (\s tc -> s { toolCallToDetails = Map.insert (callId tc) details (toolCallToDetails s) }) st1 tcs
+                    Nothing -> st1
+              in st2
+            Nothing -> st
         [] -> st
 
     -- Lookup reasoning_details when creating request
     handleReasoningMessageWithState :: OpenRouterReasoningState -> MessageEncoder provider model
     handleReasoningMessageWithState st msg req = case msg of
       AssistantReasoning reasoning ->
-        -- Lookup reasoning_details from state map
-        case Map.lookup reasoning (reasoningDetailsMap st) of
+        -- Lookup reasoning_details from state map by reasoning text
+        case Map.lookup reasoning (reasoningTextToDetails st) of
           Just details ->
             -- Found details in state - this is an echoed reasoning from a previous API response
             -- Create a proper message with the reasoning_details preserved
@@ -429,6 +503,75 @@ openRouterReasoning _p _m _configs state = noopHandler
             -- Just use reasoning_content without details
             appendMessage (reasoningMessage reasoning) req
       _ -> req
+
+    -- Verify chain-of-thought and add reasoning_details
+    -- Split messages into chunks by user messages, verify each chunk has complete reasoning_details
+    -- Only add reasoning_details to chunks where ALL reasoning can be looked up
+    verifyAndAddReasoningDetails :: OpenRouterReasoningState -> OpenAIRequest -> OpenAIRequest
+    verifyAndAddReasoningDetails st req =
+      let chunks = chunkMessagesByUser (messages req)
+          verifiedChunks = map (verifyAndSignChunk st) chunks
+          processedMsgs = concatMap (processChunk st) verifiedChunks
+      in req { messages = processedMsgs }
+
+    -- Chunk messages by user messages
+    -- Returns [[UserMsg, AssistantMsg1, ToolMsg1, ...], [UserMsg, AssistantMsg2, ...], ...]
+    chunkMessagesByUser :: [OpenAIMessage] -> [[OpenAIMessage]]
+    chunkMessagesByUser = foldr addToChunks []
+      where
+        addToChunks msg [] = [[msg]]
+        addToChunks msg chunks@(currentChunk:rest) =
+          if role msg == "user"
+            then [msg] : chunks  -- Start new chunk
+            else (msg : currentChunk) : rest  -- Add to current chunk
+
+    -- Verify a chunk and mark it as signed or unsigned
+    verifyAndSignChunk :: OpenRouterReasoningState -> [OpenAIMessage] -> (Bool, [OpenAIMessage])
+    verifyAndSignChunk st chunk =
+      let canLookupAll = all (canLookupReasoningDetails st) chunk
+      in (canLookupAll, chunk)
+
+    -- Check if we can lookup reasoning_details for a message
+    canLookupReasoningDetails :: OpenRouterReasoningState -> OpenAIMessage -> Bool
+    canLookupReasoningDetails st msg
+      | role msg /= "assistant" = True  -- Non-assistant messages don't need reasoning_details
+      | otherwise =
+          let hasReasoningContent = case reasoning_content msg of
+                Just txt -> Map.member txt (reasoningTextToDetails st)
+                Nothing -> True  -- No reasoning_content means we don't need to look it up
+              hasToolCallDetails = case tool_calls msg of
+                Just (tc:_) -> Map.member (callId tc) (toolCallToDetails st)
+                Nothing -> True  -- No tool calls means we don't need to look up details
+          in hasReasoningContent && hasToolCallDetails
+
+    -- Process a verified chunk: add reasoning_details if signed, filter AssistantReasoning if unsigned
+    processChunk :: OpenRouterReasoningState -> (Bool, [OpenAIMessage]) -> [OpenAIMessage]
+    processChunk st (True, chunk) = map (addReasoningDetailsToMessage st) chunk
+    processChunk _  (False, chunk) = filter (not . isAssistantReasoningMessage) chunk
+
+    -- Check if a message is an assistant message with only reasoning_content
+    isAssistantReasoningMessage :: OpenAIMessage -> Bool
+    isAssistantReasoningMessage msg =
+      role msg == "assistant" && isJust (reasoning_content msg)
+
+    -- Add reasoning_details to a single message if it has tool calls or reasoning_content that we have details for
+    addReasoningDetailsToMessage :: OpenRouterReasoningState -> OpenAIMessage -> OpenAIMessage
+    addReasoningDetailsToMessage st msg
+      | role msg /= "assistant" = msg
+      | otherwise =
+          let -- Try to lookup by tool call ID first
+              detailsFromToolCall = case tool_calls msg of
+                Just (tc:_) -> Map.lookup (callId tc) (toolCallToDetails st)
+                Nothing -> Nothing
+              -- Try to lookup by reasoning_content
+              detailsFromReasoning = case reasoning_content msg of
+                Just txt -> Map.lookup txt (reasoningTextToDetails st)
+                Nothing -> Nothing
+              -- Use whichever we found (tool call takes precedence)
+              details = detailsFromToolCall <|> detailsFromReasoning
+          in case details of
+               Just d -> msg { reasoning_details = Just d }
+               Nothing -> msg
 
     -- Move reasoning messages before text in the same sequence
     -- When we encounter reasoning after text, put reasoning first, then text

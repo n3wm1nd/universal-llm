@@ -2,7 +2,9 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module TestModels where
 
@@ -10,7 +12,34 @@ import UniversalLLM.Core.Types
 import qualified UniversalLLM.Providers.Anthropic as Anthropic
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
 import UniversalLLM.Providers.Anthropic (Anthropic(..))
-import UniversalLLM.Providers.OpenAI (OpenAI(..), LlamaCpp(..), OpenRouter(..))
+import UniversalLLM.Providers.OpenAI (OpenAI(..), LlamaCpp(..), OpenRouter(..), OpenAICompatible(..))
+import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse, OpenAICompletionRequest, OpenAICompletionResponse)
+
+-- New provider for ZAI coding endpoint
+data ZAI = ZAI deriving (Show, Eq)
+
+-- Provider instances for ZAI (uses OpenAI protocol)
+instance ModelName ZAI GLM45 where
+  modelName _ = "GLM-4.5-Air"
+
+instance Provider ZAI model where
+  type ProviderRequest ZAI = OpenAIRequest
+  type ProviderResponse ZAI = OpenAIResponse
+
+instance Provider ZAI model => CompletionProvider ZAI model where
+  type CompletionRequest ZAI = OpenAICompletionRequest
+  type CompletionResponse ZAI = OpenAICompletionResponse
+
+instance {-# OVERLAPPABLE #-} ModelName ZAI model => CompletionProviderImplementation ZAI model where
+  getComposableCompletionProvider = OpenAI.baseCompletionProvider
+
+-- Supporting capability instances for ZAI
+instance SupportsTemperature ZAI
+instance SupportsMaxTokens ZAI
+instance SupportsSeed ZAI
+instance SupportsSystemPrompt ZAI
+instance SupportsStop ZAI
+instance SupportsStreaming ZAI
 
 -- ============================================================================
 -- Anthropic Models
@@ -90,6 +119,16 @@ instance HasReasoning GLM45 OpenRouter where
 instance HasJSON GLM45 OpenRouter where
   withJSON = OpenAI.openAIJSON
 
+-- ZAI provider capabilities (same as OpenAI-compatible)
+instance HasTools GLM45 ZAI where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning GLM45 ZAI where
+  withReasoning = OpenAI.openAIReasoning
+
+instance HasJSON GLM45 ZAI where
+  withJSON = OpenAI.openAIJSON
+
 -- Composable providers for each backend
 openAIGLM45 :: ComposableProvider OpenAI GLM45 ((), ((), ((), ())))
 openAIGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @OpenAI @GLM45
@@ -99,6 +138,9 @@ llamaCppGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withToo
 
 openRouterGLM45 :: ComposableProvider OpenRouter GLM45 ((), ((), ((), ())))
 openRouterGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @OpenRouter @GLM45
+
+zaiGLM45 :: ComposableProvider ZAI GLM45 ((), ((), ((), ())))
+zaiGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @ZAI @GLM45
 
 -- ============================================================================
 -- OpenRouter-specific Models

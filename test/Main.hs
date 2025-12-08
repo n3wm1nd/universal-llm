@@ -121,6 +121,7 @@ main = do
   anthropicToken <- fmap T.pack <$> lookupEnv "ANTHROPIC_OAUTH_TOKEN"
   openaiApiKey <- lookupEnv "OPENAI_API_KEY"
   openrouterApiKey <- lookupEnv "OPENROUTER_API_KEY"
+  zaiApiKey <- lookupEnv "ZAI_API_KEY"
   llamacppUrl <- lookupEnv "LLAMACPP_URL"
   openaiCompatUrl <- lookupEnv "OPENAI_COMPAT_URL"  -- Generic OpenAI-compatible endpoint
   _openaiCompatModel <- lookupEnv "OPENAI_COMPAT_MODEL"  -- For providers that need model name in env
@@ -177,6 +178,23 @@ main = do
           in TestCache.liveMode $
             TestHTTP.httpCallStreaming "https://openrouter.ai/api/v1/chat/completions" headers
         _ -> TestCache.playbackModeRaw cachePath
+
+  -- Build ZAI response provider
+  let zaiProvider :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
+      zaiProvider = case mode of
+        Just "record" | Just apiKey <- zaiApiKey ->
+          let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+          in TestCache.recordMode cachePath $
+            TestHTTP.httpCall "https://api.z.ai/api/coding/paas/v4/chat/completions" headers
+        Just "update" | Just apiKey <- zaiApiKey ->
+          let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+          in TestCache.updateMode cachePath $
+            TestHTTP.httpCall "https://api.z.ai/api/coding/paas/v4/chat/completions" headers
+        Just "live" | Just apiKey <- zaiApiKey ->
+          let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+          in TestCache.liveMode $
+            TestHTTP.httpCall "https://api.z.ai/api/coding/paas/v4/chat/completions" headers
+        _ -> TestCache.playbackMode cachePath
 
   -- Query llama.cpp server for loaded model (if URL is set)
   llamacppLoadedModel <- case llamacppUrl of
@@ -328,6 +346,7 @@ main = do
           , ModelRegistry.openrouterProvider = openrouterProvider
           , ModelRegistry.llamacppProvider = llamacppProvider
           , ModelRegistry.openaiCompatProvider = openaiCompatProvider
+          , ModelRegistry.zaiProvider = zaiProvider
           }
     describe "Model Registry" $ ModelRegistry.modelTests providers
 

@@ -29,6 +29,22 @@ import Data.Maybe (listToMaybe)
 import qualified Data.List
 import UniversalLLM.Core.Types
 
+-- | Reasoning configuration for OpenRouter
+data OpenAIReasoningConfig = OpenAIReasoningConfig
+  { reasoning_enabled :: Maybe Bool
+  , reasoning_max_tokens :: Maybe Int
+  , reasoning_effort :: Maybe Text
+  , reasoning_exclude :: Maybe Bool
+  } deriving (Generic, Show, Eq)
+
+instance HasCodec OpenAIReasoningConfig where
+  codec = object "OpenAIReasoningConfig" $
+    OpenAIReasoningConfig
+      <$> optionalField "enabled" "Enable reasoning" .= reasoning_enabled
+      <*> optionalField "max_tokens" "Max reasoning tokens" .= reasoning_max_tokens
+      <*> optionalField "effort" "Reasoning effort level" .= reasoning_effort
+      <*> optionalField "exclude" "Exclude reasoning from response" .= reasoning_exclude
+
 data OpenAIRequest = OpenAIRequest
   { model :: Text
   , messages :: [OpenAIMessage]
@@ -38,6 +54,7 @@ data OpenAIRequest = OpenAIRequest
   , tools :: Maybe [OpenAIToolDefinition]
   , response_format :: Maybe OpenAIResponseFormat
   , stream :: Maybe Bool
+  , reasoning :: Maybe OpenAIReasoningConfig
   } deriving (Generic, Show, Eq)
 
 instance Semigroup OpenAIRequest where
@@ -50,6 +67,7 @@ instance Semigroup OpenAIRequest where
     , tools = tools r1 <> tools r2  -- Concatenate tool lists
     , response_format = response_format r2 <|> response_format r1
     , stream = stream r2 <|> stream r1
+    , reasoning = reasoning r2 <|> reasoning r1
     }
 
 instance Monoid OpenAIRequest where
@@ -62,6 +80,7 @@ instance Monoid OpenAIRequest where
     , tools = Nothing
     , response_format = Nothing
     , stream = Nothing
+    , reasoning = Nothing
     }
 
 data OpenAIResponseFormat = OpenAIResponseFormat
@@ -134,6 +153,7 @@ instance HasCodec OpenAIRequest where
       <*> optionalField "tools" "Tool definitions" .= tools
       <*> optionalField "response_format" "Response format specification" .= response_format
       <*> optionalField "stream" "Enable streaming" .= stream
+      <*> optionalField "reasoning" "Reasoning configuration (OpenRouter)" .= reasoning
 
 instance HasCodec OpenAIResponseFormat where
   codec = object "OpenAIResponseFormat" $
@@ -234,6 +254,7 @@ defaultOpenAIRequest = OpenAIRequest
   , tools = Nothing
   , response_format = Nothing
   , stream = Nothing
+  , reasoning = Nothing
   }
 
 -- | Default OpenAI message (use record update syntax to set fields)
