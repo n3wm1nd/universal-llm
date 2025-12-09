@@ -19,8 +19,10 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Aeson as Aeson
-import Data.Aeson (object, (.=))
+import Data.Aeson (object, (.=), Value)
 import qualified Data.Aeson as Value
+import qualified Data.Aeson.KeyMap as KM
+import qualified Data.Vector as V
 import qualified Data.ByteString.Lazy as BSL
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -452,14 +454,37 @@ openRouterReasoning _p _m configs state = noopHandler
     parseReasoningResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
         (OpenAIChoice msg:rest) ->
+          -- Try reasoning_content first (OpenAI format)
           case reasoning_content msg of
             Just txt ->
               -- Extract reasoning but preserve content and other fields in the choice
               let updatedMsg = msg { reasoning_content = Nothing }
                   newChoices = OpenAIChoice updatedMsg : rest
               in Right (Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse newChoices)))
-            Nothing -> Right Nothing
+            Nothing ->
+              -- Try reasoning_details (OpenRouter format)
+              case extractReasoningFromDetails (reasoning_details msg) of
+                Just txt ->
+                  -- Clear reasoning_details after extraction to prevent infinite unfold loop
+                  -- (State preservation happens in cpPostResponse via storeReasoningDetailsFromResponse)
+                  let updatedMsg = msg { reasoning_details = Nothing }
+                      newChoices = OpenAIChoice updatedMsg : rest
+                  in Right (Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse newChoices)))
+                Nothing -> Right Nothing
         [] -> Right Nothing
+
+    -- Extract reasoning text from OpenRouter reasoning_details array
+    extractReasoningFromDetails :: Maybe Value -> Maybe Text
+    extractReasoningFromDetails Nothing = Nothing
+    extractReasoningFromDetails (Just (Aeson.Array arr)) =
+      -- reasoning_details is an array of objects with "text" fields
+      -- Concatenate all text fields
+      let texts = [txt | Aeson.Object obj <- V.toList arr
+                       , Just (Aeson.String txt) <- [KM.lookup "text" obj]]
+      in if null texts
+         then Nothing
+         else Just (T.intercalate "\n\n" texts)
+    extractReasoningFromDetails _ = Nothing
 
     -- Store reasoning_details from response for later echo-back
     storeReasoningDetailsFromResponse :: ProviderResponse provider -> OpenRouterReasoningState -> OpenRouterReasoningState
@@ -469,9 +494,13 @@ openRouterReasoning _p _m configs state = noopHandler
         (OpenAIChoice msg:_) ->
           case reasoning_details msg of
             Just details ->
-              let -- Store by reasoning text if present
-                  st1 = case reasoning_content msg of
-                    Just reasoningText -> st { reasoningTextToDetails = Map.insert reasoningText details (reasoningTextToDetails st) }
+              let -- Extract reasoning text from either reasoning_content (OpenAI) or reasoning_details (OpenRouter)
+                  reasoningText = case reasoning_content msg of
+                    Just txt -> Just txt
+                    Nothing -> extractReasoningFromDetails (Just details)
+                  -- Store by reasoning text if we extracted it
+                  st1 = case reasoningText of
+                    Just txt -> st { reasoningTextToDetails = Map.insert txt details (reasoningTextToDetails st) }
                     Nothing -> st
                   -- Store by tool call ID(s) if present
                   st2 = case tool_calls msg of
@@ -490,11 +519,12 @@ openRouterReasoning _p _m configs state = noopHandler
           Just details ->
             -- Found details in state - this is an echoed reasoning from a previous API response
             -- Create a proper message with the reasoning_details preserved
+            -- Do NOT set reasoning_content - OpenRouter uses reasoning_details, not reasoning_content
             appendMessage
               (defaultOpenAIMessage
                 { role = "assistant"
                 , content = Just ""  -- Empty content when there's only reasoning
-                , reasoning_content = Just reasoning
+                , reasoning_content = Nothing  -- Don't add reasoning_content when using reasoning_details
                 , reasoning_details = Just details  -- Preserve the details!
                 }) req
           Nothing ->

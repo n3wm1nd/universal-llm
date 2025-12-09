@@ -53,18 +53,18 @@ modelTests providers = do
   -- GLM 4.5 via llama.cpp - Test against llama.cpp server when the model is loaded
   describe "GLM 4.5 (llama.cpp)" $
     testModel TestModels.llamaCppGLM45 LlamaCpp TestModels.GLM45 (llamacppProvider providers)
-      [ ST.text, ST.tools ]
+      [ ST.text, ST.tools, ST.reasoning ]
 
   -- OpenRouter Models
   -- GLM 4.5 via OpenRouter
   describe "GLM 4.5 (OpenRouter)" $
     testModel TestModels.openRouterGLM45 OpenRouter TestModels.GLM45 (openrouterProvider providers)
-      [ ST.text, ST.tools ]
+      [ ST.text, ST.tools, ST.reasoning ]
 
-  -- Amazon Nova 2 Lite via OpenRouter - Test reasoning_details support
+  -- Amazon Nova 2 Lite via OpenRouter - Note: Nova doesn't return AssistantReasoning via OpenRouter
   describe "Amazon Nova 2 Lite (OpenRouter)" $
     testModel TestModels.openRouterNova2Lite OpenRouter TestModels.Nova2Lite (openrouterProvider providers)
-      [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+      [ ST.text, ST.tools, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
 
   -- Google Gemini 3 Pro Preview via OpenRouter - Test reasoning_details preservation with tool calls
   describe "Gemini 3 Pro Preview (OpenRouter)" $

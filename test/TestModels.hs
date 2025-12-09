@@ -114,7 +114,8 @@ instance HasTools GLM45 OpenRouter where
   withTools = OpenAI.openAITools
 
 instance HasReasoning GLM45 OpenRouter where
-  withReasoning = OpenAI.openAIReasoning
+  type ReasoningState GLM45 OpenRouter = OpenAI.OpenRouterReasoningState
+  withReasoning = OpenAI.openRouterReasoning
 
 instance HasJSON GLM45 OpenRouter where
   withJSON = OpenAI.openAIJSON
@@ -136,8 +137,8 @@ openAIGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools
 llamaCppGLM45 :: ComposableProvider LlamaCpp GLM45 ((), ((), ((), ())))
 llamaCppGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @LlamaCpp @GLM45
 
-openRouterGLM45 :: ComposableProvider OpenRouter GLM45 ((), ((), ((), ())))
-openRouterGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @OpenRouter @GLM45
+openRouterGLM45 :: ComposableProvider OpenRouter GLM45 (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+openRouterGLM45 = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @OpenRouter @GLM45
 
 zaiGLM45 :: ComposableProvider ZAI GLM45 ((), ((), ((), ())))
 zaiGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @ZAI @GLM45

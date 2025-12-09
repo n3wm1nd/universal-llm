@@ -13,6 +13,7 @@ import Data.Aeson (object, (.=))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.Map.Strict as Map
+import Data.Default (def)
 import TestCache (ResponseProvider)
 import TestModels
 import UniversalLLM.Core.Types
@@ -28,7 +29,7 @@ buildRequest :: TestModel
              -> [ModelConfig TestProvider TestModel]
              -> [Message TestModel TestProvider]
              -> OpenAIRequest
-buildRequest _model = buildRequestGeneric TestModels.openRouterGLM45 OpenRouter GLM45 ((), ((), ((), ())))
+buildRequest _model = buildRequestGeneric TestModels.openRouterGLM45 OpenRouter GLM45 (def, ((), ((), ())))
 
 -- Generic helper to build request with explicit composable provider
 buildRequestGeneric :: forall provider model s. (ProviderRequest provider ~ OpenAIRequest)
@@ -50,7 +51,7 @@ parseOpenAIResponse :: TestModel
 parseOpenAIResponse _model configs _history (OpenAIError (OpenAIErrorResponse errDetail)) =
   Left $ ProviderError (code errDetail) $ errorMessage errDetail <> " (" <> errorType errDetail <> ")"
 parseOpenAIResponse _model configs _history resp =
-  let msgs = parseOpenAIResponseGeneric TestModels.openRouterGLM45 OpenRouter GLM45 configs ((), ((), ((), ()))) resp
+  let msgs = parseOpenAIResponseGeneric TestModels.openRouterGLM45 OpenRouter GLM45 configs (def, ((), ((), ()))) resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs
@@ -82,24 +83,31 @@ spec getResponse = do
       resp1 <- getResponse req1
 
       case parseOpenAIResponse GLM45 configs msgs1 resp1 of
-        Right [AssistantText txt] -> do
+        Right parsedMsgs1 -> do
+          -- Extract AssistantText, may also have AssistantReasoning
+          let textMsgs1 = [txt | AssistantText txt <- parsedMsgs1]
+          length textMsgs1 `shouldSatisfy` (> 0)
+          let txt = head textMsgs1
           T.isInfixOf "4" txt `shouldBe` True
 
           -- Second exchange - append to history
-          let msgs2 = msgs1 <> [AssistantText txt, UserText "What about 3+3?"]
+          let msgs2 = msgs1 <> parsedMsgs1 <> [UserText "What about 3+3?"]
               req2 = buildRequest GLM45 configs msgs2
 
           resp2 <- getResponse req2
 
           case parseOpenAIResponse GLM45 configs msgs2 resp2 of
-            Right [AssistantText txt2] -> do
+            Right msgs -> do
+              -- Should have at least AssistantText, may also have AssistantReasoning
+              let textMsgs = [txt | AssistantText txt <- msgs]
+              length textMsgs `shouldSatisfy` (> 0)
+              let txt2 = head textMsgs
               T.isInfixOf "6" txt2 `shouldBe` True
 
-              -- Verify request has full conversation history
-              length (messages req2) `shouldBe` 3
+              -- Verify request has conversation history (exact count depends on reasoning extraction)
+              length (messages req2) `shouldSatisfy` (>= 3)
 
-        Right other -> expectationFailure $ "Expected [AssistantText], got: " ++ show other
-        Left err -> expectationFailure $ "parseResponse failed: " ++ show err
+            Left err -> expectationFailure $ "parseResponse failed: " ++ show err
 
     it "merges consecutive user messages" $ do
       let model = GLM45
@@ -216,14 +224,16 @@ spec getResponse = do
       resp <- getResponse req
 
       case parseOpenAIResponse GLM45 configs msgs resp of
-        Right [AssistantJSON jsonVal] -> do
-          case jsonVal of
+        Right parsedMsgs -> do
+          -- Extract AssistantJSON, may also have AssistantReasoning
+          let jsonMsgs = [jsonVal | AssistantJSON jsonVal <- parsedMsgs]
+          length jsonMsgs `shouldSatisfy` (> 0)
+          case head jsonMsgs of
             Aeson.Object obj ->
               case KM.lookup "colors" obj of
                 Just (Aeson.Array arr) -> length arr `shouldSatisfy` (>= 3)
                 _ -> expectationFailure "JSON missing 'colors' array"
             _ -> expectationFailure "Response not a JSON object"
-        Right other -> expectationFailure $ "Expected [AssistantJSON], got: " ++ show other
         Left err -> expectationFailure $ "parseResponse failed: " ++ show err
 
     it "latest UserRequestJSON sets the schema for the request" $ do

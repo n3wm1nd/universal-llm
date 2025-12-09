@@ -11,6 +11,7 @@ import qualified Data.ByteString.Lazy.Char8 as BSLC
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Aeson (object, (.=))
+import Data.Default (def)
 import TestCache (ResponseProvider)
 import TestModels
 import UniversalLLM.Core.Types
@@ -27,7 +28,7 @@ type TestModel = GLM45
 buildStreamingRequest :: [ModelConfig TestProvider TestModel]
                      -> [Message TestModel TestProvider]
                      -> OpenAIRequest
-buildStreamingRequest = buildStreamingRequestGeneric TestModels.openRouterGLM45 Provider.OpenRouter GLM45 ((), ((), ((), ())))
+buildStreamingRequest = buildStreamingRequestGeneric TestModels.openRouterGLM45 Provider.OpenRouter GLM45 (def, ((), ((), ())))
 
 -- Generic helper to build streaming request with explicit composable provider
 buildStreamingRequestGeneric :: forall provider model s. (ProviderRequest provider ~ OpenAIRequest)

@@ -271,7 +271,11 @@ reasoning = StandardTest $ \cp provider model initialState getResponse -> do
       -- Should get back at least one message
       length parsedMsgs `shouldSatisfy` (> 0)
 
-      -- Should handle reasoning in round-trip
+      -- Should get at least one AssistantReasoning message when reasoning is enabled
+      let reasoningMsgs = [txt | AssistantReasoning txt <- parsedMsgs]
+      length reasoningMsgs `shouldSatisfy` (> 0)
+
+      -- Should handle reasoning in round-trip (sending AssistantReasoning back to LLM)
       let msgs2 = msgs ++ parsedMsgs ++ [UserText "Now what is 20 * 30?"]
           (_, req2) = toProviderRequest cp provider model configs state2 msgs2
 
