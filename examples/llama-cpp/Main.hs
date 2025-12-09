@@ -35,20 +35,20 @@ import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
 -- Simple model (just model identity)
 data MistralModel = MistralModel deriving (Show, Eq)
 
-instance ModelName OpenAI MistralModel where
+instance ModelName (Model MistralModel OpenAI) where
   modelName _ = "mistral-7b-instruct"
 
-instance HasTools MistralModel OpenAI where
+instance HasTools (Model MistralModel OpenAI) where
   withTools = UniversalLLM.Providers.OpenAI.openAITools
 
-instance HasJSON MistralModel OpenAI where
+instance HasJSON (Model MistralModel OpenAI) where
   withJSON :: ComposableProvider
-    OpenAI MistralModel (JSONState MistralModel OpenAI)
+    (Model MistralModel OpenAI) (JSONState (Model MistralModel OpenAI))
   withJSON = UniversalLLM.Providers.OpenAI.openAIJSON
 
 -- Composable provider for MistralModel with tools
-mistralComposableProvider :: ComposableProvider OpenAI MistralModel ((), ())
-mistralComposableProvider = withTools `chainProviders` UniversalLLM.Providers.OpenAI.baseComposableProvider @OpenAI @MistralModel
+mistralComposableProvider :: ComposableProvider (Model MistralModel OpenAI) ((), ())
+mistralComposableProvider = withTools `chainProviders` UniversalLLM.Providers.OpenAI.baseComposableProvider @(Model MistralModel OpenAI)
 
 -- ============================================================================
 -- Tool Definition
@@ -97,31 +97,30 @@ getTimeTool = do
 -- ============================================================================
 
 -- Main agent loop - continues until text response (non-tool)
--- This is polymorphic over BOTH provider and model
-agentLoop :: forall provider model req resp state.
-             (HasTools model provider,
-              req ~ ProviderRequest provider, resp ~ ProviderResponse provider,
+-- This is polymorphic over the unified model type
+agentLoop :: forall m req resp state.
+             (HasTools m,
+              req ~ ProviderRequest m, resp ~ ProviderResponse m,
               Monoid req)
-          => ComposableProvider provider model state
-          -> provider
-          -> model
+          => ComposableProvider m state
+          -> m
           -> state
           -> [LLMTool IO]
           -> LLMCall req resp
-          -> [ModelConfig provider model]
-          -> [Message model provider]
+          -> [ModelConfig m]
+          -> [Message m]
           -> ExceptT LLMError IO ()
-agentLoop composableProvider provider model state tools callLLM configs messages = do
+agentLoop composableProvider model state tools callLLM configs messages = do
   -- Build config with tools added
   let toolDefs = map llmToolToDefinition tools
       configs' = configs ++ [Tools toolDefs]
 
   -- Build and send request (provider-agnostic)
-  let request = snd $ toProviderRequest composableProvider provider model configs' state messages
+  let request = snd $ toProviderRequest composableProvider model configs' state messages
   response <- callLLM request
 
   -- Parse response (provider-agnostic)
-  responses <- case fromProviderResponse composableProvider provider model configs' state response of
+  responses <- case fromProviderResponse composableProvider model configs' state response of
     Left err -> except $ Left err
     Right (_state, msgs) ->
       if null msgs
@@ -131,14 +130,14 @@ agentLoop composableProvider provider model state tools callLLM configs messages
   newMsgs <- liftIO $ concat <$> mapM (handleResponse tools) responses
   -- Continue loop only if there are tool results to send back
   unless (null newMsgs) $
-    agentLoop composableProvider provider model state tools callLLM configs' (messages ++ responses ++ newMsgs)
+    agentLoop composableProvider model state tools callLLM configs' (messages ++ responses ++ newMsgs)
 
--- Handle different response types (polymorphic over provider and model)
+-- Handle different response types (polymorphic over model type)
 -- Returns empty list for text (stops loop), tool results for tool calls (continues loop)
-handleResponse :: forall provider model. HasTools model provider
+handleResponse :: forall m. HasTools m
                => [LLMTool IO]
-               -> Message model provider
-               -> IO [Message model provider]
+               -> Message m
+               -> IO [Message m]
 handleResponse _ (AssistantText text) = do
   putStrLn $ "🤖 " <> T.unpack text
   return [] -- Empty list stops the loop
@@ -180,9 +179,8 @@ main = do
   let tools :: [LLMTool IO]
       tools = [LLMTool getTimeTool]
 
-  -- Concrete provider and model selection (only place where specific types matter)
-  let provider = OpenAI
-      model = MistralModel
+  -- Concrete model selection (only place where specific types matter)
+  let model = Model MistralModel OpenAI
 
   -- Build config
   let configs = [ Temperature 0.7
@@ -190,8 +188,8 @@ main = do
                 ]
   let initialMsg = [UserText "Use the get_time tool to tell me what time it is."]
 
-  -- Business logic (agentLoop) is polymorphic - works with any provider/model
-  result <- runExceptT $ agentLoop mistralComposableProvider provider model ((), ()) tools callLLM configs initialMsg
+  -- Business logic (agentLoop) is polymorphic - works with any model
+  result <- runExceptT $ agentLoop mistralComposableProvider model ((), ()) tools callLLM configs initialMsg
   case result of
     Left err -> putStrLn $ "❌ Error: " <> show err
     Right () -> return ()

@@ -5,6 +5,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module XMLProvidersSpec (spec) where
 
@@ -29,93 +31,89 @@ import TestModels (GLM45)
 -- Mock model that uses XML response parsing (Strategy A)
 data MockXMLResponseModel = MockXMLResponseModel deriving (Show, Eq)
 
-instance ModelName OpenAI.LlamaCpp MockXMLResponseModel where
+instance ModelName (MockXMLResponseModel `Via` OpenAI.LlamaCpp) where
   modelName _ = "mock-xml-response"
 
-instance HasTools MockXMLResponseModel OpenAI.LlamaCpp where
+instance HasTools (MockXMLResponseModel `Via` OpenAI.LlamaCpp) where
   withTools = OpenAI.openAITools
 
 -- Mock model that uses full XML support (Strategy B)
 data MockFullXMLModel = MockFullXMLModel deriving (Show, Eq)
 
-instance ModelName OpenAI.OpenAICompatible MockFullXMLModel where
+instance ModelName (MockFullXMLModel `Via` OpenAI.OpenAICompatible) where
   modelName _ = "mock-full-xml"
 
-instance HasTools MockFullXMLModel OpenAI.OpenAICompatible where
+instance HasTools (MockFullXMLModel `Via` OpenAI.OpenAICompatible) where
   withTools = OpenAI.openAITools
 
 -- Helper to build a request from messages (with explicit composable provider)
-buildRequestGeneric :: (Monoid (ProviderRequest provider))
-                   => ComposableProvider provider model s
-                   -> provider
+buildRequestGeneric :: (Monoid (ProviderRequest model))
+                   => ComposableProvider model s
                    -> model
-                   -> [ModelConfig provider model]
+                   -> [ModelConfig model]
                    -> s
-                   -> [Message model provider]
-                   -> ProviderRequest provider
-buildRequestGeneric composableProvider provider model configs s = snd . toProviderRequest composableProvider provider model configs s
+                   -> [Message model]
+                   -> ProviderRequest model
+buildRequestGeneric composableProvider model configs s = snd . toProviderRequest composableProvider model configs s
 
 -- TypeClass to support buildRequest with implicit composable provider/state
-class BuildRequest provider model where
-  buildRequest :: provider
-               -> model
-               -> [ModelConfig provider model]
-               -> [Message model provider]
-               -> ProviderRequest provider
+class BuildRequest model where
+  buildRequest :: model
+               -> [ModelConfig model]
+               -> [Message model]
+               -> ProviderRequest model
 
 -- Instance for MockXMLResponseModel
-instance BuildRequest OpenAI.LlamaCpp MockXMLResponseModel where
-  buildRequest provider model configs msgs =
-    let base = OpenAI.baseComposableProvider @OpenAI.LlamaCpp @MockXMLResponseModel
+instance BuildRequest (MockXMLResponseModel `Via` OpenAI.LlamaCpp) where
+  buildRequest model configs msgs =
+    let base = OpenAI.baseComposableProvider @(MockXMLResponseModel `Via` OpenAI.LlamaCpp)
         withToolsProvider = chainProviders OpenAI.openAITools base
         composableProvider = withXMLResponseParsing withToolsProvider
-    in snd $ toProviderRequest composableProvider provider model configs ((), ((), ())) msgs
+    in snd $ toProviderRequest composableProvider model configs ((), ((), ())) msgs
 
 -- Instance for MockFullXMLModel
-instance BuildRequest OpenAI.OpenAICompatible MockFullXMLModel where
-  buildRequest provider model configs msgs =
-    let base = OpenAI.baseComposableProvider @OpenAI.OpenAICompatible @MockFullXMLModel
+instance BuildRequest (MockFullXMLModel `Via` OpenAI.OpenAICompatible) where
+  buildRequest model configs msgs =
+    let base = OpenAI.baseComposableProvider @(MockFullXMLModel `Via` OpenAI.OpenAICompatible)
         withToolsProvider = chainProviders OpenAI.openAITools base
         composableProvider = withFullXMLToolSupport withToolsProvider
-    in snd $ toProviderRequest composableProvider provider model configs ((), ((), ())) msgs
+    in snd $ toProviderRequest composableProvider model configs ((), ((), ())) msgs
 
 -- Helper to parse a response (with explicit composable provider)
-parseResponseGeneric :: ComposableProvider provider model s
-                    -> provider
+parseResponseGeneric :: ComposableProvider model s
                     -> model
-                    -> [ModelConfig provider model]
+                    -> [ModelConfig model]
                     -> s
-                    -> [Message model provider]  -- history
-                    -> ProviderResponse provider
-                    -> [Message model provider]
-parseResponseGeneric composableProvider provider model configs s history resp =
-  let msgs = either (error . show) snd $ fromProviderResponse composableProvider provider model configs s resp
+                    -> [Message model]  -- history
+                    -> ProviderResponse model
+                    -> [Message model]
+parseResponseGeneric composableProvider model configs s history resp =
+  let msgs = either (error . show) snd $ fromProviderResponse composableProvider model configs s resp
   in msgs
 
 -- TypeClass to support parseResponse with implicit composable provider/state
-class ParseResponse provider model where
-  parseResponse :: provider
-                -> model
-                -> [ModelConfig provider model]
-                -> [Message model provider]  -- history
-                -> ProviderResponse provider
-                -> [Message model provider]
+class ParseResponse model where
+  parseResponse :: model
+                -> [ModelConfig model]
+                -> [Message model]  -- history
+                -> ProviderResponse model
+                -> [Message model]
 
 -- Instance for MockXMLResponseModel
-instance ParseResponse OpenAI.LlamaCpp MockXMLResponseModel where
-  parseResponse provider model configs history resp =
-    let base = OpenAI.baseComposableProvider @OpenAI.LlamaCpp @MockXMLResponseModel
+instance ParseResponse (MockXMLResponseModel `Via` OpenAI.LlamaCpp) where
+  parseResponse model configs history resp =
+    let base = OpenAI.baseComposableProvider @(MockXMLResponseModel `Via` OpenAI.LlamaCpp)
         withToolsProvider = chainProviders OpenAI.openAITools base
         composableProvider = withXMLResponseParsing withToolsProvider
-    in either (error . show) snd $ fromProviderResponse composableProvider provider model configs ((), ((), ())) resp
+    in either (error . show) snd $ fromProviderResponse composableProvider model configs ((), ((), ())) resp
 
 -- Instance for MockFullXMLModel
-instance ParseResponse OpenAI.OpenAICompatible MockFullXMLModel where
-  parseResponse provider model configs history resp =
-    let base = OpenAI.baseComposableProvider @OpenAI.OpenAICompatible @MockFullXMLModel
+instance ParseResponse (MockFullXMLModel `Via` OpenAI.OpenAICompatible) where
+  parseResponse model configs history resp =
+    let base = OpenAI.baseComposableProvider @(MockFullXMLModel `Via` OpenAI.OpenAICompatible)
         withToolsProvider = chainProviders OpenAI.openAITools base
         composableProvider = withFullXMLToolSupport withToolsProvider
-    in either (error . show) snd $ fromProviderResponse composableProvider provider model configs ((), ((), ())) resp
+    in either (error . show) snd $ fromProviderResponse composableProvider model configs ((), ((), ())) resp
 
 -- Create a mock OpenAI response with text content
 mockTextResponse :: Text -> OpenAIResponse
@@ -158,8 +156,7 @@ spec = do
   describe "XML Provider Integration Tests" $ do
     describe "Strategy A: withXMLResponseParsing (native tool support + XML responses)" $ do
       it "preserves message history when parsing XML responses" $ do
-        let provider = OpenAI.LlamaCpp
-            model = MockXMLResponseModel
+        let model = Model MockXMLResponseModel OpenAI.LlamaCpp
             toolDef = ToolDefinition "test_tool" "A test tool" (object ["param" .= ("string" :: Text)])
             configs = [Tools [toolDef]]
 
@@ -170,7 +167,7 @@ spec = do
                       ]
 
             -- Build request with history
-            req = buildRequest provider model configs history
+            req = buildRequest model configs history
             reqMsgs = messages req
 
         -- Check that all messages are in the request
@@ -181,7 +178,7 @@ spec = do
             response = mockTextResponse xmlToolCall
 
             -- Parse response
-            parsedMsgs = parseResponse provider model configs history response
+            parsedMsgs = parseResponse model configs history response
 
         -- Should parse into a tool call message
         case parsedMsgs of
@@ -189,8 +186,7 @@ spec = do
           _ -> expectationFailure $ "Expected tool call, got: " ++ show parsedMsgs
 
       it "handles mixed text and XML tool calls" $ do
-        let provider = OpenAI.LlamaCpp
-            model = MockXMLResponseModel
+        let model = Model MockXMLResponseModel OpenAI.LlamaCpp
             toolDef = ToolDefinition "calc" "Calculator" (object [])
             configs = [Tools [toolDef]]
             history = [UserText "Calculate 2+2"]
@@ -199,7 +195,7 @@ spec = do
             xmlToolCall = "Let me calculate that:\n<tool_call>calc\n<arg_key>expr</arg_key>\n<arg_value>2+2</arg_value>\n</tool_call>\nDone!"
             response = mockTextResponse xmlToolCall
 
-            parsedMsgs = parseResponse provider model configs history response
+            parsedMsgs = parseResponse model configs history response
 
         -- Should have both text and tool call
         length parsedMsgs `shouldBe` 2
@@ -209,8 +205,7 @@ spec = do
           _ -> expectationFailure $ "Expected text + tool call, got: " ++ show parsedMsgs
 
       it "preserves tool results in native OpenAI format (not converted to XML)" $ do
-        let provider = OpenAI.LlamaCpp
-            model = MockXMLResponseModel
+        let model = Model MockXMLResponseModel OpenAI.LlamaCpp
             toolDef = ToolDefinition "echo" "Echo tool" (object [])
             configs = [Tools [toolDef]]
 
@@ -223,7 +218,7 @@ spec = do
                           ]
 
             -- Build request - tool results should be in native format
-            req = buildRequest provider model configs history
+            req = buildRequest model configs history
             reqMsgs = messages req
 
         -- Should have 3 messages, last one is tool result in OpenAI format
@@ -237,13 +232,12 @@ spec = do
 
     describe "Strategy B: withFullXMLToolSupport (no native tool support)" $ do
       it "converts tool definitions to system prompt text" $ do
-        let provider = OpenAI.OpenAICompatible
-            model = MockFullXMLModel
+        let model = Model MockFullXMLModel OpenAI.OpenAICompatible
             toolDef = ToolDefinition "search" "Search the web" (object ["query" .= ("string" :: Text)])
             configs = [Tools [toolDef], SystemPrompt "You are helpful."]
             history = [UserText "Search for cats"]
 
-            req = buildRequest provider model configs history
+            req = buildRequest model configs history
             reqMsgs = messages req
 
         -- First message should be system with tool definitions
@@ -257,8 +251,7 @@ spec = do
           Nothing -> expectationFailure "Expected system message content"
 
       it "converts tool calls to XML text in assistant messages" $ do
-        let provider = OpenAI.OpenAICompatible
-            model = MockFullXMLModel
+        let model = Model MockFullXMLModel OpenAI.OpenAICompatible
             configs = []
 
             toolCall = ToolCall "call_456" "multiply" (object ["a" .= (2 :: Int), "b" .= (3 :: Int)])
@@ -266,7 +259,7 @@ spec = do
                           , AssistantTool toolCall
                           ]
 
-            req = buildRequest provider model configs history
+            req = buildRequest model configs history
             reqMsgs = messages req
 
         -- Check that tool call is converted to XML in an assistant message
@@ -281,8 +274,7 @@ spec = do
           Nothing -> expectationFailure "Expected assistant message content"
 
       it "converts tool results to XML text in user messages" $ do
-        let provider = OpenAI.OpenAICompatible
-            model = MockFullXMLModel
+        let model = Model MockFullXMLModel OpenAI.OpenAICompatible
             configs = []
 
             toolCall = ToolCall "call_789" "divide" (object [])
@@ -292,7 +284,7 @@ spec = do
                           , ToolResultMsg toolResult
                           ]
 
-            req = buildRequest provider model configs history
+            req = buildRequest model configs history
             reqMsgs = messages req
 
         -- Check that tool result is converted to XML in a user message
@@ -308,8 +300,7 @@ spec = do
           Nothing -> expectationFailure "Expected user message content"
 
       it "preserves full message history through transformations" $ do
-        let provider = OpenAI.OpenAICompatible
-            model = MockFullXMLModel
+        let model = Model MockFullXMLModel OpenAI.OpenAICompatible
             toolDef = ToolDefinition "fetch" "Fetch data" (object [])
             configs = [Tools [toolDef]]
 
@@ -324,7 +315,7 @@ spec = do
                           , UserText "What did you get?"
                           ]
 
-            req = buildRequest provider model configs history
+            req = buildRequest model configs history
             reqMsgs = messages req
 
             -- System + 6 messages = 7 total
@@ -338,8 +329,7 @@ spec = do
         any (T.isInfixOf "What did you get") contentTexts `shouldBe` True
 
       it "parses XML tool calls from responses" $ do
-        let provider = OpenAI.OpenAICompatible
-            model = MockFullXMLModel
+        let model = Model MockFullXMLModel OpenAI.OpenAICompatible
             configs = []
             history = [UserText "Do something"]
 
@@ -347,7 +337,7 @@ spec = do
             xmlResponse = "<tool_call>process\n<arg_key>input</arg_key>\n<arg_value>data</arg_value>\n</tool_call>"
             response = mockTextResponse xmlResponse
 
-            parsedMsgs = parseResponse provider model configs history response
+            parsedMsgs = parseResponse model configs history response
 
         -- Should parse into tool call
         case parsedMsgs of
@@ -360,8 +350,7 @@ spec = do
 
     describe "Error Handling" $ do
       it "handles tool result errors correctly (Strategy A)" $ do
-        let provider = OpenAI.LlamaCpp
-            model = MockXMLResponseModel
+        let model = Model MockXMLResponseModel OpenAI.LlamaCpp
             configs = []
 
             toolCall = ToolCall "call_err" "broken_tool" (object [])
@@ -371,7 +360,7 @@ spec = do
                           , ToolResultMsg errorResult
                           ]
 
-            req = buildRequest provider model configs history
+            req = buildRequest model configs history
             reqMsgs = messages req
 
         -- Tool result should preserve error message
@@ -382,8 +371,7 @@ spec = do
           Nothing -> expectationFailure "Expected tool message content"
 
       it "handles tool result errors correctly (Strategy B - XML format)" $ do
-        let provider = OpenAI.OpenAICompatible
-            model = MockFullXMLModel
+        let model = Model MockFullXMLModel OpenAI.OpenAICompatible
             configs = []
 
             toolCall = ToolCall "call_err2" "failed_tool" (object [])
@@ -393,7 +381,7 @@ spec = do
                           , ToolResultMsg errorResult
                           ]
 
-            req = buildRequest provider model configs history
+            req = buildRequest model configs history
             reqMsgs = messages req
 
         -- Tool result should be XML with error
@@ -407,11 +395,10 @@ spec = do
 
       it "handles invalid tool calls (non-existent tool)" $ do
         -- For Strategy A (native OpenAI protocol)
-        let provider1 = OpenAI.LlamaCpp
-            model1 = MockXMLResponseModel
+        let model1 = Model MockXMLResponseModel OpenAI.LlamaCpp
             invalidCall1 = InvalidToolCall "call_inv" "nonexistent_tool" "some args" "Tool not found"
             history1 = [UserText "test", AssistantTool invalidCall1]
-            req1 = buildRequest provider1 model1 [] history1
+            req1 = buildRequest model1 [] history1
             reqMsgs1 = messages req1
 
         -- InvalidToolCall cannot be represented in OpenAI's native format,
@@ -419,11 +406,10 @@ spec = do
         length reqMsgs1 `shouldBe` 2
 
         -- For Strategy B (full XML)
-        let provider2 = OpenAI.OpenAICompatible
-            model2 = MockFullXMLModel
+        let model2 = Model MockFullXMLModel OpenAI.OpenAICompatible
             invalidCall2 = InvalidToolCall "call_inv2" "nonexistent_tool" "some args" "Tool not found"
             history2 = [UserText "test", AssistantTool invalidCall2]
-            req2 = buildRequest provider2 model2 [] history2
+            req2 = buildRequest model2 [] history2
             reqMsgs2 = messages req2
 
         -- Should convert to text representation
@@ -434,8 +420,7 @@ spec = do
           Nothing -> expectationFailure "Expected assistant message content"
 
       it "handles malformed XML in responses gracefully" $ do
-        let provider = OpenAI.OpenAICompatible
-            model = MockFullXMLModel
+        let model = Model MockFullXMLModel OpenAI.OpenAICompatible
             configs = []
             history = [UserText "test"]
 
@@ -443,7 +428,7 @@ spec = do
             malformedXML = "<tool_call>broken_tool\n<arg_key>key</arg_key>"
             response = mockTextResponse malformedXML
 
-            parsedMsgs = parseResponse provider model configs history response
+            parsedMsgs = parseResponse model configs history response
 
         -- Should return text as-is when XML can't be parsed
         case parsedMsgs of
@@ -452,8 +437,7 @@ spec = do
 
     describe "Message History Preservation" $ do
       it "does not drop messages during transformation (Strategy A)" $ do
-        let provider = OpenAI.LlamaCpp
-            model = MockXMLResponseModel
+        let model = Model MockXMLResponseModel OpenAI.LlamaCpp
             configs = []
 
             -- Complex history with various message types
@@ -464,15 +448,14 @@ spec = do
                           , UserText "Message 3"
                           ]
 
-            req = buildRequest provider model configs history
+            req = buildRequest model configs history
             reqMsgs = messages req
 
             -- All messages should be preserved
         length reqMsgs `shouldBe` 5
 
       it "does not drop messages during transformation (Strategy B)" $ do
-        let provider = OpenAI.OpenAICompatible
-            model = MockFullXMLModel
+        let model = Model MockFullXMLModel OpenAI.OpenAICompatible
             toolDef = ToolDefinition "tool1" "Tool" (object [])
             configs = [Tools [toolDef]]
 
@@ -487,15 +470,14 @@ spec = do
                           , AssistantText "Done"
                           ]
 
-            req = buildRequest provider model configs history
+            req = buildRequest model configs history
             reqMsgs = messages req
 
             -- System + 7 conversation messages
         length reqMsgs `shouldSatisfy` (>= 7)
 
       it "preserves message order during transformation" $ do
-        let provider = OpenAI.OpenAICompatible
-            model = MockFullXMLModel
+        let model = Model MockFullXMLModel OpenAI.OpenAICompatible
             configs = []
 
             history = [ UserText "First"
@@ -503,7 +485,7 @@ spec = do
                           , UserText "Third"
                           ]
 
-            req = buildRequest provider model configs history
+            req = buildRequest model configs history
             reqMsgs = messages req
             roles = [role msg | msg <- reqMsgs]
 

@@ -44,7 +44,7 @@ import UniversalLLM.Core.Types
 -- ============================================================================
 
 -- | Serialize base messages (UserText, AssistantText, SystemText)
-serializeBaseMessage :: Message model provider -> Maybe Value
+serializeBaseMessage :: Message m -> Maybe Value
 serializeBaseMessage (UserText txt) = Just $ Aeson.object
   [ "type" .= ("UserText" :: Text)
   , "text" .= txt
@@ -60,7 +60,7 @@ serializeBaseMessage (SystemText txt) = Just $ Aeson.object
 serializeBaseMessage _ = Nothing  -- Not a base message
 
 -- | Deserialize base messages (UserText, AssistantText, SystemText)
-deserializeBaseMessage :: Value -> Maybe (Message model provider)
+deserializeBaseMessage :: Value -> Maybe (Message m)
 deserializeBaseMessage val = Aeson.parseMaybe parseObj val
   where
     parseObj = Aeson.withObject "Message" $ \obj -> do
@@ -137,7 +137,7 @@ deserializeToolResult val = Aeson.parseMaybe parseObj val
       return $ ToolResult call output
 
 -- | Serialize tool messages (requires HasTools constraint)
-serializeToolMessages :: HasTools model provider => Message model provider -> Maybe Value
+serializeToolMessages :: HasTools m => Message m -> Maybe Value
 serializeToolMessages (AssistantTool tc) = Just $ Aeson.object
   [ "type" .= ("AssistantTool" :: Text)
   , "tool_call" .= serializeToolCall tc
@@ -149,7 +149,7 @@ serializeToolMessages (ToolResultMsg tr) = Just $ Aeson.object
 serializeToolMessages _ = Nothing  -- Not a tool message
 
 -- | Deserialize tool messages (requires HasTools constraint)
-deserializeToolMessages :: HasTools model provider => Value -> Maybe (Message model provider)
+deserializeToolMessages :: HasTools m => Value -> Maybe (Message m)
 deserializeToolMessages val = Aeson.parseMaybe parseObj val
   where
     parseObj = Aeson.withObject "Message" $ \obj -> do
@@ -172,7 +172,7 @@ deserializeToolMessages val = Aeson.parseMaybe parseObj val
 -- ============================================================================
 
 -- | Serialize vision messages (requires HasVision constraint)
-serializeVisionMessages :: HasVision model provider => Message model provider -> Maybe Value
+serializeVisionMessages :: HasVision m => Message m -> Maybe Value
 serializeVisionMessages (UserImage mediaType imageData) = Just $ Aeson.object
   [ "type" .= ("UserImage" :: Text)
   , "media_type" .= mediaType
@@ -181,7 +181,7 @@ serializeVisionMessages (UserImage mediaType imageData) = Just $ Aeson.object
 serializeVisionMessages _ = Nothing
 
 -- | Deserialize vision messages (requires HasVision constraint)
-deserializeVisionMessages :: HasVision model provider => Value -> Maybe (Message model provider)
+deserializeVisionMessages :: HasVision m => Value -> Maybe (Message m)
 deserializeVisionMessages val = Aeson.parseMaybe parseObj val
   where
     parseObj = Aeson.withObject "Message" $ \obj -> do
@@ -198,7 +198,7 @@ deserializeVisionMessages val = Aeson.parseMaybe parseObj val
 -- ============================================================================
 
 -- | Serialize JSON messages (requires HasJSON constraint)
-serializeJSONMessages :: HasJSON model provider => Message model provider -> Maybe Value
+serializeJSONMessages :: HasJSON m => Message m -> Maybe Value
 serializeJSONMessages (UserRequestJSON query schema) = Just $ Aeson.object
   [ "type" .= ("UserRequestJSON" :: Text)
   , "query" .= query
@@ -211,7 +211,7 @@ serializeJSONMessages (AssistantJSON val) = Just $ Aeson.object
 serializeJSONMessages _ = Nothing
 
 -- | Deserialize JSON messages (requires HasJSON constraint)
-deserializeJSONMessages :: HasJSON model provider => Value -> Maybe (Message model provider)
+deserializeJSONMessages :: HasJSON m => Value -> Maybe (Message m)
 deserializeJSONMessages val = Aeson.parseMaybe parseObj val
   where
     parseObj = Aeson.withObject "Message" $ \obj -> do
@@ -231,7 +231,7 @@ deserializeJSONMessages val = Aeson.parseMaybe parseObj val
 -- ============================================================================
 
 -- | Serialize reasoning messages (requires HasReasoning constraint)
-serializeReasoningMessages :: HasReasoning model provider => Message model provider -> Maybe Value
+serializeReasoningMessages :: HasReasoning m => Message m -> Maybe Value
 serializeReasoningMessages (AssistantReasoning txt) = Just $ Aeson.object
   [ "type" .= ("AssistantReasoning" :: Text)
   , "text" .= txt
@@ -239,7 +239,7 @@ serializeReasoningMessages (AssistantReasoning txt) = Just $ Aeson.object
 serializeReasoningMessages _ = Nothing
 
 -- | Deserialize reasoning messages (requires HasReasoning constraint)
-deserializeReasoningMessages :: HasReasoning model provider => Value -> Maybe (Message model provider)
+deserializeReasoningMessages :: HasReasoning m => Value -> Maybe (Message m)
 deserializeReasoningMessages val = Aeson.parseMaybe parseObj val
   where
     parseObj = Aeson.withObject "Message" $ \obj -> do

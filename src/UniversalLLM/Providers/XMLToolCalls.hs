@@ -54,8 +54,8 @@ toolCallToXMLText (InvalidToolCall _ tcName rawArgs _) =
 
 -- | Parse XML tool calls from assistant text response
 -- Returns (list of tool call messages, cleaned text without tool calls)
-parseXMLFromResponse :: forall model provider. HasTools model provider
-                     => Text -> ([Message model provider], Text)
+parseXMLFromResponse :: forall m. HasTools m
+                     => Text -> ([Message m], Text)
 parseXMLFromResponse txt =
   let (xmlBlocks, cleanedText) = extractAndRemoveXMLToolCalls txt
       parsedCalls = mapMaybe parseXMLToolCall xmlBlocks
@@ -71,20 +71,20 @@ parseXMLFromResponse txt =
 -- | Parse XML tool calls from responses (provider has native tool support)
 -- This ONLY handles response parsing - tool definitions use native format
 withXMLResponseParsing ::
-  forall provider model s s'.
-  (HasTools model provider) =>
-  ComposableProvider provider model s ->
-  ComposableProvider provider model ((), s)
+  forall m s s'.
+  (HasTools m) =>
+  ComposableProvider m s ->
+  ComposableProvider m ((), s)
 withXMLResponseParsing  = chainProviders xmlResponseParser
 
 
-xmlResponseParser :: HasTools model provider => p1 -> p2 -> p3 -> p4 -> ComposableProviderHandlers provider model state
-xmlResponseParser _p _m _configs _s = noopHandler
+xmlResponseParser :: HasTools m => m -> [ModelConfig m] -> state -> ComposableProviderHandlers m state
+xmlResponseParser _m _configs _s = noopHandler
   { 
     cpPureMessageResponse = extractXMLFromMessages
   }
 
-extractXMLFromMessages :: HasTools model provider => [Message model provider] -> [Message model provider]
+extractXMLFromMessages :: HasTools m => [Message m] -> [Message m]
 extractXMLFromMessages acc =
   let (toolCalls, cleanedMsgs) = foldl processMessage ([], []) acc
   in cleanedMsgs <> toolCalls
@@ -111,20 +111,20 @@ extractXMLFromMessages acc =
 -- Handles: system prompt injection, tool results as text, XML response parsing
 
 withFullXMLToolSupport ::
-  forall provider model s s'.
-  (ProviderRequest provider ~ OpenAIRequest, HasTools model provider) =>
+  forall m s s'.
+  (ProviderRequest m ~ OpenAIRequest, HasTools m) =>
    -- FIXME: we need a way to modify [Config] to make this work with all providers by putting it in SystemPrompt
-  ComposableProvider provider model s -> ComposableProvider provider model ((), s)
+  ComposableProvider m s -> ComposableProvider m ((), s)
 withFullXMLToolSupport = chainProviders xmlFullSupport
   where
-    xmlFullSupport _p _m configs _s = noopHandler
+    xmlFullSupport _m configs _s = noopHandler
       { cpPureMessageRequest = convertToolsToXML
       , cpConfigHandler = injectToolDefinitions configs
       , cpPureMessageResponse = extractXMLMessagesFromResponse
       }
 
     -- Convert tool calls and results to XML before encoding
-    convertToolsToXML :: [Message model provider] -> [Message model provider]
+    convertToolsToXML :: [Message m] -> [Message m]
     convertToolsToXML = map convertMessage
       where
         convertMessage msg = case msg of
@@ -142,7 +142,7 @@ withFullXMLToolSupport = chainProviders xmlFullSupport
           _ -> msg
 
     -- Inject tool definitions into system prompt
-    injectToolDefinitions :: [ModelConfig provider model] -> ConfigEncoder provider model
+    injectToolDefinitions :: [ModelConfig m] -> ConfigEncoder m
     injectToolDefinitions cfgs req =
       let toolDefs = concat [defs | Tools defs <- cfgs]
       in if null toolDefs
@@ -161,7 +161,7 @@ withFullXMLToolSupport = chainProviders xmlFullSupport
         isSystemMessage _ = False
 
     -- Extract XML tool calls from parsed text messages
-    extractXMLMessagesFromResponse :: [Message model provider] -> [Message model provider]
+    extractXMLMessagesFromResponse :: [Message m] -> [Message m]
     extractXMLMessagesFromResponse acc =
       let (toolCalls, cleanedMsgs) = foldl processMessage ([], []) acc
       in cleanedMsgs <> toolCalls

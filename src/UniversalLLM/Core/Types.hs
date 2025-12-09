@@ -19,11 +19,33 @@ import Data.Text (Text)
 import Data.Aeson (Value)
 import Control.Applicative ((<|>))
 
+-- ============================================================================
+-- Core Model Type
+-- ============================================================================
 
-class Provider provider model => BaseComposableProvider model provider where
-  type BaseState model provider
-  type BaseState model provider = ()
-  baseProvider :: ComposableProvider provider model (BaseState model provider)
+-- | A unified type that bundles an AI model with its provider
+-- Replaces separate (provider, model) parameters with a single type
+data Model aiModel provider = Model aiModel provider
+
+-- | Type operator for nice syntax: GPT4 `Via` OpenRouter
+type a `Via` b = Model a b
+
+-- | Extract the AI model type from a Model
+type family AIModelOf m where
+  AIModelOf (Model a p) = a
+
+-- | Extract the provider type from a Model
+type family ProviderOf m where
+  ProviderOf (Model a p) = p
+
+-- ============================================================================
+-- Provider Classes
+-- ============================================================================
+
+class BaseComposableProvider m where
+  type BaseState m
+  type BaseState m = ()
+  baseProvider :: ComposableProvider m (BaseState m)
 
 -- Unified capability classes
 -- SupportsX for parameters (things providers accept)
@@ -35,67 +57,63 @@ class SupportsStop a
 class SupportsStreaming a
 
 -- HasX for capabilities (features that require both model AND provider support)
--- These take two parameters: model and provider
+-- These take a single unified model parameter
 -- Instances must be declared explicitly for each model/provider combination
 -- Each instance must provide a combinator to augment a base provider with the capability
-class Provider provider model => HasTools model provider where
-  type ToolState model provider
-  type ToolState model provider = ()
-  withTools :: ComposableProvider provider model (ToolState model provider)
+class HasTools m where
+  type ToolState m
+  type ToolState m = ()
+  withTools :: ComposableProvider m (ToolState m)
 
-class Provider provider model => HasVision model provider where
-  type VisionState model provider
-  type VisionState model provider = ()
-  withVision :: ComposableProvider provider model (VisionState model provider)
+class HasVision m where
+  type VisionState m
+  type VisionState m = ()
+  withVision :: ComposableProvider m (VisionState m)
 
-class Provider provider model => HasJSON model provider where
-  type JSONState model provider
-  type JSONState model provider = ()
-  withJSON :: ComposableProvider provider model (JSONState model provider)
+class HasJSON m where
+  type JSONState m
+  type JSONState m = ()
+  withJSON :: ComposableProvider m (JSONState m)
 
-class Provider provider model => HasReasoning model provider where
-  type ReasoningState model provider
-  type ReasoningState model provider = ()
-  withReasoning :: ComposableProvider provider model (ReasoningState model provider)
+class HasReasoning m where
+  type ReasoningState m
+  type ReasoningState m = ()
+  withReasoning :: ComposableProvider m (ReasoningState m)
 
--- ModelConfig GADT - configuration values with provider and model constraints
+-- ModelConfig GADT - configuration values with model constraints
 -- Only constructible if the provider supports the parameter and/or model
-data ModelConfig provider model where
-  Temperature :: SupportsTemperature provider => Double -> ModelConfig provider model
-  MaxTokens :: SupportsMaxTokens provider => Int -> ModelConfig provider model
-  Seed :: SupportsSeed provider => Int -> ModelConfig provider model
-  SystemPrompt :: SupportsSystemPrompt provider => Text -> ModelConfig provider model
-  Stop :: SupportsStop provider => [Text] -> ModelConfig provider model
-  Tools :: HasTools model provider => [ToolDefinition] -> ModelConfig provider model
-  Reasoning :: HasReasoning model provider => Bool -> ModelConfig provider model
-  Streaming :: SupportsStreaming provider => Bool -> ModelConfig provider model
+data ModelConfig m where
+  Temperature :: SupportsTemperature (ProviderOf m) => Double -> ModelConfig m
+  MaxTokens :: SupportsMaxTokens (ProviderOf m) => Int -> ModelConfig m
+  Seed :: SupportsSeed (ProviderOf m) => Int -> ModelConfig m
+  SystemPrompt :: SupportsSystemPrompt (ProviderOf m) => Text -> ModelConfig m
+  Stop :: SupportsStop (ProviderOf m) => [Text] -> ModelConfig m
+  Tools :: HasTools m => [ToolDefinition] -> ModelConfig m
+  Reasoning :: HasReasoning m => Bool -> ModelConfig m
+  Streaming :: SupportsStreaming (ProviderOf m) => Bool -> ModelConfig m
 
 -- Provider-specific model names
-class ModelName provider model where
-  modelName :: model -> Text
+class ModelName m where
+  modelName :: m -> Text
 
-providerReasoningTools :: 
-  ( HasTools model provider, HasReasoning model provider,
-  BaseComposableProvider model provider ) =>
-  ComposableProvider provider model
-  (ToolState model provider, (ReasoningState model provider, BaseState model provider ))
-providerReasoningTools = withTools 
-  `chainProviders` withReasoning 
+providerReasoningTools ::
+  ( HasTools m, HasReasoning m, BaseComposableProvider m ) =>
+  ComposableProvider m
+  (ToolState m, (ReasoningState m, BaseState m))
+providerReasoningTools = withTools
+  `chainProviders` withReasoning
   `chainProviders` baseProvider
 
-providerReasoning :: 
-  ( HasReasoning model provider,
-  BaseComposableProvider model provider ) =>ComposableProvider provider model
-  (ReasoningState model provider, BaseState model provider )
-providerReasoning = withReasoning 
+providerReasoning ::
+  ( HasReasoning m, BaseComposableProvider m ) =>
+  ComposableProvider m (ReasoningState m, BaseState m)
+providerReasoning = withReasoning
   `chainProviders` baseProvider
 
-providerTools :: 
-  ( HasTools model provider,
-  BaseComposableProvider model provider ) =>
-  ComposableProvider provider model
-  (ToolState model provider,  BaseState model provider )
-providerTools = withTools 
+providerTools ::
+  ( HasTools m, BaseComposableProvider m ) =>
+  ComposableProvider m (ToolState m, BaseState m)
+providerTools = withTools
   `chainProviders` baseProvider
 
 
@@ -146,16 +164,16 @@ data LLMError
   | ProviderError Int Text     -- HTTP status + raw response for debugging
   deriving (Show, Eq)
 
-class Provider provider model where
-  type ProviderRequest provider
-  type ProviderResponse provider
+class Provider m where
+  type ProviderRequest m
+  type ProviderResponse m
 
 
 -- CompletionProvider: Type families for completion requests/responses
 -- Separate from chat to allow different wire formats if needed
-class Provider provider model => CompletionProvider provider model where
-  type CompletionRequest provider
-  type CompletionResponse provider
+class Provider m => CompletionProvider m where
+  type CompletionRequest m
+  type CompletionResponse m
 
 
 -- ============================================================================
@@ -163,45 +181,45 @@ class Provider provider model => CompletionProvider provider model where
 -- ============================================================================
 
 -- Handler for encoding a single message into a request patch
-type MessageEncoder provider model =
-  Message model provider -> ProviderRequest provider -> ProviderRequest provider
+type MessageEncoder m =
+  Message m -> ProviderRequest m -> ProviderRequest m
 
 -- Handler for modifying request based on configs
-type ConfigEncoder provider model =
-  ProviderRequest provider -> ProviderRequest provider
+type ConfigEncoder m =
+  ProviderRequest m -> ProviderRequest m
 
 -- Handler for unfolding response into individual provider messages
 -- Returns one message at a time, plus remaining response
 -- Left err: API error or parse failure
 -- Right Nothing: Successfully processed, no more messages to extract
 -- Right (Just (msg, rest)): Successfully extracted message, continue with rest
-type ResponseUnfolder provider model =
-  ProviderResponse provider -> Either LLMError (Maybe (Message model provider, ProviderResponse provider))
+type ResponseUnfolder m =
+  ProviderResponse m -> Either LLMError (Maybe (Message m, ProviderResponse m))
 
--- Collection of handlers for a specific provider/model/config combination
-data ComposableProviderHandlers provider model state = ComposableProviderHandlers
+-- Collection of handlers for a specific model/provider/config combination
+data ComposableProviderHandlers m state = ComposableProviderHandlers
   { -- Request building phase
-    cpPureMessageRequest :: [Message model provider] -> [Message model provider]
-  , cpToRequest :: MessageEncoder provider model
-  , cpConfigHandler :: ConfigEncoder provider model
-  , cpPreRequest :: ProviderRequest provider -> state -> state
+    cpPureMessageRequest :: [Message m] -> [Message m]
+  , cpToRequest :: MessageEncoder m
+  , cpConfigHandler :: ConfigEncoder m
+  , cpPreRequest :: ProviderRequest m -> state -> state
 
   -- Response parsing phase
-  , cpPostResponse :: ProviderResponse provider -> state -> state
-  , cpFromResponse :: ResponseUnfolder provider model
-  , cpPureMessageResponse :: [Message model provider] -> [Message model provider]
+  , cpPostResponse :: ProviderResponse m -> state -> state
+  , cpFromResponse :: ResponseUnfolder m
+  , cpPureMessageResponse :: [Message m] -> [Message m]
 
   -- Serialization
-  , cpSerializeMessage :: Message model provider -> Maybe Value
-  , cpDeserializeMessage :: Value -> Maybe (Message model provider)
+  , cpSerializeMessage :: Message m -> Maybe Value
+  , cpDeserializeMessage :: Value -> Maybe (Message m)
   }
 
 -- ComposableProvider is now a function that builds handlers given context
-type ComposableProvider provider model state =
-  provider -> model -> [ModelConfig provider model] -> state -> ComposableProviderHandlers provider model state
+type ComposableProvider m state =
+  m -> [ModelConfig m] -> state -> ComposableProviderHandlers m state
 
 -- No-op handler collection (all functions are identity or return Nothing)
-noopHandler :: ComposableProviderHandlers provider model state
+noopHandler :: ComposableProviderHandlers m state
 noopHandler = ComposableProviderHandlers
   { cpPureMessageRequest = id
   , cpToRequest = \_ req -> req
@@ -215,7 +233,7 @@ noopHandler = ComposableProviderHandlers
   }
 
 -- Chain two handler collections together
-chainProvidersAt :: ComposableProviderHandlers provider model s -> ComposableProviderHandlers provider model s' -> ComposableProviderHandlers provider model (s,s')
+chainProvidersAt :: ComposableProviderHandlers m s -> ComposableProviderHandlers m s' -> ComposableProviderHandlers m (s,s')
 chainProvidersAt h1 h2 = ComposableProviderHandlers
   { cpPureMessageRequest = cpPureMessageRequest h1 . cpPureMessageRequest h2
   , cpToRequest = \msg req -> cpToRequest h2 msg (cpToRequest h1 msg req)
@@ -233,27 +251,26 @@ chainProvidersAt h1 h2 = ComposableProviderHandlers
 
 -- Chain two providers together, applying cp1 first then cp2
 infixr 6 `chainProviders`
-chainProviders :: ComposableProvider provider model s
-               -> ComposableProvider provider model s'
-               -> ComposableProvider provider model (s,s')
-chainProviders cp1 cp2 p m configs (s,s') =
-  (cp1 p m configs s) `chainProvidersAt` (cp2 p m configs s')
+chainProviders :: ComposableProvider m s
+               -> ComposableProvider m s'
+               -> ComposableProvider m (s,s')
+chainProviders cp1 cp2 m configs (s,s') =
+  (cp1 m configs s) `chainProvidersAt` (cp2 m configs s')
 
 -- Helper functions for building requests and parsing responses
 
 -- Build a provider request from messages using the model's provider implementation
 -- The base provider is responsible for creating the initial empty request structure
-toProviderRequest :: (Monoid (ProviderRequest provider))
-                  => ComposableProvider provider model providerstackstate
-                  -> provider
-                  -> model
-                  -> [ModelConfig provider model]
+toProviderRequest :: (Monoid (ProviderRequest m))
+                  => ComposableProvider m providerstackstate
+                  -> m
+                  -> [ModelConfig m]
                   -> providerstackstate
-                  -> [Message model provider]
-                  -> (providerstackstate, ProviderRequest provider)
-toProviderRequest composableProvider provider model configs s msgs =
-  let 
-      handlers = composableProvider provider model configs s
+                  -> [Message m]
+                  -> (providerstackstate, ProviderRequest m)
+toProviderRequest composableProvider model configs s msgs =
+  let
+      handlers = composableProvider model configs s
       -- Apply pure message transformations first
       pureMessages = cpPureMessageRequest handlers msgs
       -- Fold over messages, encoding each one
@@ -265,15 +282,14 @@ toProviderRequest composableProvider provider model configs s msgs =
 
 -- Parse a provider response using the model's provider implementation
 fromProviderResponse :: ()
-                     => ComposableProvider provider model providerstackstate
-                     -> provider
-                     -> model
-                     -> [ModelConfig provider model]
+                     => ComposableProvider m providerstackstate
+                     -> m
+                     -> [ModelConfig m]
                      -> providerstackstate
-                     -> ProviderResponse provider
-                     -> Either LLMError (providerstackstate, [Message model provider])
-fromProviderResponse composableProvider provider model configs s resp =
-  let handlers = composableProvider provider model configs s
+                     -> ProviderResponse m
+                     -> Either LLMError (providerstackstate, [Message m])
+fromProviderResponse composableProvider model configs s resp =
+  let handlers = composableProvider model configs s
   in case unfoldMessages (cpFromResponse handlers) resp of
       Left err -> Left err
       Right messages ->
@@ -283,7 +299,7 @@ fromProviderResponse composableProvider provider model configs s resp =
             s' = cpPostResponse handlers resp s
         in Right (s', pureMessages)
   where
-    unfoldMessages :: ResponseUnfolder provider model -> ProviderResponse provider -> Either LLMError [Message model provider]
+    unfoldMessages :: ResponseUnfolder m -> ProviderResponse m -> Either LLMError [Message m]
     unfoldMessages unfolder response =
       case unfolder response of
         Left err -> Left err
@@ -293,18 +309,18 @@ fromProviderResponse composableProvider provider model configs s resp =
           return (msg : rest)
 
 -- GADT Messages with capability constraints
-data Message model provider where
-  UserText :: Text -> Message model provider
-  UserImage :: HasVision model provider => Text -> Text -> Message model provider
-  UserRequestJSON :: HasJSON model provider => Text -> Value -> Message model provider  -- Text query + JSON schema
-  AssistantText :: Text -> Message model provider
-  AssistantReasoning :: HasReasoning model provider => Text -> Message model provider
-  AssistantTool :: HasTools model provider => ToolCall -> Message model provider
-  AssistantJSON :: HasJSON model provider => Value -> Message model provider
-  SystemText :: Text -> Message model provider
-  ToolResultMsg :: HasTools model provider => ToolResult -> Message model provider
+data Message m where
+  UserText :: Text -> Message m
+  UserImage :: HasVision m => Text -> Text -> Message m
+  UserRequestJSON :: HasJSON m => Text -> Value -> Message m  -- Text query + JSON schema
+  AssistantText :: Text -> Message m
+  AssistantReasoning :: HasReasoning m => Text -> Message m
+  AssistantTool :: HasTools m => ToolCall -> Message m
+  AssistantJSON :: HasJSON m => Value -> Message m
+  SystemText :: Text -> Message m
+  ToolResultMsg :: HasTools m => ToolResult -> Message m
 
-instance Show (Message model provider) where
+instance Show (Message m) where
   show (UserText _) = "UserText"
   show (UserImage _ _) = "UserImage"
   show (UserRequestJSON _ _) = "UserRequestJSON"
@@ -315,7 +331,7 @@ instance Show (Message model provider) where
   show (SystemText _) = "SystemText"
   show (ToolResultMsg _) = "ToolResultMsg"
 
-instance Eq (Message model provider) where
+instance Eq (Message m) where
   UserText t1 == UserText t2 = t1 == t2
   UserImage url1 desc1 == UserImage url2 desc2 = url1 == url2 && desc1 == desc2
   UserRequestJSON q1 s1 == UserRequestJSON q2 s2 = q1 == q2 && s1 == s2
@@ -331,7 +347,7 @@ instance Eq (Message model provider) where
 data MessageDirection = User | Assistant
   deriving (Eq, Show)
 
-messageDirection :: Message model provider -> MessageDirection
+messageDirection :: Message m -> MessageDirection
 messageDirection (UserText _) = User
 messageDirection (UserImage _ _) = User
 messageDirection (UserRequestJSON _ _) = User
@@ -348,83 +364,78 @@ messageDirection (AssistantJSON _) = Assistant
 
 -- Completion-specific handler types (no messages, just prompts)
 -- Note: CompletionProvider constraint needed for access to CompletionRequest/CompletionResponse
-type PromptHandler provider model =
-  provider
-  -> model
-  -> [ModelConfig provider model]
+type PromptHandler m =
+  m
+  -> [ModelConfig m]
   -> Text  -- The prompt
-  -> CompletionRequest provider
-  -> CompletionRequest provider
+  -> CompletionRequest m
+  -> CompletionRequest m
 
 -- Config handler for completions (reuse pattern, but different request type)
-type CompletionConfigHandler provider model =
-  provider
-  -> model
-  -> [ModelConfig provider model]
-  -> CompletionRequest provider
-  -> CompletionRequest provider
+type CompletionConfigHandler m =
+  m
+  -> [ModelConfig m]
+  -> CompletionRequest m
+  -> CompletionRequest m
 
 -- Completion parser extracts text from response
-type CompletionParser provider model =
-  provider
-  -> model
-  -> [ModelConfig provider model]
+type CompletionParser m =
+  m
+  -> [ModelConfig m]
   -> Text  -- Original prompt (for context)
-  -> CompletionResponse provider
+  -> CompletionResponse m
   -> Text  -- Completed text
 
 -- Composable completion provider (simpler than chat)
-data ComposableCompletionProvider provider model = ComposableCompletionProvider
-  { ccpToRequest :: PromptHandler provider model
-  , ccpConfigHandler :: CompletionConfigHandler provider model
-  , ccpFromResponse :: CompletionParser provider model
+data ComposableCompletionProvider m = ComposableCompletionProvider
+  { ccpToRequest :: PromptHandler m
+  , ccpConfigHandler :: CompletionConfigHandler m
+  , ccpFromResponse :: CompletionParser m
   }
 
 -- Provider implementation for completions
-class Provider provider model => CompletionProviderImplementation provider model where
-  getComposableCompletionProvider :: ComposableCompletionProvider provider model
+class Provider m => CompletionProviderImplementation m where
+  getComposableCompletionProvider :: ComposableCompletionProvider m
 
 -- Chain two completion providers together
 infixl 6 `chainCompletionProviders`
-chainCompletionProviders :: ComposableCompletionProvider provider model
-                         -> ComposableCompletionProvider provider model
-                         -> ComposableCompletionProvider provider model
+chainCompletionProviders :: ComposableCompletionProvider m
+                         -> ComposableCompletionProvider m
+                         -> ComposableCompletionProvider m
 chainCompletionProviders cp1 cp2 = ComposableCompletionProvider
-  { ccpToRequest = \provider model configs prompt req ->
-      let req' = ccpToRequest cp1 provider model configs prompt req
-      in ccpToRequest cp2 provider model configs prompt req'
-  , ccpConfigHandler = \provider model configs req ->
-      let req' = ccpConfigHandler cp1 provider model configs req
-      in ccpConfigHandler cp2 provider model configs req'
-  , ccpFromResponse = \provider model configs prompt resp ->
-      ccpFromResponse cp2 provider model configs prompt resp  -- Note: only cp2 sees the response (cp1 ignored)
+  { ccpToRequest = \model configs prompt req ->
+      let req' = ccpToRequest cp1 model configs prompt req
+      in ccpToRequest cp2 model configs prompt req'
+  , ccpConfigHandler = \model configs req ->
+      let req' = ccpConfigHandler cp1 model configs req
+      in ccpConfigHandler cp2 model configs req'
+  , ccpFromResponse = \model configs prompt resp ->
+      ccpFromResponse cp2 model configs prompt resp  -- Note: only cp2 sees the response (cp1 ignored)
   }
 
 -- Build a completion request from a prompt
-toCompletionRequest :: (CompletionProviderImplementation provider model, Monoid (CompletionRequest provider))
-                    => provider
-                    -> model
-                    -> [ModelConfig provider model]
+toCompletionRequest :: (CompletionProviderImplementation m, Monoid (CompletionRequest m))
+                    => m
+                    -> [ModelConfig m]
                     -> Text  -- The prompt
-                    -> CompletionRequest provider
-toCompletionRequest provider model configs prompt =
+                    -> CompletionRequest m
+toCompletionRequest model configs prompt =
   let composableProvider = getComposableCompletionProvider
       promptHandler = ccpToRequest composableProvider
       configHandler = ccpConfigHandler composableProvider
       -- Apply prompt handler
-      reqAfterPrompt = promptHandler provider model configs prompt mempty
+      reqAfterPrompt = promptHandler model configs prompt mempty
       -- Apply config handlers
-  in configHandler provider model configs reqAfterPrompt
+  in configHandler model configs reqAfterPrompt
 
 -- Parse a completion response
-fromCompletionResponse :: CompletionProviderImplementation provider model
-                       => provider
-                       -> model
-                       -> [ModelConfig provider model]
+fromCompletionResponse :: CompletionProviderImplementation m
+                       => m
+                       -> [ModelConfig m]
                        -> Text  -- Original prompt
-                       -> CompletionResponse provider
+                       -> CompletionResponse m
                        -> Text  -- Completed text
-fromCompletionResponse provider model configs prompt resp =
+fromCompletionResponse model configs prompt resp =
   let composableProvider = getComposableCompletionProvider
       parser = ccpFromResponse composableProvider
-  in parser provider model configs prompt resp
+  in parser model configs prompt resp

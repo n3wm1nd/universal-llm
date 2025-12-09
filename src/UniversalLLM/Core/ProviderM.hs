@@ -31,65 +31,61 @@ import UniversalLLM.Core.Types
 -- | ProviderM is a monad that threads provider state automatically.
 -- It wraps StateT to manage state implicitly while allowing access to
 -- arbitrary base monad operations (IO, ExceptT, etc.).
-newtype ProviderM provider model s m a =
+newtype ProviderM model s m a =
   ProviderM (StateT s m a)
   deriving (Functor, Applicative, Monad, MonadTrans)
 
 -- | Core entry point: run the provider monad with explicit state management.
 -- Returns both the final state and the result.
-withProviderState :: forall provider model s m a.
+withProviderState :: forall model s m a.
                      (Monad m)
-                  => ComposableProvider provider model s
-                  -> provider
+                  => ComposableProvider model s
                   -> model
                   -> s
-                  -> ProviderM provider model s m a
+                  -> ProviderM model s m a
                   -> m (s, a)
-withProviderState _cp _provider _model initialState (ProviderM stateAction) =
+withProviderState _cp _model initialState (ProviderM stateAction) =
   fmap (\(a, s) -> (s, a)) $ runStateT stateAction initialState
 
 -- | Convenience wrapper: initialize state with Default and discard final state.
-withProvider :: forall provider model s m a.
+withProvider :: forall model s m a.
                 (Monad m, Default s)
-             => ComposableProvider provider model s
-             -> provider
+             => ComposableProvider model s
              -> model
-             -> ProviderM provider model s m a
+             -> ProviderM model s m a
              -> m a
-withProvider cp provider model monad =
-  fmap snd $ withProviderState cp provider model def monad
+withProvider cp model action =
+  fmap snd $ withProviderState cp model def action
 
 -- | Build a provider request from messages.
 -- State is threaded implicitly through the monad.
-toRequest :: forall provider model s m.
-             (Monad m, Monoid (ProviderRequest provider))
-          => ComposableProvider provider model s
-          -> provider
+toRequest :: forall model s m.
+             (Monad m, Monoid (ProviderRequest model))
+          => ComposableProvider model s
           -> model
-          -> [ModelConfig provider model]
-          -> [Message model provider]
-          -> ProviderM provider model s m (ProviderRequest provider)
-toRequest composableProvider provider model configs messages =
+          -> [ModelConfig model]
+          -> [Message model]
+          -> ProviderM model s m (ProviderRequest model)
+toRequest composableProvider model configs messages =
   ProviderM $ do
     state <- get
-    let (newState, request) = toProviderRequest composableProvider provider model configs state messages
+    let (newState, request) = toProviderRequest composableProvider model configs state messages
     put newState
     pure request
 
 -- | Parse a provider response into messages.
 -- State is threaded implicitly through the monad.
-fromResponse :: forall provider model s m.
+fromResponse :: forall model s m.
                 (MonadFail m)
-             => ComposableProvider provider model s
-             -> provider
+             => ComposableProvider model s
              -> model
-             -> [ModelConfig provider model]
-             -> ProviderResponse provider
-             -> ProviderM provider model s m [Message model provider]
-fromResponse composableProvider provider model configs response =
+             -> [ModelConfig model]
+             -> ProviderResponse model
+             -> ProviderM model s m [Message model]
+fromResponse composableProvider model configs response =
   ProviderM $ do
     state <- get
-    case fromProviderResponse composableProvider provider model configs state response of
+    case fromProviderResponse composableProvider model configs state response of
       Left err -> fail $ "LLM error: " ++ show err
       Right (newState, messages) -> do
         put newState
@@ -99,20 +95,19 @@ fromResponse composableProvider provider model configs response =
 -- The query function takes messages and returns response messages.
 -- Usage: resp <- query [UserText "question"]
 --        resp2 <- query (resp <> [UserText "followup"])
-withProviderCall :: forall provider model s m a.
-                    (MonadFail m, Default s, Monoid (ProviderRequest provider))
-                 => ComposableProvider provider model s
-                 -> provider
+withProviderCall :: forall model s m a.
+                    (MonadFail m, Default s, Monoid (ProviderRequest model))
+                 => ComposableProvider model s
                  -> model
-                 -> [ModelConfig provider model]
-                 -> (ProviderRequest provider -> m (ProviderResponse provider))
-                 -> (([Message model provider] -> ProviderM provider model s m [Message model provider]) -> ProviderM provider model s m a)
+                 -> [ModelConfig model]
+                 -> (ProviderRequest model -> m (ProviderResponse model))
+                 -> (([Message model] -> ProviderM model s m [Message model]) -> ProviderM model s m a)
                  -> m a
-withProviderCall cp provider model configs callLLM mkProgram =
-  withProvider cp provider model (mkProgram query)
+withProviderCall cp model configs callLLM mkProgram =
+  withProvider cp model (mkProgram query)
   where
-    query :: [Message model provider] -> ProviderM provider model s m [Message model provider]
+    query :: [Message model] -> ProviderM model s m [Message model]
     query msgs = do
-      request <- toRequest cp provider model configs msgs
+      request <- toRequest cp model configs msgs
       response <- lift $ callLLM request
-      fromResponse cp provider model configs response
+      fromResponse cp model configs response

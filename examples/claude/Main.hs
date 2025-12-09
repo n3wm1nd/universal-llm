@@ -36,15 +36,15 @@ import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
 -- Claude Sonnet 4.5 model
 data ClaudeSonnet45 = ClaudeSonnet45 deriving (Show, Eq)
 
-instance ModelName Anthropic ClaudeSonnet45 where
+instance ModelName (Model ClaudeSonnet45 Anthropic) where
   modelName _ = "claude-sonnet-4-5-20250929"
 
-instance HasTools ClaudeSonnet45 Anthropic where
+instance HasTools (Model ClaudeSonnet45 Anthropic) where
   withTools = AnthropicProvider.anthropicTools
 
 -- Composable provider for ClaudeSonnet45 with tools
-claudeSonnet45ComposableProvider :: ComposableProvider Anthropic ClaudeSonnet45 ((), ())
-claudeSonnet45ComposableProvider = withTools `chainProviders` AnthropicProvider.baseComposableProvider @ClaudeSonnet45
+claudeSonnet45ComposableProvider :: ComposableProvider (Model ClaudeSonnet45 Anthropic) ((), ())
+claudeSonnet45ComposableProvider = withTools `chainProviders` AnthropicProvider.baseComposableProvider @(Model ClaudeSonnet45 Anthropic)
 
 -- ============================================================================
 -- Tool Definition
@@ -104,26 +104,25 @@ mkAnthropicCall oauthToken =
 
 -- Main agent loop - continues until text response (non-tool)
 -- This is polymorphic over BOTH provider and model
-agentLoop :: forall provider model req resp state.
-             (HasTools model provider,
-              req ~ ProviderRequest provider, resp ~ ProviderResponse provider,
+agentLoop :: forall m req resp state.
+             (HasTools m,
+              req ~ ProviderRequest m, resp ~ ProviderResponse m,
               Monoid req)
-          => ComposableProvider provider model state
-          -> provider
-          -> model
+          => ComposableProvider m state
+          -> m
           -> state
           -> [LLMTool IO]
           -> LLMCall req resp
-          -> [ModelConfig provider model]
-          -> [Message model provider]
+          -> [ModelConfig m]
+          -> [Message m]
           -> ExceptT LLMError IO ()
-agentLoop composableProvider provider model state tools callLLM configs messages = do
+agentLoop composableProvider model state tools callLLM configs messages = do
   -- Build and send request (provider-agnostic)
-  let request = snd $ toProviderRequest composableProvider provider model configs state messages
+  let request = snd $ toProviderRequest composableProvider model configs state messages
   response <- callLLM request
 
   -- Parse response (provider-agnostic)
-  responses <- case fromProviderResponse composableProvider provider model configs state response of
+  responses <- case fromProviderResponse composableProvider model configs state response of
     Left err -> except $ Left err
     Right (_state, msgs) ->
       if null msgs
@@ -133,14 +132,14 @@ agentLoop composableProvider provider model state tools callLLM configs messages
   newMsgs <- liftIO $ concat <$> mapM (handleResponse tools) responses
   -- Continue loop only if there are tool results to send back
   unless (null newMsgs) $
-    agentLoop composableProvider provider model state tools callLLM configs (messages ++ responses ++ newMsgs)
+    agentLoop composableProvider model state tools callLLM configs (messages ++ responses ++ newMsgs)
 
 -- Handle different response types (polymorphic over provider and model)
 -- Returns empty list for text (stops loop), tool results for tool calls (continues loop)
-handleResponse :: forall provider model. HasTools model provider
+handleResponse :: forall m. HasTools m
                => [LLMTool IO]
-               -> Message model provider
-               -> IO [Message model provider]
+               -> Message m
+               -> IO [Message m]
 handleResponse _ (AssistantText text) = do
   putStrLn $ "🤖 " <> T.unpack text
   return [] -- Empty list stops the loop
@@ -183,8 +182,7 @@ main = do
       tools = [LLMTool getTimeTool]
 
   -- Concrete provider and model selection (only place where specific types matter)
-  let provider = Anthropic
-      model = ClaudeSonnet45
+  let model = Model ClaudeSonnet45 Anthropic
 
   -- Build config
   let toolDefs = map llmToolToDefinition tools
@@ -195,7 +193,7 @@ main = do
   let initialMsg = [UserText "Use the get_time tool to tell me what time it is."]
 
   -- Business logic (agentLoop) is polymorphic - works with any provider/model
-  result <- runExceptT $ agentLoop claudeSonnet45ComposableProvider provider model ((), ()) tools callClaude configs initialMsg
+  result <- runExceptT $ agentLoop claudeSonnet45ComposableProvider model ((), ()) tools callClaude configs initialMsg
   case result of
     Left err -> putStrLn $ "❌ Error: " <> show err
     Right () -> return ()

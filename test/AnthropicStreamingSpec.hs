@@ -20,33 +20,33 @@ import qualified UniversalLLM.Providers.Anthropic as Provider
 import Data.Default (Default(..))
 
 -- Helper to build streaming request - uses ClaudeSonnet45 with basic composition
--- (Wrapper around the generic version that provides the specific model and composable provider)
-buildStreamingRequest :: [ModelConfig Provider.Anthropic TestModels.ClaudeSonnet45]
-                     -> [Message TestModels.ClaudeSonnet45 Provider.Anthropic]
+-- (Wrapper around generic version that provides specific model and composable provider)
+buildStreamingRequest :: [ModelConfig (Model TestModels.ClaudeSonnet45 Provider.Anthropic)]
+                     -> [Message (Model TestModels.ClaudeSonnet45 Provider.Anthropic)]
                      -> AnthropicRequest
-buildStreamingRequest = buildStreamingRequestGeneric TestModels.anthropicSonnet45 TestModels.ClaudeSonnet45 ((), ())
+buildStreamingRequest configs msgs = buildStreamingRequestGeneric TestModels.anthropicSonnet45 (Model TestModels.ClaudeSonnet45 Provider.Anthropic) ((), ()) configs msgs
 
 -- Helper to build streaming request - uses ClaudeSonnet45WithReasoning
-buildStreamingRequestWithReasoning :: [ModelConfig Provider.Anthropic TestModels.ClaudeSonnet45WithReasoning]
-                                 -> [Message TestModels.ClaudeSonnet45WithReasoning Provider.Anthropic]
+buildStreamingRequestWithReasoning :: [ModelConfig (Model TestModels.ClaudeSonnet45WithReasoning Provider.Anthropic)]
+                                 -> [Message (Model TestModels.ClaudeSonnet45WithReasoning Provider.Anthropic)]
                                  -> AnthropicRequest
-buildStreamingRequestWithReasoning = buildStreamingRequestGeneric TestModels.anthropicSonnet45Reasoning TestModels.ClaudeSonnet45WithReasoning (def, ((), ()))
+buildStreamingRequestWithReasoning configs msgs = buildStreamingRequestGeneric TestModels.anthropicSonnet45Reasoning (Model TestModels.ClaudeSonnet45WithReasoning Provider.Anthropic) (def, ((), ())) configs msgs
 
 -- Generic helper to build streaming request with explicit composable provider
-buildStreamingRequestGeneric :: forall model s. ComposableProvider Provider.Anthropic model s
-                           -> model
+buildStreamingRequestGeneric :: forall model s. ComposableProvider (Model model Provider.Anthropic) s
+                           -> Model model Provider.Anthropic
                            -> s
-                           -> [ModelConfig Provider.Anthropic model]
-                           -> [Message model Provider.Anthropic]
+                           -> [ModelConfig (Model model Provider.Anthropic)]
+                           -> [Message (Model model Provider.Anthropic)]
                            -> AnthropicRequest
-buildStreamingRequestGeneric composableProvider model s configs = snd . toProviderRequest composableProvider Provider.Anthropic model configs s
+buildStreamingRequestGeneric composableProvider modelValue s configs msgs = snd $ toProviderRequest composableProvider modelValue configs s msgs
 
 spec :: ResponseProvider AnthropicRequest BSL.ByteString -> Spec
 spec getResponse = do
   describe "Anthropic Streaming Responses (SSE Format)" $ do
 
     it "sends streaming request and receives SSE response with message_stop event" $ do
-      let model = ClaudeSonnet45
+      let model = Model ClaudeSonnet45 Provider.Anthropic
           configs = [MaxTokens 100, Streaming True]
           msgs = [UserText "Say hello"]
           req = Provider.withMagicSystemPrompt $
@@ -69,7 +69,7 @@ spec getResponse = do
       T.isInfixOf "message_stop" (T.pack bodyStr) `shouldBe` True
 
     it "sends streaming request with tools and receives SSE response with tool_use event" $ do
-      let model = ClaudeSonnet45
+      let model = Model ClaudeSonnet45 Provider.Anthropic
           toolDef = ToolDefinition
             { toolDefName = "get_weather"
             , toolDefDescription = "Get the weather for a location"
@@ -111,7 +111,7 @@ spec getResponse = do
 
     it "sends streaming request with extended thinking and receives SSE response with thinking_delta events" $ do
       -- Use ClaudeSonnet45WithReasoning for this test since reasoning requires HasReasoning instance
-      let model = ClaudeSonnet45WithReasoning
+      let model = Model ClaudeSonnet45WithReasoning Provider.Anthropic
           configs = [MaxTokens 16000, Streaming True, Reasoning True]
           msgs = [UserText "Solve this puzzle: What has cities but no houses, forests but no trees, and water but no fish?"]
           req = Provider.withMagicSystemPrompt $
@@ -139,7 +139,7 @@ spec getResponse = do
       T.isInfixOf "message_stop" (T.pack bodyStr) `shouldBe` True
 
     it "sends streaming request with thinking and tools, receives SSE response with thinking and tool_use events" $ do
-      let model = ClaudeSonnet45WithReasoning
+      let model = Model ClaudeSonnet45WithReasoning Provider.Anthropic
           toolDef = ToolDefinition
             { toolDefName = "get_weather"
             , toolDefDescription = "Get the weather for a location"
@@ -187,7 +187,7 @@ spec getResponse = do
       T.isInfixOf "message_stop" (T.pack bodyStr) `shouldBe` True
 
     it "handles multiple content blocks in order (thinking and tool_use)" $ do
-      let model = ClaudeSonnet45WithReasoning
+      let model = Model ClaudeSonnet45WithReasoning Provider.Anthropic
           toolDef = ToolDefinition
             { toolDefName = "get_weather"
             , toolDefDescription = "Get weather"

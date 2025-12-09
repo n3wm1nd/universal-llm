@@ -36,18 +36,18 @@ import Network.HTTP.Simple (httpLBS, setRequestBodyLBS, setRequestHeaders, parse
 -- Define the specific model we're using in this proxy
 data GPT4o = GPT4o deriving (Show, Eq)
 
-instance ModelName OpenAI GPT4o where
+instance ModelName (Model GPT4o OpenAI) where
   modelName _ = "gpt-4o"
 
-instance HasTools GPT4o OpenAI where
+instance HasTools (Model GPT4o OpenAI) where
   withTools = OpenAIProvider.openAITools
 
-instance HasJSON GPT4o OpenAI where
+instance HasJSON (Model GPT4o OpenAI) where
   withJSON = OpenAIProvider.openAIJSON
 
 -- Composable provider for GPT4o with tools
-gpt4oComposableProvider :: ComposableProvider OpenAI GPT4o ((), ())
-gpt4oComposableProvider = withTools `chainProviders` OpenAIProvider.baseComposableProvider @OpenAI @GPT4o
+gpt4oComposableProvider :: ComposableProvider (Model GPT4o OpenAI) ((), ())
+gpt4oComposableProvider = withTools `chainProviders` OpenAIProvider.baseComposableProvider @(Model GPT4o OpenAI)
 
 -- ============================================================================
 -- Configuration
@@ -56,11 +56,8 @@ gpt4oComposableProvider = withTools `chainProviders` OpenAIProvider.baseComposab
 type BackendProvider = OpenAI
 type BackendModel = GPT4o
 
-backendProvider :: BackendProvider
-backendProvider = OpenAI
-
-backendModel :: BackendModel
-backendModel = GPT4o
+backendModel :: Model GPT4o OpenAI
+backendModel = Model GPT4o OpenAI
 
 -- ============================================================================
 -- HTTP Transport (copied from examples, will be shared eventually)
@@ -111,7 +108,7 @@ handleProxy apiKey reqBody = do
   liftIO $ putStrLn $ "📥 Received request for model: " <> T.unpack (model oaiRequest)
 
   -- 2. Convert to universal format (Messages + Config)
-  proxyConfig <- case parseOpenAIRequest @BackendProvider @BackendModel oaiRequest of
+  proxyConfig <- case parseOpenAIRequest oaiRequest of
     Left err -> throwE $ ParseError $ "Failed to parse request: " <> err
     Right cfg -> return cfg
 
@@ -119,7 +116,6 @@ handleProxy apiKey reqBody = do
 
   -- 3. Convert universal format to backend provider request
   let backendRequest = snd $ toProviderRequest gpt4oComposableProvider
-                                                 backendProvider
                                                  backendModel
                                                  (proxyConfigs proxyConfig)
                                                  ((), ())
@@ -135,7 +131,6 @@ handleProxy apiKey reqBody = do
 
   -- 5. Parse backend response to universal messages
   universalMessages <- case fromProviderResponse gpt4oComposableProvider
-                                                 backendProvider
                                                  backendModel
                                                  (proxyConfigs proxyConfig)
                                                  ((), ())
@@ -146,7 +141,7 @@ handleProxy apiKey reqBody = do
   liftIO $ putStrLn $ "🔄 Converted to " <> show (length universalMessages) <> " universal messages"
 
   -- 6. Convert universal messages back to OpenAI format
-  oaiResponse <- case buildOpenAIResponse @BackendProvider @BackendModel universalMessages of
+  oaiResponse <- case buildOpenAIResponse universalMessages of
     Left err -> throwE $ ParseError $ "Failed to build OpenAI response: " <> err
     Right resp -> return resp
 

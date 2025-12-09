@@ -3,6 +3,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeOperators #-}
 
 module CompletionSpec (spec) where
 
@@ -16,24 +17,24 @@ import UniversalLLM.Protocols.OpenAI
 import UniversalLLM.Providers.OpenAI
 
 -- Helper to build completion request
-buildCompletionRequest :: forall model. (CompletionProviderImplementation OpenAI model, ModelName OpenAI model)
-                       => model
-                       -> [ModelConfig OpenAI model]
+buildCompletionRequest :: forall m. (CompletionProviderImplementation m, ModelName m)
+                       => m
+                       -> [ModelConfig m]
                        -> Text
-                       -> OpenAICompletionRequest
-buildCompletionRequest = toCompletionRequest OpenAI
+                       -> CompletionRequest m
+buildCompletionRequest = toCompletionRequest
 
 -- Helper to parse completion response
-parseCompletion :: forall model. (CompletionProviderImplementation OpenAI model, ModelName OpenAI model)
-                => model
-                -> [ModelConfig OpenAI model]
+parseCompletion :: forall m. (CompletionProviderImplementation m, ModelName m)
+                => m
+                -> [ModelConfig m]
                 -> Text
-                -> OpenAICompletionResponse
+                -> CompletionResponse m
                 -> Either LLMError Text
 parseCompletion model configs prompt (OpenAICompletionError (OpenAIErrorResponse errDetail)) =
   Left $ ProviderError (code errDetail) $ errorMessage errDetail <> " (" <> errorType errDetail <> ")"
 parseCompletion model configs prompt resp =
-  let text = fromCompletionResponse OpenAI model configs prompt resp
+  let text = fromCompletionResponse model configs prompt resp
   in if T.null text
      then Left $ ParseError "No completion text returned"
      else Right text
@@ -43,7 +44,7 @@ spec getResponse = do
   describe "OpenAI Completion Interface" $ do
 
     it "completes a simple prompt" $ do
-      let model = GLM45  -- Using a test model
+      let model = Model GLM45 OpenAI  -- Using a test model with provider
           configs = [MaxTokens 50, Temperature 0.7]
           prompt = "The capital of France is"
 
@@ -51,7 +52,7 @@ spec getResponse = do
 
       resp <- getResponse req
 
-      case parseCompletion @GLM45 model configs prompt resp of
+      case parseCompletion model configs prompt resp of
         Right completedText -> do
           -- Should contain "Paris" or similar
           T.toLower completedText `shouldSatisfy` T.isInfixOf "paris"
@@ -61,7 +62,7 @@ spec getResponse = do
         Left err -> expectationFailure $ "parseCompletion failed: " ++ show err
 
     it "respects MaxTokens configuration" $ do
-      let model = GLM45
+      let model = Model GLM45 OpenAI
           configs = [MaxTokens 10]  -- Very short
           prompt = "Once upon a time"
 
@@ -71,7 +72,7 @@ spec getResponse = do
       completionMaxTokens req `shouldBe` Just 10
 
     it "respects Temperature configuration" $ do
-      let model = GLM45
+      let model = Model GLM45 OpenAI
           configs = [Temperature 0.5]
           prompt = "Test"
 
@@ -81,7 +82,7 @@ spec getResponse = do
       completionTemperature req `shouldBe` Just 0.5
 
     it "respects Stop sequences configuration" $ do
-      let model = GLM45
+      let model = Model GLM45 OpenAI
           configs = [Stop ["\n\n", "###"]]
           prompt = "Test"
 
@@ -91,7 +92,7 @@ spec getResponse = do
       stop req `shouldBe` Just ["\n\n", "###"]
 
     it "completes prompts with stop sequences" $ do
-      let model = GLM45
+      let model = Model GLM45 OpenAI
           configs = [MaxTokens 100, Stop ["\n"]]  -- Stop at first newline
           prompt = "List three colors: 1."
 
@@ -99,7 +100,7 @@ spec getResponse = do
 
       resp <- getResponse req
 
-      case parseCompletion @GLM45 model configs prompt resp of
+      case parseCompletion model configs prompt resp of
         Right completedText -> do
           -- Should have stopped at first newline, so text should be relatively short
           -- and not contain multiple list items
@@ -108,17 +109,17 @@ spec getResponse = do
         Left err -> expectationFailure $ "parseCompletion failed: " ++ show err
 
     it "sets the model name in the request" $ do
-      let model = GLM45
+      let model = Model GLM45 OpenAI
           configs = []
           prompt = "Test"
 
           req = buildCompletionRequest model configs prompt
 
       -- Verify model name is set correctly
-      completionModel req `shouldBe` modelName @OpenAI GLM45
+      completionModel req `shouldBe` modelName (Model GLM45 OpenAI)
 
     it "sets the prompt in the request" $ do
-      let model = GLM45
+      let model = Model GLM45 OpenAI
           configs = []
           testPrompt = "This is a test prompt"
 

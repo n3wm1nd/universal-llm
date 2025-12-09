@@ -12,8 +12,8 @@ import Data.Text (Text)
 data SimpleModel = SimpleModel Text deriving (Show, Eq)
 
 -- Universal ModelName instance - works with any provider
-instance ModelName provider SimpleModel where
-  modelName (SimpleModel name) = name
+instance ModelName (Model SimpleModel provider) where
+  modelName (Model (SimpleModel name) _) = name
 
 -- Note: SimpleModel intentionally has no capability instances
 -- It represents the minimal baseline - text input and text output only

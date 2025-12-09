@@ -85,7 +85,7 @@ instance Arbitrary ToolCall where
     ]
 
 -- Generate Messages for ClaudeSonnet45 (Anthropic with tools)
-genMessageAnthropicTools :: Gen (Message ClaudeSonnet45 AnthropicProvider.Anthropic)
+genMessageAnthropicTools :: Gen (Message (Model ClaudeSonnet45 AnthropicProvider.Anthropic))
 genMessageAnthropicTools = oneof
   [ UserText <$> genNonEmptyText
   , AssistantText <$> genNonEmptyText
@@ -100,7 +100,7 @@ genMessageAnthropicTools = oneof
       ]
 
 -- Generate Messages for GLM45 (OpenAI with tools, reasoning, JSON)
-genMessageOpenAIFull :: Gen (Message GLM45 OpenAIProvider.OpenAI)
+genMessageOpenAIFull :: Gen (Message (Model GLM45 OpenAIProvider.OpenAI))
 genMessageOpenAIFull = oneof
   [ UserText <$> genNonEmptyText
   , AssistantText <$> genNonEmptyText
@@ -118,7 +118,7 @@ genMessageOpenAIFull = oneof
       ]
 
 -- Generate ModelConfig for Anthropic
-genConfigAnthropic :: Gen (ModelConfig AnthropicProvider.Anthropic ClaudeSonnet45)
+genConfigAnthropic :: Gen (ModelConfig (Model ClaudeSonnet45 AnthropicProvider.Anthropic))
 genConfigAnthropic = oneof
   [ Temperature <$> choose (0.0, 2.0)
   , MaxTokens <$> choose (1, 4096)
@@ -127,7 +127,7 @@ genConfigAnthropic = oneof
   ]
 
 -- Generate ModelConfig for OpenAI
-genConfigOpenAI :: Gen (ModelConfig OpenAIProvider.OpenAI GLM45)
+genConfigOpenAI :: Gen (ModelConfig (Model GLM45 OpenAIProvider.OpenAI))
 genConfigOpenAI = oneof
   [ Temperature <$> choose (0.0, 2.0)
   , MaxTokens <$> choose (1, 4096)
@@ -138,15 +138,15 @@ genConfigOpenAI = oneof
   ]
 
 
-toProviderRequestSonnet45 msg = fmap snd $ toProviderRequest anthropicSonnet45 Anthropic ClaudeSonnet45 msg ((), ())
-toProviderRequestSonnet45WithReasoning msg = fmap snd $ toProviderRequest anthropicSonnet45Reasoning Anthropic ClaudeSonnet45WithReasoning msg (def, ((), ()))
+toProviderRequestSonnet45 msg = fmap snd $ toProviderRequest anthropicSonnet45 (Model ClaudeSonnet45 Anthropic) msg ((), ())
+toProviderRequestSonnet45WithReasoning msg = fmap snd $ toProviderRequest anthropicSonnet45Reasoning (Model ClaudeSonnet45WithReasoning Anthropic) msg (def, ((), ()))
 
-toProviderRequestGLM45 msg = fmap snd $ toProviderRequest openAIGLM45 OpenAIProvider.OpenAI GLM45 msg ((), ((), ((), ())))
-toProviderRequestGLM45WithReasoning msg = fmap snd $ toProviderRequest openAIGLM45 OpenAIProvider.OpenAI GLM45 msg ((), ((), ((), ())))
+toProviderRequestGLM45 msg = fmap snd $ toProviderRequest openAIGLM45 (Model GLM45 OpenAIProvider.OpenAI) msg ((), ((), ((), ())))
+toProviderRequestGLM45WithReasoning msg = fmap snd $ toProviderRequest openAIGLM45 (Model GLM45 OpenAIProvider.OpenAI) msg ((), ((), ((), ())))
 
--- fromProviderResponse signature: composableProvider -> provider -> model -> configs -> state -> response -> (state, messages)
-fromProviderResponseGLM45 configs resp = either (error . show) snd $ fromProviderResponse openAIGLM45 OpenAIProvider.OpenAI GLM45 configs ((), ((), ((), ()))) resp
-fromProviderResponseSonnet45WithReasoning configs resp = either (error . show) snd $ fromProviderResponse anthropicSonnet45Reasoning Anthropic ClaudeSonnet45WithReasoning configs (def, ((), ())) resp
+-- fromProviderResponse signature: composableProvider -> model -> configs -> state -> response -> (state, messages)
+fromProviderResponseGLM45 configs resp = either (error . show) snd $ fromProviderResponse openAIGLM45 (Model GLM45 OpenAIProvider.OpenAI) configs ((), ((), ((), ()))) resp
+fromProviderResponseSonnet45WithReasoning configs resp = either (error . show) snd $ fromProviderResponse anthropicSonnet45Reasoning (Model ClaudeSonnet45WithReasoning Anthropic) configs (def, ((), ())) resp
 
 -- ============================================================================
 -- Property tests for Anthropic
@@ -441,7 +441,7 @@ prop_anthropicReasoningMessages = forAll reasoningMessage $ \msgs ->
       return (reasoning1 : remaining)
 
 -- Helper generator for Anthropic messages with reasoning support
-genMessageAnthropicReasoningTools :: Gen (Message ClaudeSonnet45WithReasoning AnthropicProvider.Anthropic)
+genMessageAnthropicReasoningTools :: Gen (Message (Model ClaudeSonnet45WithReasoning AnthropicProvider.Anthropic))
 genMessageAnthropicReasoningTools = oneof
   [ UserText <$> genNonEmptyText
   , AssistantText <$> genNonEmptyText

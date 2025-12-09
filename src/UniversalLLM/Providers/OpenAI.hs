@@ -216,33 +216,33 @@ instance SupportsStreaming LiteLLM
 -- OpenAI capabilities are now declared per-model (see model files)
 
 -- All OpenAI-compatible providers use the same request/response types
-instance Provider OpenAI model where
-  type ProviderRequest OpenAI = OpenAIRequest
-  type ProviderResponse OpenAI = OpenAIResponse
+instance Provider (Model aiModel OpenAI) where
+  type ProviderRequest (Model aiModel OpenAI) = OpenAIRequest
+  type ProviderResponse (Model aiModel OpenAI) = OpenAIResponse
 
-instance Provider OpenAICompatible model where
-  type ProviderRequest OpenAICompatible = OpenAIRequest
-  type ProviderResponse OpenAICompatible = OpenAIResponse
+instance Provider (Model aiModel OpenAICompatible) where
+  type ProviderRequest (Model aiModel OpenAICompatible) = OpenAIRequest
+  type ProviderResponse (Model aiModel OpenAICompatible) = OpenAIResponse
 
-instance Provider OpenRouter model where
-  type ProviderRequest OpenRouter = OpenAIRequest
-  type ProviderResponse OpenRouter = OpenAIResponse
+instance Provider (Model aiModel OpenRouter) where
+  type ProviderRequest (Model aiModel OpenRouter) = OpenAIRequest
+  type ProviderResponse (Model aiModel OpenRouter) = OpenAIResponse
 
-instance Provider LlamaCpp model where
-  type ProviderRequest LlamaCpp = OpenAIRequest
-  type ProviderResponse LlamaCpp = OpenAIResponse
+instance Provider (Model aiModel LlamaCpp) where
+  type ProviderRequest (Model aiModel LlamaCpp) = OpenAIRequest
+  type ProviderResponse (Model aiModel LlamaCpp) = OpenAIResponse
 
-instance Provider Ollama model where
-  type ProviderRequest Ollama = OpenAIRequest
-  type ProviderResponse Ollama = OpenAIResponse
+instance Provider (Model aiModel Ollama) where
+  type ProviderRequest (Model aiModel Ollama) = OpenAIRequest
+  type ProviderResponse (Model aiModel Ollama) = OpenAIResponse
 
-instance Provider VLLM model where
-  type ProviderRequest VLLM = OpenAIRequest
-  type ProviderResponse VLLM = OpenAIResponse
+instance Provider (Model aiModel VLLM) where
+  type ProviderRequest (Model aiModel VLLM) = OpenAIRequest
+  type ProviderResponse (Model aiModel VLLM) = OpenAIResponse
 
-instance Provider LiteLLM model where
-  type ProviderRequest LiteLLM = OpenAIRequest
-  type ProviderResponse LiteLLM = OpenAIResponse 
+instance Provider (Model aiModel LiteLLM) where
+  type ProviderRequest (Model aiModel LiteLLM) = OpenAIRequest
+  type ProviderResponse (Model aiModel LiteLLM) = OpenAIResponse 
 
 -- Helper: Get last message from request
 lastMessage :: OpenAIRequest -> Maybe OpenAIMessage
@@ -251,7 +251,7 @@ lastMessage req = case messages req of
   msgs -> Just (last msgs)
 
 -- Text message encoder
-handleTextMessage :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageEncoder provider model
+handleTextMessage :: forall m. (ProviderRequest m ~ OpenAIRequest) => MessageEncoder m
 handleTextMessage msg req = case msg of
   UserText txt ->
     case lastMessage req >>= appendToMessageIfSameRole "user" txt of
@@ -266,7 +266,7 @@ handleTextMessage msg req = case msg of
   _ -> req  -- Not a text message
 
 -- Tool message encoder
-handleToolMessage :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageEncoder provider model
+handleToolMessage :: forall m. (ProviderRequest m ~ OpenAIRequest) => MessageEncoder m
 handleToolMessage msg req = case msg of
   AssistantTool toolCall ->
     let tc = convertFromToolCall toolCall
@@ -280,7 +280,7 @@ handleToolMessage msg req = case msg of
   _ -> req
 
 -- JSON message encoder
-handleJSONMessage :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageEncoder provider model
+handleJSONMessage :: forall m. (ProviderRequest m ~ OpenAIRequest) => MessageEncoder m
 handleJSONMessage msg req = case msg of
   UserRequestJSON txt schema ->
     let wrappedSchema = object
@@ -298,7 +298,7 @@ handleJSONMessage msg req = case msg of
     (&) = flip ($)
 
 -- Reasoning message encoder
-handleReasoningMessage :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => MessageEncoder provider model
+handleReasoningMessage :: forall m. (ProviderRequest m ~ OpenAIRequest) => MessageEncoder m
 handleReasoningMessage msg req = case msg of
   AssistantReasoning txt -> appendMessage (reasoningMessage txt) req
   _ -> req
@@ -306,10 +306,10 @@ handleReasoningMessage msg req = case msg of
 -- Composable providers
 
 -- Base composable provider: model name, basic config, text messages
-baseComposableProvider :: forall provider model. (ModelName provider model, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model ()
-baseComposableProvider _p m configs _s = noopHandler
+baseComposableProvider :: forall m. (ModelName m, ProviderRequest m ~ OpenAIRequest, ProviderResponse m ~ OpenAIResponse) => ComposableProvider m ()
+baseComposableProvider model configs _s = noopHandler
   { cpToRequest = \msg req ->
-      let req' = req { model = modelName @provider m
+      let req' = req { model = modelName model
                      , temperature = getFirst [t | Temperature t <- configs]
                      , max_tokens = getFirst [mt | MaxTokens mt <- configs]
                      , seed = getFirst [s | Seed s <- configs]
@@ -347,8 +347,8 @@ baseComposableProvider _p m configs _s = noopHandler
         [] -> Right Nothing
 
 -- Standalone reasoning provider
-openAIReasoning :: forall provider model state. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model state
-openAIReasoning _p _m configs _s = noopHandler
+openAIReasoning :: forall m state. (HasReasoning m, ProviderRequest m ~ OpenAIRequest, ProviderResponse m ~ OpenAIResponse) => ComposableProvider m state
+openAIReasoning _m configs _s = noopHandler
   { cpToRequest = handleReasoningMessage
   , cpConfigHandler = \req ->
       let -- Only enable reasoning if the last message is from the user
@@ -388,7 +388,7 @@ openAIReasoning _p _m configs _s = noopHandler
 
     -- Move reasoning messages before text in the same sequence
     -- When we encounter reasoning after text, put reasoning first, then text
-    orderReasoningBeforeText :: [Message model provider] -> [Message model provider]
+    orderReasoningBeforeText :: [Message m] -> [Message m]
     orderReasoningBeforeText = go [] []
       where
         go accum reasoning [] = reasoning ++ accum
@@ -409,8 +409,8 @@ openAIReasoning _p _m configs _s = noopHandler
 -- OpenRouter reasoning provider - handles reasoning_details preservation
 -- This is specifically for OpenRouter which requires reasoning_details to be preserved
 -- across multi-turn conversations, especially when using tool calls with reasoning models
-openRouterReasoning :: forall provider model. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse, ReasoningState model provider ~ OpenRouterReasoningState) => ComposableProvider provider model OpenRouterReasoningState
-openRouterReasoning _p _m configs state = noopHandler
+openRouterReasoning :: forall m. (HasReasoning m, ProviderRequest m ~ OpenAIRequest, ProviderResponse m ~ OpenAIResponse, ReasoningState m ~ OpenRouterReasoningState) => ComposableProvider m OpenRouterReasoningState
+openRouterReasoning _m configs state = noopHandler
   { cpToRequest = handleReasoningMessageWithState state
   , cpConfigHandler = \req ->
       let -- Verify and add reasoning_details based on chain-of-thought verification
@@ -487,7 +487,7 @@ openRouterReasoning _p _m configs state = noopHandler
     extractReasoningFromDetails _ = Nothing
 
     -- Store reasoning_details from response for later echo-back
-    storeReasoningDetailsFromResponse :: ProviderResponse provider -> OpenRouterReasoningState -> OpenRouterReasoningState
+    storeReasoningDetailsFromResponse :: ProviderResponse m -> OpenRouterReasoningState -> OpenRouterReasoningState
     storeReasoningDetailsFromResponse (OpenAIError _) st = st
     storeReasoningDetailsFromResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) st =
       case respChoices of
@@ -511,7 +511,7 @@ openRouterReasoning _p _m configs state = noopHandler
         [] -> st
 
     -- Lookup reasoning_details when creating request
-    handleReasoningMessageWithState :: OpenRouterReasoningState -> MessageEncoder provider model
+    handleReasoningMessageWithState :: OpenRouterReasoningState -> MessageEncoder m
     handleReasoningMessageWithState st msg req = case msg of
       AssistantReasoning reasoning ->
         -- Lookup reasoning_details from state map by reasoning text
@@ -605,7 +605,7 @@ openRouterReasoning _p _m configs state = noopHandler
 
     -- Move reasoning messages before text in the same sequence
     -- When we encounter reasoning after text, put reasoning first, then text
-    orderReasoningBeforeText :: [Message model provider] -> [Message model provider]
+    orderReasoningBeforeText :: [Message m] -> [Message m]
     orderReasoningBeforeText = go [] []
       where
         go accum reasoning [] = reasoning ++ accum
@@ -624,8 +624,8 @@ openRouterReasoning _p _m configs state = noopHandler
     isAssistantText _ = False
 
 -- Standalone tools provider
-openAITools :: forall provider model . (HasTools model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model ()
-openAITools _p _m configs _s = noopHandler
+openAITools :: forall m . (HasTools m, ProviderRequest m ~ OpenAIRequest, ProviderResponse m ~ OpenAIResponse) => ComposableProvider m ()
+openAITools _m configs _s = noopHandler
   { cpToRequest = \msg req ->
       let req' = handleToolMessage msg req
           toolDefs = [defs | Tools defs <- configs]
@@ -650,8 +650,8 @@ openAITools _p _m configs _s = noopHandler
         [] -> Right Nothing
 
 -- Standalone JSON provider
-openAIJSON :: forall provider model . (HasJSON model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => ComposableProvider provider model ()
-openAIJSON _p _m _configs _s = noopHandler
+openAIJSON :: forall m . (HasJSON m, ProviderRequest m ~ OpenAIRequest, ProviderResponse m ~ OpenAIResponse) => ComposableProvider m ()
+openAIJSON _m _configs _s = noopHandler
   { cpToRequest = handleJSONMessage
   , cpFromResponse = \_ -> Right Nothing  -- Let base handler parse it
   , cpPureMessageResponse = convertTextToJSON
@@ -667,7 +667,7 @@ openAIJSON _p _m _configs _s = noopHandler
     -- a way to track request state through the response parsing pipeline.
 
     -- Convert AssistantText messages to AssistantJSON if the text is valid JSON
-    convertTextToJSON :: [Message model provider] -> [Message model provider]
+    convertTextToJSON :: [Message m] -> [Message m]
     convertTextToJSON = map convertMessage
       where
         convertMessage (AssistantText txt) =
@@ -684,9 +684,9 @@ openAIJSON _p _m _configs _s = noopHandler
 -- ============================================================================
 
 -- | Convenience wrapper: Apply base composable provider's model name and config handling (without message processing)
-handleBase :: forall provider model. (ModelName provider model, ProviderRequest provider ~ OpenAIRequest) => provider -> model -> [ModelConfig provider model] -> MessageEncoder provider model
-handleBase _p m configs _msg req =
-  let req' = req { model = modelName @provider m
+handleBase :: forall m. (ModelName m, ProviderRequest m ~ OpenAIRequest) => m -> [ModelConfig m] -> MessageEncoder m
+handleBase model configs _msg req =
+  let req' = req { model = modelName model
                  , temperature = getFirst [t | Temperature t <- configs]
                  , max_tokens = getFirst [mt | MaxTokens mt <- configs]
                  , seed = getFirst [s | Seed s <- configs]
@@ -696,50 +696,15 @@ handleBase _p m configs _msg req =
     getFirst [] = Nothing
     getFirst (x:_) = Just x
 
--- | Convenience wrapper: Apply text message handler
-handleTextMessages :: forall provider model. (ProviderRequest provider ~ OpenAIRequest) => provider -> model -> [ModelConfig provider model] -> MessageEncoder provider model
-handleTextMessages _p _m _configs = handleTextMessage
-
--- | Convenience wrapper: Apply reasoning message handler
-handleReasoning :: forall provider model s. (HasReasoning model provider, ProviderRequest provider ~ OpenAIRequest, ProviderResponse provider ~ OpenAIResponse) => provider -> model -> [ModelConfig provider model] -> s -> MessageEncoder provider model
-handleReasoning p m configs s msg req =
-  let cp = openAIReasoning @provider @model
-      handlers = cp p m configs s
-  in cpToRequest handlers msg req
-
 
 -- ============================================================================
 -- Completion Interface (Legacy /v1/completions endpoint)
 -- ============================================================================
 
 -- All OpenAI-compatible providers use the same completion request/response types
-instance Provider OpenAI model => CompletionProvider OpenAI model where
-  type CompletionRequest OpenAI = OpenAICompletionRequest
-  type CompletionResponse OpenAI = OpenAICompletionResponse
-
-instance Provider OpenAICompatible model => CompletionProvider OpenAICompatible model where
-  type CompletionRequest OpenAICompatible = OpenAICompletionRequest
-  type CompletionResponse OpenAICompatible = OpenAICompletionResponse
-
-instance Provider OpenRouter model => CompletionProvider OpenRouter model where
-  type CompletionRequest OpenRouter = OpenAICompletionRequest
-  type CompletionResponse OpenRouter = OpenAICompletionResponse
-
-instance Provider LlamaCpp model => CompletionProvider LlamaCpp model where
-  type CompletionRequest LlamaCpp = OpenAICompletionRequest
-  type CompletionResponse LlamaCpp = OpenAICompletionResponse
-
-instance Provider Ollama model => CompletionProvider Ollama model where
-  type CompletionRequest Ollama = OpenAICompletionRequest
-  type CompletionResponse Ollama = OpenAICompletionResponse
-
-instance Provider VLLM model => CompletionProvider VLLM model where
-  type CompletionRequest VLLM = OpenAICompletionRequest
-  type CompletionResponse VLLM = OpenAICompletionResponse
-
-instance Provider LiteLLM model => CompletionProvider LiteLLM model where
-  type CompletionRequest LiteLLM = OpenAICompletionRequest
-  type CompletionResponse LiteLLM = OpenAICompletionResponse
+instance Provider m => CompletionProvider m where
+  type CompletionRequest m = OpenAICompletionRequest
+  type CompletionResponse m = OpenAICompletionResponse
 
 -- Helper: Modify completion request fields
 modifyCompletionRequest :: (OpenAICompletionRequest -> OpenAICompletionRequest)
@@ -748,33 +713,33 @@ modifyCompletionRequest :: (OpenAICompletionRequest -> OpenAICompletionRequest)
 modifyCompletionRequest = id
 
 -- Prompt handler: Set the prompt and model name
-handlePrompt :: forall provider model.
+handlePrompt :: forall m.
                 (
-                 CompletionRequest provider ~ OpenAICompletionRequest,
-                 ModelName provider model)
-             =>PromptHandler provider model
-handlePrompt _provider mdl _configs prmpt req =
-  req { completionModel = modelName @provider mdl
+                 CompletionRequest m ~ OpenAICompletionRequest,
+                 ModelName m)
+             =>PromptHandler m
+handlePrompt model _configs prmpt req =
+  req { completionModel = modelName model
       , prompt = prmpt
       }
 
 -- Config handler: Apply temperature, max_tokens, and stop sequences
-configureCompletion :: forall provider model.
-                       (CompletionRequest provider ~ OpenAICompletionRequest)
-                    =>CompletionConfigHandler provider model
-configureCompletion _provider _model configs req = foldl applyConfig req configs
+configureCompletion :: forall m.
+                       (CompletionRequest m ~ OpenAICompletionRequest)
+                    =>CompletionConfigHandler m
+configureCompletion _m configs req = foldl applyConfig req configs
   where
-    applyConfig :: OpenAICompletionRequest -> ModelConfig provider model -> OpenAICompletionRequest
+    applyConfig :: OpenAICompletionRequest -> ModelConfig m -> OpenAICompletionRequest
     applyConfig r (Temperature temp) = r { completionTemperature = Just temp }
     applyConfig r (MaxTokens maxTok) = r { completionMaxTokens = Just maxTok }
     applyConfig r (Stop stopSeqs) = r { stop = Just stopSeqs }
     applyConfig r _ = r  -- Other configs don't apply to completions
 
 -- Response parser: Extract text from first completion choice
-parseCompletionResponse :: forall provider model.
-                           (CompletionResponse provider ~ OpenAICompletionResponse)
-                        =>CompletionParser provider model
-parseCompletionResponse _provider _model _configs _prompt resp =
+parseCompletionResponse :: forall m.
+                           (CompletionResponse m ~ OpenAICompletionResponse)
+                        =>CompletionParser m
+parseCompletionResponse _m _configs _prompt resp =
   case resp of
     OpenAICompletionSuccess successResp ->
       case completionChoices successResp of
@@ -783,35 +748,17 @@ parseCompletionResponse _provider _model _configs _prompt resp =
     OpenAICompletionError _err -> ""  -- Return empty on error (could be improved)
 
 -- Base completion provider
-baseCompletionProvider :: forall provider model.
-                          (CompletionRequest provider ~ OpenAICompletionRequest,
-                           CompletionResponse provider ~ OpenAICompletionResponse,
-                           ModelName provider model)
-                       =>ComposableCompletionProvider provider model
+baseCompletionProvider :: forall m.
+                          (CompletionRequest m ~ OpenAICompletionRequest,
+                           CompletionResponse m ~ OpenAICompletionResponse,
+                           ModelName m)
+                       =>ComposableCompletionProvider m
 baseCompletionProvider = ComposableCompletionProvider
-  { ccpToRequest = handlePrompt @provider @model
-  , ccpConfigHandler = configureCompletion @provider @model
-  , ccpFromResponse = parseCompletionResponse @provider @model
+  { ccpToRequest = handlePrompt @m
+  , ccpConfigHandler = configureCompletion @m
+  , ccpFromResponse = parseCompletionResponse @m
   }
 
 -- Default CompletionProviderImplementation for all models
-instance {-# OVERLAPPABLE #-} ModelName OpenAI model => CompletionProviderImplementation OpenAI model where
-  getComposableCompletionProvider = baseCompletionProvider
-
-instance {-# OVERLAPPABLE #-} ModelName OpenAICompatible model => CompletionProviderImplementation OpenAICompatible model where
-  getComposableCompletionProvider = baseCompletionProvider
-
-instance {-# OVERLAPPABLE #-} ModelName OpenRouter model => CompletionProviderImplementation OpenRouter model where
-  getComposableCompletionProvider = baseCompletionProvider
-
-instance {-# OVERLAPPABLE #-} ModelName LlamaCpp model => CompletionProviderImplementation LlamaCpp model where
-  getComposableCompletionProvider = baseCompletionProvider
-
-instance {-# OVERLAPPABLE #-} ModelName Ollama model => CompletionProviderImplementation Ollama model where
-  getComposableCompletionProvider = baseCompletionProvider
-
-instance {-# OVERLAPPABLE #-} ModelName VLLM model => CompletionProviderImplementation VLLM model where
-  getComposableCompletionProvider = baseCompletionProvider
-
-instance {-# OVERLAPPABLE #-} ModelName LiteLLM model => CompletionProviderImplementation LiteLLM model where
+instance {-# OVERLAPPABLE #-} (Provider m, ModelName m) => CompletionProviderImplementation m where
   getComposableCompletionProvider = baseCompletionProvider

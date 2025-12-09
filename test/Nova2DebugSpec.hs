@@ -21,74 +21,74 @@ spec getResponse = do
   describe "Nova 2 Lite Debug" $ do
 
     it "sends a simple text message without tools or reasoning" $ do
-      let model = Nova2Lite
+      let model = Model Nova2Lite OpenRouter
           configs = [MaxTokens 500]
-          msgs = [UserText "Hello, how are you?" :: Message Nova2Lite OpenRouter]
-          (state1, req1) = toProviderRequest openRouterNova2Lite OpenRouter model configs def msgs
+          msgs = [UserText "Hello, how are you?" :: Message (Model Nova2Lite OpenRouter)]
+          (state1, req1) = toProviderRequest openRouterNova2Lite model configs def msgs
 
       resp1 <- getResponse req1
 
-      case fromProviderResponse openRouterNova2Lite OpenRouter model configs state1 resp1 of
+      case fromProviderResponse openRouterNova2Lite model configs state1 resp1 of
         Right (_, parsedMsgs) -> do
           length parsedMsgs `shouldSatisfy` (> 0)
         Left err -> expectationFailure $ "Failed to parse response: " ++ show err
 
     it "sends a message with reasoning enabled but no tools" $ do
-      let model = Nova2Lite
+      let model = Model Nova2Lite OpenRouter
           configs = [MaxTokens 500, Reasoning True]
-          msgs = [UserText "Think step by step: what is 2+2?" :: Message Nova2Lite OpenRouter]
-          (state1, req1) = toProviderRequest openRouterNova2Lite OpenRouter model configs def msgs
+          msgs = [UserText "Think step by step: what is 2+2?" :: Message (Model Nova2Lite OpenRouter)]
+          (state1, req1) = toProviderRequest openRouterNova2Lite model configs def msgs
 
       resp1 <- getResponse req1
 
-      case fromProviderResponse openRouterNova2Lite OpenRouter model configs state1 resp1 of
+      case fromProviderResponse openRouterNova2Lite model configs state1 resp1 of
         Right (_, parsedMsgs) -> do
           length parsedMsgs `shouldSatisfy` (> 0)
         Left err -> expectationFailure $ "Failed to parse response: " ++ show err
 
     it "sends a message with tools but no reasoning" $ do
-      let model = Nova2Lite
+      let model = Model Nova2Lite OpenRouter
           toolDef = ToolDefinition "get_weather" "Get weather for a location"
                       (object ["type" .= ("object" :: Text)])
           configs = [MaxTokens 500, Tools [toolDef]]
-          msgs = [UserText "What's the weather in Paris?" :: Message Nova2Lite OpenRouter]
-          (state1, req1) = toProviderRequest openRouterNova2Lite OpenRouter model configs def msgs
+          msgs = [UserText "What's the weather in Paris?" :: Message (Model Nova2Lite OpenRouter)]
+          (state1, req1) = toProviderRequest openRouterNova2Lite model configs def msgs
 
       resp1 <- getResponse req1
 
-      case fromProviderResponse openRouterNova2Lite OpenRouter model configs state1 resp1 of
+      case fromProviderResponse openRouterNova2Lite model configs state1 resp1 of
         Right (_, parsedMsgs) -> do
           length parsedMsgs `shouldSatisfy` (> 0)
         Left err -> expectationFailure $ "Failed to parse response: " ++ show err
 
     it "sends a message with both tools and reasoning" $ do
-      let model = Nova2Lite
+      let model = Model Nova2Lite OpenRouter
           toolDef = ToolDefinition "list_files" "List files matching a pattern"
                       (object ["type" .= ("object" :: Text)])
           configs = [MaxTokens 500, Reasoning True, Tools [toolDef]]
-          msgs = [UserText "Think carefully: list all markdown files" :: Message Nova2Lite OpenRouter]
-          (state1, req1) = toProviderRequest openRouterNova2Lite OpenRouter model configs def msgs
+          msgs = [UserText "Think carefully: list all markdown files" :: Message (Model Nova2Lite OpenRouter)]
+          (state1, req1) = toProviderRequest openRouterNova2Lite model configs def msgs
 
       resp1 <- getResponse req1
 
-      case fromProviderResponse openRouterNova2Lite OpenRouter model configs state1 resp1 of
+      case fromProviderResponse openRouterNova2Lite model configs state1 resp1 of
         Right (_, parsedMsgs) -> do
           length parsedMsgs `shouldSatisfy` (> 0)
         Left err -> expectationFailure $ "Failed to parse response: " ++ show err
 
     it "multi-turn conversation with tools and reasoning" $ do
-      let model = Nova2Lite
+      let model = Model Nova2Lite OpenRouter
           toolDef = ToolDefinition "list_files" "List files matching a pattern"
                       (object ["type" .= ("object" :: Text)])
           configs = [MaxTokens 500, Reasoning True, Tools [toolDef]]
 
           -- First turn
-          msgs1 = [UserText "Think carefully: list all markdown files" :: Message Nova2Lite OpenRouter]
-          (state1, req1) = toProviderRequest openRouterNova2Lite OpenRouter model configs def msgs1
+          msgs1 = [UserText "Think carefully: list all markdown files" :: Message (Model Nova2Lite OpenRouter)]
+          (state1, req1) = toProviderRequest openRouterNova2Lite model configs def msgs1
 
       resp1 <- getResponse req1
 
-      case fromProviderResponse openRouterNova2Lite OpenRouter model configs state1 resp1 of
+      case fromProviderResponse openRouterNova2Lite model configs state1 resp1 of
         Right (state2, parsedMsgs1) -> do
           putStrLn $ "Parsed messages 1: " ++ show (map (\m -> case m of
             AssistantText _ -> "AssistantText"
@@ -105,11 +105,11 @@ spec getResponse = do
 
           -- Second turn
           let msgs2 = msgs1 ++ parsedMsgs1 ++ toolResults ++ [UserText "Thank you!"]
-              (_, req2) = toProviderRequest openRouterNova2Lite OpenRouter model configs state2 msgs2
+              (_, req2) = toProviderRequest openRouterNova2Lite model configs state2 msgs2
 
           resp2 <- getResponse req2
 
-          case fromProviderResponse openRouterNova2Lite OpenRouter model configs state2 resp2 of
+          case fromProviderResponse openRouterNova2Lite model configs state2 resp2 of
             Right (_, parsedMsgs2) -> do
               length parsedMsgs2 `shouldSatisfy` (> 0)
             Left err -> expectationFailure $ "Failed to parse response 2: " ++ show err

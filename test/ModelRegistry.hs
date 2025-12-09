@@ -14,6 +14,7 @@ import Test.Hspec
 import qualified TestModels
 import qualified StandardTests as ST
 import TestHelpers (testModel)
+import UniversalLLM.Core.Types (Model(..), Via(..))
 import UniversalLLM.Providers.Anthropic (Anthropic(..))
 import qualified UniversalLLM.Providers.OpenAI as OpenAIProvider
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
@@ -42,37 +43,37 @@ modelTests providers = do
 
   -- Anthropic Models
   describe "Claude Sonnet 4.5" $
-    testModel TestModels.anthropicSonnet45 Anthropic TestModels.ClaudeSonnet45 (anthropicProvider providers)
+    testModel TestModels.anthropicSonnet45 (Model TestModels.ClaudeSonnet45 Anthropic) (anthropicProvider providers)
       [ ST.text, ST.tools ]
 
   describe "Claude Sonnet 4.5 with Reasoning" $
-    testModel TestModels.anthropicSonnet45Reasoning Anthropic TestModels.ClaudeSonnet45WithReasoning (anthropicProvider providers)
+    testModel TestModels.anthropicSonnet45Reasoning (Model TestModels.ClaudeSonnet45WithReasoning Anthropic) (anthropicProvider providers)
       [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
   -- LlamaCpp Models
   -- GLM 4.5 via llama.cpp - Test against llama.cpp server when the model is loaded
   describe "GLM 4.5 (llama.cpp)" $
-    testModel TestModels.llamaCppGLM45 LlamaCpp TestModels.GLM45 (llamacppProvider providers)
+    testModel TestModels.llamaCppGLM45 (Model TestModels.GLM45 LlamaCpp) (llamacppProvider providers)
       [ ST.text, ST.tools, ST.reasoning ]
 
   -- OpenRouter Models
   -- GLM 4.5 via OpenRouter
   describe "GLM 4.5 (OpenRouter)" $
-    testModel TestModels.openRouterGLM45 OpenRouter TestModels.GLM45 (openrouterProvider providers)
+    testModel TestModels.openRouterGLM45 (Model TestModels.GLM45 OpenRouter) (openrouterProvider providers)
       [ ST.text, ST.tools, ST.reasoning ]
 
   -- Amazon Nova 2 Lite via OpenRouter - Note: Nova doesn't return AssistantReasoning via OpenRouter
   describe "Amazon Nova 2 Lite (OpenRouter)" $
-    testModel TestModels.openRouterNova2Lite OpenRouter TestModels.Nova2Lite (openrouterProvider providers)
+    testModel TestModels.openRouterNova2Lite (Model TestModels.Nova2Lite OpenRouter) (openrouterProvider providers)
       [ ST.text, ST.tools, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
 
   -- Google Gemini 3 Pro Preview via OpenRouter - Test reasoning_details preservation with tool calls
   describe "Gemini 3 Pro Preview (OpenRouter)" $
-    testModel TestModels.openRouterGemini3ProPreview OpenRouter TestModels.Gemini3ProPreview (openrouterProvider providers)
+    testModel TestModels.openRouterGemini3ProPreview (Model TestModels.Gemini3ProPreview OpenRouter) (openrouterProvider providers)
       [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
 
   -- ZAI Models
   -- GLM 4.5 via ZAI coding endpoint
   describe "GLM 4.5 (ZAI)" $
-    testModel TestModels.zaiGLM45 ZAI TestModels.GLM45 (zaiProvider providers)
+    testModel TestModels.zaiGLM45 (Model TestModels.GLM45 ZAI) (zaiProvider providers)
       [ ST.text, ST.tools, ST.reasoning ]

@@ -78,10 +78,10 @@ spec = do
     describe "toToolDefinition -> OpenAI Protocol" $ do
       it "generates valid OpenAI tool structure from Tool instance" $ do
         let toolDef = toToolDefinition calculatorToolWrapped
-            model = GLM45
+            model = Model GLM45 OpenAI.OpenAI
             configs = [Tools [toolDef]]
-            msgs = [UserText "Calculate 5 + 3" :: Message GLM45 OpenAI.OpenAI]
-            req = snd $ toProviderRequest openAIGLM45 OpenAI.OpenAI GLM45 configs ((), ((), ((), ()))) msgs
+            msgs = [UserText "Calculate 5 + 3" :: Message (Model GLM45 OpenAI.OpenAI)]
+            req = snd $ toProviderRequest openAIGLM45 model configs ((), ((), ((), ()))) msgs
 
         -- Verify tool is correctly translated to OpenAI format
         case OpenAIProt.tools req of
@@ -118,10 +118,10 @@ spec = do
     describe "toToolDefinition -> Anthropic Protocol" $ do
       it "generates valid Anthropic tool structure from Tool instance" $ do
         let toolDef = toToolDefinition calculatorToolWrapped
-            model = ClaudeSonnet45
+            model = Model ClaudeSonnet45 Anthropic.Anthropic
             configs = [Tools [toolDef]]
-            msgs = [UserText "Calculate 10 * 7" :: Message ClaudeSonnet45 Anthropic.Anthropic]
-            req = snd $ toProviderRequest TestModels.anthropicSonnet45 Anthropic.Anthropic model configs ((), ()) msgs
+            msgs = [UserText "Calculate 10 * 7" :: Message (Model ClaudeSonnet45 Anthropic.Anthropic)]
+            req = snd $ toProviderRequest TestModels.anthropicSonnet45 model configs ((), ()) msgs
 
         -- Verify tool is correctly translated to Anthropic format
         case AnthropicProt.tools req of
@@ -152,10 +152,10 @@ spec = do
         let calcDef = toToolDefinition calculatorToolWrapped
             -- We only have one tool type defined, so just use it twice with different configs
             -- In a real scenario, you'd have multiple different Tool types
-            model = GLM45
+            model = Model GLM45 OpenAI.OpenAI
             configs = [Tools [calcDef]]
-            msgs = [UserText "Do some math" :: Message GLM45 OpenAI.OpenAI]
-            req = snd $ toProviderRequest openAIGLM45 OpenAI.OpenAI GLM45 configs ((), ((), ((), ()))) msgs
+            msgs = [UserText "Do some math" :: Message (Model GLM45 OpenAI.OpenAI)]
+            req = snd $ toProviderRequest openAIGLM45 model configs ((), ((), ((), ()))) msgs
 
         -- Should have tools in the request
         case OpenAIProt.tools req of

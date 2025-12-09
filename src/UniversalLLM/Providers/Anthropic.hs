@@ -148,12 +148,12 @@ instance SupportsStreaming Anthropic
 -- Anthropic capabilities are now declared per-model (see model files)
 
 -- Provider typeclass implementation (just type associations)
-instance Provider Anthropic model where
-  type ProviderRequest Anthropic = AnthropicRequest
-  type ProviderResponse Anthropic = AnthropicResponse
+instance Provider (Model aiModel Anthropic) where
+  type ProviderRequest (Model aiModel Anthropic) = AnthropicRequest
+  type ProviderResponse (Model aiModel Anthropic) = AnthropicResponse
 
 -- Text message encoder - groups messages incrementally
-handleTextMessage :: ProviderRequest Anthropic ~ AnthropicRequest => MessageEncoder Anthropic model
+handleTextMessage :: ProviderRequest m ~ AnthropicRequest => MessageEncoder m
 handleTextMessage msg req = case msg of
   UserText txt -> if Text.null txt then req else appendContentBlock "user" (fromText txt) req
   AssistantText txt -> if Text.null txt then req else appendContentBlock "assistant" (fromText txt) req
@@ -161,7 +161,7 @@ handleTextMessage msg req = case msg of
   _ -> req
 
 -- Tool message encoder - groups tool blocks incrementally
-handleToolMessage :: (ProviderRequest Anthropic ~ AnthropicRequest, HasTools model Anthropic) => MessageEncoder Anthropic model
+handleToolMessage :: (ProviderRequest m ~ AnthropicRequest, HasTools m) => MessageEncoder m
 handleToolMessage msg req = case msg of
   AssistantTool toolCall -> appendContentBlock "assistant" (fromToolCall toolCall) req
   ToolResultMsg result -> appendContentBlock "user" (fromToolResult result) req
@@ -170,11 +170,11 @@ handleToolMessage msg req = case msg of
 -- Composable providers for Anthropic
 
 -- Base provider: handles text messages and basic configuration
-baseComposableProvider :: forall model. (ModelName Anthropic model) => ComposableProvider Anthropic model ()
-baseComposableProvider p m configs _s = noopHandler
+baseComposableProvider :: forall m. (ModelName m, ProviderRequest m ~ AnthropicRequest, ProviderResponse m ~ AnthropicResponse) => ComposableProvider m ()
+baseComposableProvider model configs _s = noopHandler
   { cpPureMessageRequest = ensureUserFirstPure
   , cpToRequest = \msg req ->
-      let req' = req { model = modelName @Anthropic m
+      let req' = req { model = modelName model
                      , max_tokens = case [mt | MaxTokens mt <- configs] of { (mt:_) -> mt; [] -> max_tokens req }
                      , temperature = case [t | Temperature t <- configs] of { (t:_) -> Just t; [] -> temperature req }
                      }
@@ -217,8 +217,8 @@ baseComposableProvider p m configs _s = noopHandler
         _ -> Right Nothing  -- First block is not text, let another provider handle it
 
 -- Standalone tools provider
-anthropicTools :: forall model s . (HasTools model Anthropic) => ComposableProvider Anthropic model s
-anthropicTools _p _m configs _s = noopHandler
+anthropicTools :: forall m s . (HasTools m, ProviderRequest m ~ AnthropicRequest, ProviderResponse m ~ AnthropicResponse) => ComposableProvider m s
+anthropicTools _m configs _s = noopHandler
   { cpToRequest = handleToolMessage
   , cpConfigHandler = \req ->
       let toolDefs = [defs | Tools defs <- configs]
@@ -240,8 +240,8 @@ anthropicTools _p _m configs _s = noopHandler
         _ -> Right Nothing  -- First block is not a tool call, let another provider handle it
 
 -- Standalone reasoning provider
-anthropicReasoning :: forall model. (HasReasoning model Anthropic) => ComposableProvider Anthropic model AnthropicReasoningState
-anthropicReasoning _p _m configs state = noopHandler
+anthropicReasoning :: forall m. (HasReasoning m, ProviderRequest m ~ AnthropicRequest, ProviderResponse m ~ AnthropicResponse) => ComposableProvider m AnthropicReasoningState
+anthropicReasoning _m configs state = noopHandler
   { cpToRequest = handleReasoningMessageWithState state
   , cpConfigHandler = \req ->
       let reasoningEnabled = not $ any isReasoningFalse configs
@@ -302,7 +302,7 @@ anthropicReasoning _p _m configs state = noopHandler
         _ -> True  -- No tool call sequence, so no constraint
 
     -- Store signature in state after receiving response
-    storeSignatureFromResponse :: ProviderResponse Anthropic -> AnthropicReasoningState -> AnthropicReasoningState
+    storeSignatureFromResponse :: ProviderResponse m -> AnthropicReasoningState -> AnthropicReasoningState
     storeSignatureFromResponse (AnthropicError _) st = st
     storeSignatureFromResponse (AnthropicSuccess resp) st =
       case responseContent resp of
@@ -322,7 +322,7 @@ anthropicReasoning _p _m configs state = noopHandler
         _ -> Right Nothing  -- First block is not thinking, let another provider handle it
 
     -- Lookup signature when creating request
-    handleReasoningMessageWithState :: AnthropicReasoningState -> MessageEncoder Anthropic model
+    handleReasoningMessageWithState :: AnthropicReasoningState -> MessageEncoder m
     handleReasoningMessageWithState st msg req = case msg of
       AssistantReasoning thinking ->
         -- Lookup signature from state map

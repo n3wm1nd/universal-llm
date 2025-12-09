@@ -19,43 +19,37 @@ import qualified UniversalLLM.Providers.Anthropic as Anthropic
 data FullFeaturedModel = FullFeaturedModel deriving (Show, Eq)
 
 -- OpenAI provider support - all capabilities
-instance ModelName OpenAI FullFeaturedModel where
+instance ModelName (Model FullFeaturedModel OpenAI) where
   modelName _ = "full-featured-model"
 
-instance BaseComposableProvider FullFeaturedModel OpenAI where
+instance BaseComposableProvider (Model FullFeaturedModel OpenAI) where
   baseProvider = OpenAI.baseComposableProvider
 
-instance HasTools FullFeaturedModel OpenAI where
+instance HasTools (Model FullFeaturedModel OpenAI) where
   withTools = openAITools
 
-instance HasJSON FullFeaturedModel OpenAI where
+instance HasJSON (Model FullFeaturedModel OpenAI) where
   withJSON = openAIJSON
 
-instance HasReasoning FullFeaturedModel OpenAI where
+instance HasReasoning (Model FullFeaturedModel OpenAI) where
   withReasoning = openAIReasoning
 
 -- Note: HasVision intentionally NOT implemented yet (no provider supports it)
--- instance HasVision FullFeaturedModel OpenAI where
+-- instance HasVision (Model FullFeaturedModel OpenAI) where
 --   withVision = UniversalLLM.Providers.OpenAI.openAIWithVision
 
 
 -- Anthropic provider support - subset of capabilities
-instance ModelName Anthropic FullFeaturedModel where
+instance ModelName (Model FullFeaturedModel Anthropic) where
   modelName _ = "full-featured-model"
 
-instance BaseComposableProvider FullFeaturedModel Anthropic where
+instance BaseComposableProvider (Model FullFeaturedModel Anthropic) where
   baseProvider = Anthropic.baseComposableProvider
 
-instance HasTools FullFeaturedModel Anthropic where
-  withTools :: ComposableProvider
-     Anthropic
-     FullFeaturedModel
-     (ToolState FullFeaturedModel Anthropic)
+instance HasTools (Model FullFeaturedModel Anthropic) where
   withTools = anthropicTools
 
-fullprovider :: (HasReasoning provider model, HasJSON provider model, HasTools provider model,
-  BaseComposableProvider provider model) =>
-  ComposableProvider model provider
-    (ReasoningState provider model, (JSONState provider model, (ToolState provider model, BaseState provider model)))
+fullprovider :: (HasReasoning m, HasJSON m, HasTools m, BaseComposableProvider m) =>
+  ComposableProvider m (ReasoningState m, (JSONState m, (ToolState m, BaseState m)))
 fullprovider = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` baseProvider
 

@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 module ReasoningConfigSpec (spec) where
 
@@ -15,9 +16,10 @@ spec = do
   describe "Reasoning Config" $ do
     describe "OpenRouter Gemini" $ do
       it "sets reasoning field when Reasoning True in configs" $ do
-        let configs = [Reasoning True, MaxTokens 1000]
+        let configs :: [ModelConfig (Model Gemini3ProPreview OpenRouter)]
+            configs = [Reasoning True, MaxTokens 1000]
             msgs = [UserText "Hello"]
-            (_, req) = toProviderRequest openRouterGemini3ProPreview OpenRouter Gemini3ProPreview configs def msgs
+            (_, req) = toProviderRequest openRouterGemini3ProPreview (Model Gemini3ProPreview OpenRouter) configs def msgs
 
         -- Check that reasoning field is set
         case reasoning req of
@@ -27,24 +29,27 @@ spec = do
             reasoning_effort reasoningCfg `shouldBe` Just "low"
 
       it "does not set reasoning field when Reasoning False in configs" $ do
-        let configs = [Reasoning False, MaxTokens 1000]
+        let configs :: [ModelConfig (Model Gemini3ProPreview OpenRouter)]
+            configs = [Reasoning False, MaxTokens 1000]
             msgs = [UserText "Hello"]
-            (_, req) = toProviderRequest openRouterGemini3ProPreview OpenRouter Gemini3ProPreview configs def msgs
+            (_, req) = toProviderRequest openRouterGemini3ProPreview (Model Gemini3ProPreview OpenRouter) configs def msgs
 
         reasoning req `shouldBe` Nothing
 
       it "does not set reasoning field when Reasoning not in configs" $ do
-        let configs = [MaxTokens 1000]
+        let configs :: [ModelConfig (Model Gemini3ProPreview OpenRouter)]
+            configs = [MaxTokens 1000]
             msgs = [UserText "Hello"]
-            (_, req) = toProviderRequest openRouterGemini3ProPreview OpenRouter Gemini3ProPreview configs def msgs
+            (_, req) = toProviderRequest openRouterGemini3ProPreview (Model Gemini3ProPreview OpenRouter) configs def msgs
 
         reasoning req `shouldBe` Nothing
 
     describe "OpenAI GLM45" $ do
       it "sets reasoning field when Reasoning True in configs" $ do
-        let configs = [Reasoning True, MaxTokens 1000]
+        let configs :: [ModelConfig (Model GLM45 OpenAI)]
+            configs = [Reasoning True, MaxTokens 1000]
             msgs = [UserText "Hello"]
-            (_, req) = toProviderRequest openAIGLM45 OpenAI GLM45 configs ((), ((), ((), ()))) msgs
+            (_, req) = toProviderRequest openAIGLM45 (Model GLM45 OpenAI) configs ((), ((), ((), ()))) msgs
 
         -- Check that reasoning field is set
         case reasoning req of

@@ -22,67 +22,66 @@ import UniversalLLM.Providers.OpenAI
 
 -- Type aliases for easier provider/model switching
 type TestProvider = OpenRouter
-type TestModel = GLM45
+type TestAIModel = GLM45
+type TestModel = Model TestAIModel TestProvider
 
 -- Helper to build request for the test model with full composition
 buildRequest :: TestModel
-             -> [ModelConfig TestProvider TestModel]
-             -> [Message TestModel TestProvider]
+             -> [ModelConfig TestModel]
+             -> [Message TestModel]
              -> OpenAIRequest
-buildRequest _model = buildRequestGeneric TestModels.openRouterGLM45 OpenRouter GLM45 (def, ((), ((), ())))
+buildRequest model = buildRequestGeneric TestModels.openRouterGLM45 model (def, ((), ((), ())))
 
 -- Generic helper to build request with explicit composable provider
-buildRequestGeneric :: forall provider model s. (ProviderRequest provider ~ OpenAIRequest)
-                    => ComposableProvider provider model s
-                    -> provider
-                    -> model
+buildRequestGeneric :: forall m s. (ProviderRequest m ~ OpenAIRequest)
+                    => ComposableProvider m s
+                    -> m
                     -> s
-                    -> [ModelConfig provider model]
-                    -> [Message model provider]
+                    -> [ModelConfig m]
+                    -> [Message m]
                     -> OpenAIRequest
-buildRequestGeneric composableProvider provider model s configs = snd . toProviderRequest composableProvider provider model configs s
+buildRequestGeneric composableProvider model s configs = snd . toProviderRequest composableProvider model configs s
 
 -- Helper to parse OpenAI response for the test model
 parseOpenAIResponse :: TestModel
-                    -> [ModelConfig TestProvider TestModel]
-                    -> [Message TestModel TestProvider]
+                    -> [ModelConfig TestModel]
+                    -> [Message TestModel]
                     -> OpenAIResponse
-                    -> Either LLMError [Message TestModel TestProvider]
-parseOpenAIResponse _model configs _history (OpenAIError (OpenAIErrorResponse errDetail)) =
+                    -> Either LLMError [Message TestModel]
+parseOpenAIResponse model configs _history (OpenAIError (OpenAIErrorResponse errDetail)) =
   Left $ ProviderError (code errDetail) $ errorMessage errDetail <> " (" <> errorType errDetail <> ")"
-parseOpenAIResponse _model configs _history resp =
-  let msgs = parseOpenAIResponseGeneric TestModels.openRouterGLM45 OpenRouter GLM45 configs (def, ((), ((), ()))) resp
+parseOpenAIResponse model configs _history resp =
+  let msgs = parseOpenAIResponseGeneric TestModels.openRouterGLM45 model configs (def, ((), ((), ()))) resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs
 
 -- Generic helper to parse response with explicit composable provider
-parseOpenAIResponseGeneric :: forall provider model s. (ProviderResponse provider ~ OpenAIResponse)
-                           => ComposableProvider provider model s
-                           -> provider
-                           -> model
-                           -> [ModelConfig provider model]
+parseOpenAIResponseGeneric :: forall m s. (ProviderResponse m ~ OpenAIResponse)
+                           => ComposableProvider m s
+                           -> m
+                           -> [ModelConfig m]
                            -> s
                            -> OpenAIResponse
-                           -> [Message model provider]
-parseOpenAIResponseGeneric composableProvider provider model configs s resp =
-  either (error . show) snd $ fromProviderResponse composableProvider provider model configs s resp
+                           -> [Message m]
+parseOpenAIResponseGeneric composableProvider model configs s resp =
+  either (error . show) snd $ fromProviderResponse composableProvider model configs s resp
 
 spec :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 spec getResponse = do
   describe "OpenAI Composable Provider - Basic Text" $ do
 
     it "sends message, receives response, and maintains conversation history" $ do
-      let model = GLM45
+      let model = Model GLM45 OpenRouter :: TestModel
           configs = [MaxTokens 500]  -- Increased for reasoning models
 
           -- First exchange
-          msgs1 = [UserText "What is 2+2?" :: Message TestModel TestProvider]
-          req1 = buildRequest GLM45 configs msgs1
+          msgs1 = [UserText "What is 2+2?" :: Message TestModel]
+          req1 = buildRequest model configs msgs1
 
       resp1 <- getResponse req1
 
-      case parseOpenAIResponse GLM45 configs msgs1 resp1 of
+      case parseOpenAIResponse (Model GLM45 OpenRouter) configs msgs1 resp1 of
         Right parsedMsgs1 -> do
           -- Extract AssistantText, may also have AssistantReasoning
           let textMsgs1 = [txt | AssistantText txt <- parsedMsgs1]
@@ -92,11 +91,11 @@ spec getResponse = do
 
           -- Second exchange - append to history
           let msgs2 = msgs1 <> parsedMsgs1 <> [UserText "What about 3+3?"]
-              req2 = buildRequest GLM45 configs msgs2
+              req2 = buildRequest (Model GLM45 OpenRouter) configs msgs2
 
           resp2 <- getResponse req2
 
-          case parseOpenAIResponse GLM45 configs msgs2 resp2 of
+          case parseOpenAIResponse (Model GLM45 OpenRouter) configs msgs2 resp2 of
             Right msgs -> do
               -- Should have at least AssistantText, may also have AssistantReasoning
               let textMsgs = [txt | AssistantText txt <- msgs]
@@ -110,12 +109,12 @@ spec getResponse = do
             Left err -> expectationFailure $ "parseResponse failed: " ++ show err
 
     it "merges consecutive user messages" $ do
-      let model = GLM45
+      let model = Model GLM45 OpenRouter
           configs = [MaxTokens 50]
-          msgs = [ UserText "First part" :: Message TestModel TestProvider
+          msgs = [ UserText "First part" :: Message TestModel
                  , UserText "Second part"
                  ]
-          req = buildRequest GLM45 configs msgs
+          req = buildRequest model configs msgs
 
       -- Should merge into single user message
       length (messages req) `shouldBe` 1
@@ -126,7 +125,7 @@ spec getResponse = do
   describe "OpenAI Composable Provider - Tool Calling" $ do
 
     it "completes full tool calling conversation flow" $ do
-      let model = GLM45
+      let model = Model GLM45 OpenRouter
           toolDef = ToolDefinition
             { toolDefName = "get_weather"
             , toolDefDescription = "Get the current weather in a given location"
@@ -144,8 +143,8 @@ spec getResponse = do
           configs = [Tools [toolDef], MaxTokens 800]  -- Increased for reasoning models with tools
 
           -- Step 1: Initial request with tools
-          msgs1 = [UserText "What's the weather in Paris?" :: Message TestModel TestProvider]
-          req1 = buildRequest GLM45 configs msgs1
+          msgs1 = [UserText "What's the weather in Paris?" :: Message TestModel]
+          req1 = buildRequest model configs msgs1
 
       -- Verify tools are in request
       case tools req1 of
@@ -156,7 +155,7 @@ spec getResponse = do
 
       resp1 <- getResponse req1
 
-      case parseOpenAIResponse GLM45 configs msgs1 resp1 of
+      case parseOpenAIResponse (Model GLM45 OpenRouter) configs msgs1 resp1 of
         Right parsedMsgs -> do
           -- Extract tool calls from the response (may be mixed with text)
           let toolCalls = [tc | AssistantTool tc <- parsedMsgs]
@@ -168,11 +167,11 @@ spec getResponse = do
           let toolResult = ToolResult toolCall
                              (Right $ object ["temperature" .= ("22°C" :: Text)])
               msgs2 = msgs1 <> parsedMsgs <> [ToolResultMsg toolResult]
-              req2 = buildRequest GLM45 configs msgs2
+              req2 = buildRequest (Model GLM45 OpenRouter) configs msgs2
 
           resp2 <- getResponse req2
 
-          case parseOpenAIResponse GLM45 configs msgs2 resp2 of
+          case parseOpenAIResponse (Model GLM45 OpenRouter) configs msgs2 resp2 of
             Right msgs2Result -> do
               -- Extract text from the response
               let textMsgs = [txt | AssistantText txt <- msgs2Result]
@@ -187,7 +186,7 @@ spec getResponse = do
   describe "OpenAI Composable Provider - JSON Mode" $ do
 
     it "requests and receives JSON response" $ do
-      let model = GLM45
+      let model = Model GLM45 OpenRouter
           schema = object
             [ "type" .= ("object" :: Text)
             , "properties" .= object
@@ -199,8 +198,8 @@ spec getResponse = do
             , "required" .= (["colors"] :: [Text])
             ]
           configs = [MaxTokens 500]  -- Increased for reasoning models
-          msgs = [UserRequestJSON "List 3 primary colors" schema :: Message TestModel TestProvider]
-          req = buildRequest GLM45 configs msgs
+          msgs = [UserRequestJSON "List 3 primary colors" schema :: Message TestModel]
+          req = buildRequest model configs msgs
 
       -- Verify response_format is set with correct schema
       case response_format req of
@@ -223,7 +222,7 @@ spec getResponse = do
 
       resp <- getResponse req
 
-      case parseOpenAIResponse GLM45 configs msgs resp of
+      case parseOpenAIResponse (Model GLM45 OpenRouter) configs msgs resp of
         Right parsedMsgs -> do
           -- Extract AssistantJSON, may also have AssistantReasoning
           let jsonMsgs = [jsonVal | AssistantJSON jsonVal <- parsedMsgs]
@@ -237,18 +236,18 @@ spec getResponse = do
         Left err -> expectationFailure $ "parseResponse failed: " ++ show err
 
     it "latest UserRequestJSON sets the schema for the request" $ do
-      let model = GLM45
+      let model = Model GLM45 OpenRouter
           schema1 = object ["type" .= ("string" :: Text)]
           schema2 = object ["type" .= ("number" :: Text)]
           configs = [MaxTokens 50]
 
           -- First JSON request
-          msgs1 = [UserRequestJSON "Give me a string" schema1 :: Message TestModel TestProvider]
-          req1 = buildRequest GLM45 configs msgs1
+          msgs1 = [UserRequestJSON "Give me a string" schema1 :: Message TestModel]
+          req1 = buildRequest model configs msgs1
 
           -- Second request after response - add new JSON request with different schema
           msgs2 = msgs1 <> [AssistantJSON (Aeson.String "hello"), UserRequestJSON "Give me a number" schema2]
-          req2 = buildRequest GLM45 configs msgs2
+          req2 = buildRequest model configs msgs2
 
       -- req1 should have schema1 (wrapped in name/strict/schema)
       case response_format req1 of
@@ -279,11 +278,11 @@ spec getResponse = do
   describe "Compile-Time Safety Demonstrations" $ do
 
     it "allows tool use with tool-capable model" $ do
-      let model = GLM45  -- HasTools
+      let model = Model GLM45 OpenRouter  -- HasTools
           toolDef = ToolDefinition "test_tool" "Test" (object [])
           configs = [Tools [toolDef], MaxTokens 50]
-          msgs = [UserText "test" :: Message TestModel TestProvider]
-          req = buildRequest GLM45 configs msgs
+          msgs = [UserText "test" :: Message TestModel]
+          req = buildRequest model configs msgs
 
       case tools req of
         Just [_] -> return ()
@@ -382,7 +381,7 @@ spec getResponse = do
 
           -- Create the reasoning provider and get its handlers
           initialState = OpenRouterReasoningState mempty mempty
-          handlers = openRouterReasoning @OpenRouter @TestModels.Gemini3ProPreview OpenRouter TestModels.Gemini3ProPreview [] initialState
+          handlers = openRouterReasoning  @(Model TestModels.Gemini3ProPreview OpenRouter) (Model TestModels.Gemini3ProPreview OpenRouter) [] initialState
 
           -- Store reasoning_details from the response
           updatedState = cpPostResponse handlers response initialState
@@ -413,11 +412,10 @@ spec getResponse = do
           request = defaultOpenAIRequest { messages = [requestMsg] }
 
           -- Apply the config handler
-          handlers = openRouterReasoning @OpenRouter @TestModels.Gemini3ProPreview OpenRouter TestModels.Gemini3ProPreview [] stateWithDetails
+          handlers = openRouterReasoning @(Model TestModels.Gemini3ProPreview OpenRouter) (Model TestModels.Gemini3ProPreview OpenRouter) [] stateWithDetails
           updatedRequest = cpConfigHandler handlers request
 
       -- Verify reasoning_details were added to the message
       case messages updatedRequest of
         [msg] -> reasoning_details msg `shouldBe` Just reasoningDetailsValue
         _ -> expectationFailure "Expected exactly one message"
-

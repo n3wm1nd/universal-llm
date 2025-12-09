@@ -20,26 +20,24 @@ import qualified UniversalLLM.Protocols.OpenAI as Proto
 import qualified UniversalLLM.Providers.OpenAI as Provider
 
 -- Type aliases for easier provider/model switching
-type TestProvider = Provider.OpenRouter
-type TestModel = GLM45
+type TestModel = Model GLM45 Provider.OpenRouter
 
 -- Helper to build streaming request - uses the test model with full composition
 -- (Wrapper around the generic version that provides the specific model and composable provider)
-buildStreamingRequest :: [ModelConfig TestProvider TestModel]
-                     -> [Message TestModel TestProvider]
+buildStreamingRequest :: [ModelConfig TestModel]
+                     -> [Message TestModel]
                      -> OpenAIRequest
-buildStreamingRequest = buildStreamingRequestGeneric TestModels.openRouterGLM45 Provider.OpenRouter GLM45 (def, ((), ((), ())))
+buildStreamingRequest configs msgs = buildStreamingRequestGeneric TestModels.openRouterGLM45 (Model GLM45 Provider.OpenRouter) (def, ((), ((), ()))) configs msgs
 
 -- Generic helper to build streaming request with explicit composable provider
-buildStreamingRequestGeneric :: forall provider model s. (ProviderRequest provider ~ OpenAIRequest)
-                           => ComposableProvider provider model s
-                           -> provider
-                           -> model
+buildStreamingRequestGeneric :: forall m s. (ProviderRequest m ~ OpenAIRequest, Monoid (ProviderRequest m))
+                           => ComposableProvider m s
+                           -> m
                            -> s
-                           -> [ModelConfig provider model]
-                           -> [Message model provider]
+                           -> [ModelConfig m]
+                           -> [Message m]
                            -> OpenAIRequest
-buildStreamingRequestGeneric composableProvider provider model s configs = snd . toProviderRequest composableProvider provider model configs s
+buildStreamingRequestGeneric composableProvider model s configs msgs = snd $ toProviderRequest composableProvider model configs s msgs
 
 spec :: ResponseProvider OpenAIRequest BSL.ByteString -> Spec
 spec getResponse = do

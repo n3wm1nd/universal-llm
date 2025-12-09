@@ -36,12 +36,11 @@ import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse(..), OpenAIS
 import qualified UniversalLLM.Providers.OpenAI as OpenAIProvider
 
 -- | A standard test is just a function that runs hspec tests
-newtype StandardTest provider model state = StandardTest
-  ( ComposableProvider provider model state
-    -> provider
-    -> model
+newtype StandardTest m state = StandardTest
+  ( ComposableProvider m state
+    -> m
     -> state
-    -> ResponseProvider (ProviderRequest provider) (ProviderResponse provider)
+    -> ResponseProvider (ProviderRequest m) (ProviderResponse m)
     -> Spec
   )
 
@@ -49,21 +48,21 @@ newtype StandardTest provider model state = StandardTest
 -- Basic Text Tests
 -- ============================================================================
 
-text :: ( Monoid (ProviderRequest provider)
-        , SupportsMaxTokens provider
+text :: ( Monoid (ProviderRequest m)
+        , SupportsMaxTokens (ProviderOf m)
         )
-     => StandardTest provider model state
-text = StandardTest $ \cp provider model initialState getResponse -> do
+     => StandardTest m state
+text = StandardTest $ \cp model initialState getResponse -> do
   describe "Basic Text" $ do
     it "sends message and receives response" $ do
       -- Use larger token limit to accommodate reasoning models
       let configs = [MaxTokens 2048]
           msgs = [UserText "What is 2+2?"]
-          (_, req) = toProviderRequest cp provider model configs initialState msgs
+          (_, req) = toProviderRequest cp model configs initialState msgs
 
       resp <- getResponse req
 
-      let parsedMsgs = either (error . show) snd $ fromProviderResponse cp provider model configs initialState resp
+      let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs initialState resp
 
       -- Should get back at least one assistant message
       length parsedMsgs `shouldSatisfy` (> 0)
@@ -72,20 +71,20 @@ text = StandardTest $ \cp provider model initialState getResponse -> do
       -- Use larger token limit to accommodate reasoning models
       let configs = [MaxTokens 2048]
           msgs1 = [UserText "What is 2+2?"]
-          (state1, req1) = toProviderRequest cp provider model configs initialState msgs1
+          (state1, req1) = toProviderRequest cp model configs initialState msgs1
 
       resp1 <- getResponse req1
-      let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp provider model configs state1 resp1
+      let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp model configs state1 resp1
 
       -- First response should contain messages
       length parsedMsgs1 `shouldSatisfy` (> 0)
 
       -- Continue conversation
       let msgs2 = msgs1 ++ parsedMsgs1 ++ [UserText "What about 3+3?"]
-          (_, req2) = toProviderRequest cp provider model configs state2 msgs2
+          (_, req2) = toProviderRequest cp model configs state2 msgs2
 
       resp2 <- getResponse req2
-      let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp provider model configs state2 resp2
+      let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
 
       -- Second response should also contain messages
       length parsedMsgs2 `shouldSatisfy` (> 0)
@@ -161,12 +160,12 @@ alwaysFail :: Location -> IO FailingToolResult
 alwaysFail (Location _location) = do
   fail "This tool intentionally fails"
 
-tools :: ( Monoid (ProviderRequest provider)
-         , SupportsMaxTokens provider
-         , HasTools model provider
+tools :: ( Monoid (ProviderRequest m)
+         , SupportsMaxTokens (ProviderOf m)
+         , HasTools m
          )
-      => StandardTest provider model state
-tools = StandardTest $ \cp provider model initialState getResponse -> do
+      => StandardTest m state
+tools = StandardTest $ \cp model initialState getResponse -> do
   describe "Tool Calling" $ do
     it "completes tool calling flow with successful tool execution" $ do
       -- Define tools using Approach A (ToolFunction)
@@ -174,12 +173,12 @@ tools = StandardTest $ \cp provider model initialState getResponse -> do
           toolDefs = map llmToolToDefinition tools
           configs = [MaxTokens 2048, Tools toolDefs]
           msgs = [UserText "What's the weather in London?"]
-          (state1, req1) = toProviderRequest cp provider model configs initialState msgs
+          (state1, req1) = toProviderRequest cp model configs initialState msgs
 
       -- First request should trigger tool use
       resp1 <- getResponse req1
 
-      let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp provider model configs state1 resp1
+      let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp model configs state1 resp1
 
       -- Should get back at least one message
       length parsedMsgs1 `shouldSatisfy` (> 0)
@@ -202,10 +201,10 @@ tools = StandardTest $ \cp provider model initialState getResponse -> do
 
         -- Send tool results back to LLM (exactly the same whether success or failure)
         let msgs2 = msgs ++ parsedMsgs1 ++ toolResultMsgs
-            (_, req2) = toProviderRequest cp provider model configs state2 msgs2
+            (_, req2) = toProviderRequest cp model configs state2 msgs2
 
         resp2 <- getResponse req2
-        let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp provider model configs state2 resp2
+        let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
 
         -- LLM should respond after receiving tool results
         length parsedMsgs2 `shouldSatisfy` (> 0)
@@ -216,11 +215,11 @@ tools = StandardTest $ \cp provider model initialState getResponse -> do
           toolDefs = map llmToolToDefinition tools
           configs = [MaxTokens 2048, Tools toolDefs]
           msgs = [UserText "Use the always_fail tool with location 'test'"]
-          (state1, req1) = toProviderRequest cp provider model configs initialState msgs
+          (state1, req1) = toProviderRequest cp model configs initialState msgs
 
       resp1 <- getResponse req1
 
-      let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp provider model configs state1 resp1
+      let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp model configs state1 resp1
 
       -- Extract tool calls if any
       let toolCalls = [ tc | AssistantTool tc <- parsedMsgs1 ]
@@ -240,10 +239,10 @@ tools = StandardTest $ \cp provider model initialState getResponse -> do
 
         -- Send tool results back to LLM (exactly the same whether success or failure)
         let msgs2 = msgs ++ parsedMsgs1 ++ toolResultMsgs
-            (_, req2) = toProviderRequest cp provider model configs state2 msgs2
+            (_, req2) = toProviderRequest cp model configs state2 msgs2
 
         resp2 <- getResponse req2
-        let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp provider model configs state2 resp2
+        let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
 
         -- LLM should respond after receiving tool results (even if they're errors)
         length parsedMsgs2 `shouldSatisfy` (> 0)
@@ -252,21 +251,21 @@ tools = StandardTest $ \cp provider model initialState getResponse -> do
 -- Reasoning Tests
 -- ============================================================================
 
-reasoning :: ( Monoid (ProviderRequest provider)
-             , SupportsMaxTokens provider
-             , HasReasoning model provider
+reasoning :: ( Monoid (ProviderRequest m)
+             , SupportsMaxTokens (ProviderOf m)
+             , HasReasoning m
              )
-          => StandardTest provider model state
-reasoning = StandardTest $ \cp provider model initialState getResponse -> do
+          => StandardTest m state
+reasoning = StandardTest $ \cp model initialState getResponse -> do
   describe "Reasoning" $ do
     it "handles reasoning messages" $ do
       let configs = [MaxTokens 4096, Reasoning True]
           msgs = [UserText "Think step by step: What is 15 * 23?"]
-          (state1, req) = toProviderRequest cp provider model configs initialState msgs
+          (state1, req) = toProviderRequest cp model configs initialState msgs
 
       resp <- getResponse req
 
-      let (state2, parsedMsgs) = either (error . show) id $ fromProviderResponse cp provider model configs state1 resp
+      let (state2, parsedMsgs) = either (error . show) id $ fromProviderResponse cp model configs state1 resp
 
       -- Should get back at least one message
       length parsedMsgs `shouldSatisfy` (> 0)
@@ -277,10 +276,10 @@ reasoning = StandardTest $ \cp provider model initialState getResponse -> do
 
       -- Should handle reasoning in round-trip (sending AssistantReasoning back to LLM)
       let msgs2 = msgs ++ parsedMsgs ++ [UserText "Now what is 20 * 30?"]
-          (_, req2) = toProviderRequest cp provider model configs state2 msgs2
+          (_, req2) = toProviderRequest cp model configs state2 msgs2
 
       resp2 <- getResponse req2
-      let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp provider model configs state2 resp2
+      let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
 
       length parsedMsgs2 `shouldSatisfy` (> 0)
 
@@ -288,13 +287,13 @@ reasoning = StandardTest $ \cp provider model initialState getResponse -> do
 -- Combined Tests
 -- ============================================================================
 
-reasoningWithTools :: ( Monoid (ProviderRequest provider)
-                      , SupportsMaxTokens provider
-                      , HasReasoning model provider
-                      , HasTools model provider
+reasoningWithTools :: ( Monoid (ProviderRequest m)
+                      , SupportsMaxTokens (ProviderOf m)
+                      , HasReasoning m
+                      , HasTools m
                       )
-                   => StandardTest provider model state
-reasoningWithTools = StandardTest $ \cp provider model initialState getResponse -> do
+                   => StandardTest m state
+reasoningWithTools = StandardTest $ \cp model initialState getResponse -> do
   describe "Reasoning + Tools" $ do
     it "handles reasoning with tool calls" $ do
       -- First request: Ask a question that requires reasoning and tool use
@@ -302,11 +301,11 @@ reasoningWithTools = StandardTest $ \cp provider model initialState getResponse 
                       (object ["type" .= ("object" :: Text)])
           configs = [MaxTokens 4096, Reasoning True, Tools [toolDef]]
           msgs = [UserText "Think carefully: What files match the pattern '*.md'? Use the available tools."]
-          (state1, req1) = toProviderRequest cp provider model configs initialState msgs
+          (state1, req1) = toProviderRequest cp model configs initialState msgs
 
       resp1 <- getResponse req1
 
-      let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp provider model configs state1 resp1
+      let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp model configs state1 resp1
 
       -- Should get back messages (reasoning and/or tool calls)
       length parsedMsgs1 `shouldSatisfy` (> 0)
@@ -318,24 +317,24 @@ reasoningWithTools = StandardTest $ \cp provider model initialState getResponse 
       -- Continue conversation with tool results
       -- This is where reasoning_details preservation is critical
       let msgs2 = msgs ++ parsedMsgs1 ++ toolResults ++ [UserText "Thank you, now tell me more about those files."]
-          (_, req2) = toProviderRequest cp provider model configs state2 msgs2
+          (_, req2) = toProviderRequest cp model configs state2 msgs2
 
       resp2 <- getResponse req2
-      let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp provider model configs state2 resp2
+      let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
 
       -- Should successfully handle the continuation
       length parsedMsgs2 `shouldSatisfy` (> 0)
 
 -- OpenAI-specific test to verify reasoning_details preservation
-openAIReasoningDetailsPreservation :: ( Monoid (ProviderRequest provider)
-                                      , SupportsMaxTokens provider
-                                      , HasReasoning model provider
-                                      , HasTools model provider
-                                      , ProviderRequest provider ~ OpenAIRequest
-                                      , ProviderResponse provider ~ OpenAIResponse
+openAIReasoningDetailsPreservation :: ( Monoid (ProviderRequest m)
+                                      , SupportsMaxTokens (ProviderOf m)
+                                      , HasReasoning m
+                                      , HasTools m
+                                      , ProviderRequest m ~ OpenAIRequest
+                                      , ProviderResponse m ~ OpenAIResponse
                                       )
-                                   => StandardTest provider model state
-openAIReasoningDetailsPreservation = StandardTest $ \cp provider model initialState getResponse -> do
+                                   => StandardTest m state
+openAIReasoningDetailsPreservation = StandardTest $ \cp model initialState getResponse -> do
   describe "OpenAI Reasoning Details Preservation" $ do
     it "preserves reasoning_details when they are present in API responses" $ do
       -- First request: Ask a question that requires reasoning and tool use
@@ -343,7 +342,7 @@ openAIReasoningDetailsPreservation = StandardTest $ \cp provider model initialSt
                       (object ["type" .= ("object" :: Text)])
           configs = [MaxTokens 4096, Reasoning True, Tools [toolDef]]
           msgs = [UserText "Think carefully: What files match the pattern '*.md'? Use the available tools."]
-          (state1, req1) = toProviderRequest cp provider model configs initialState msgs
+          (state1, req1) = toProviderRequest cp model configs initialState msgs
 
       -- ASSERTION: Request should have reasoning field populated
       case OpenAI.reasoning req1 of
@@ -371,7 +370,7 @@ openAIReasoningDetailsPreservation = StandardTest $ \cp provider model initialSt
               ,Just msg)
             _ -> (False, False, Nothing)
 
-      let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp provider model configs state1 resp1
+      let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp model configs state1 resp1
 
       -- Should get back messages (reasoning and/or tool calls)
       length parsedMsgs1 `shouldSatisfy` (> 0)
@@ -386,7 +385,7 @@ openAIReasoningDetailsPreservation = StandardTest $ \cp provider model initialSt
 
       -- Continue conversation with tool results
       let msgs2 = msgs ++ parsedMsgs1 ++ toolResults ++ [UserText "Thank you, now tell me more about those files."]
-          (_, req2) = toProviderRequest cp provider model configs state2 msgs2
+          (_, req2) = toProviderRequest cp model configs state2 msgs2
 
       -- CRITICAL: ALL messages from resp1 must appear verbatim in req2 (as JSON Values)
       -- The conversation structure is:
@@ -400,7 +399,7 @@ openAIReasoningDetailsPreservation = StandardTest $ \cp provider model initialSt
       assistantMessagesAsJson `shouldBe` resp1Messages
 
       resp2 <- getResponse req2
-      let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp provider model configs state2 resp2
+      let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
 
       -- Should successfully handle the continuation
       length parsedMsgs2 `shouldSatisfy` (> 0)

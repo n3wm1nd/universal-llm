@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Proxy.OpenAICompat
   ( parseOpenAIRequest
@@ -15,9 +16,9 @@ import Data.Text (Text)
 
 -- | Configuration extracted from an OpenAI request
 -- This is the intermediate universal representation
-data ProxyConfig provider model = ProxyConfig
-  { proxyMessages :: [Message model provider]
-  , proxyConfigs :: [ModelConfig provider model]
+data ProxyConfig m = ProxyConfig
+  { proxyMessages :: [Message m]
+  , proxyConfigs :: [ModelConfig m]
   }
 
 -- ============================================================================
@@ -26,24 +27,24 @@ data ProxyConfig provider model = ProxyConfig
 
 -- | Parse an OpenAI request into universal message format
 -- This is the key translation layer: OpenAI wire format -> Universal format
-parseOpenAIRequest :: forall provider model.
-                      (SupportsTemperature provider,
-                       SupportsMaxTokens provider)
+parseOpenAIRequest :: forall m.
+                      (SupportsTemperature (ProviderOf m),
+                       SupportsMaxTokens (ProviderOf m))
                    => OpenAIRequest
-                   -> Either Text (ProxyConfig provider model)
+                   -> Either Text (ProxyConfig m)
 parseOpenAIRequest req = do
-  msgs <- mapM (parseOpenAIMessage @provider @model) (messages req)
-  let configs = extractConfigs @provider @model req
+  msgs <- mapM parseOpenAIMessage (messages req)
+  let configs = extractConfigs req
   return $ ProxyConfig
     { proxyMessages = msgs
     , proxyConfigs = configs
     }
 
 -- | Extract configuration from OpenAI request
-extractConfigs :: forall provider model.
-                  (SupportsTemperature provider, SupportsMaxTokens provider)
+extractConfigs :: forall m.
+                  (SupportsTemperature (ProviderOf m), SupportsMaxTokens (ProviderOf m))
                => OpenAIRequest
-               -> [ModelConfig provider model]
+               -> [ModelConfig m]
 extractConfigs req = concat
   [ maybe [] (\t -> [Temperature t]) (temperature req)
   , maybe [] (\m -> [MaxTokens m]) (max_tokens req)
@@ -51,9 +52,9 @@ extractConfigs req = concat
   ]
 
 -- | Parse a single OpenAI message into universal format
-parseOpenAIMessage :: forall provider model.
+parseOpenAIMessage :: forall m.
                       OpenAIMessage
-                   -> Either Text (Message model provider)
+                   -> Either Text (Message m)
 parseOpenAIMessage oaiMsg =
   case role oaiMsg of
     "user" -> case content oaiMsg of
@@ -76,8 +77,8 @@ parseOpenAIMessage oaiMsg =
 
 -- | Build an OpenAI response from universal messages
 -- This is the reverse translation: Universal format -> OpenAI wire format
-buildOpenAIResponse :: forall provider model.
-                       [Message model provider]
+buildOpenAIResponse :: forall m.
+                       [Message m]
                     -> Either Text OpenAIResponse
 buildOpenAIResponse [] =
   Left "No messages to convert to response"
@@ -92,8 +93,8 @@ buildOpenAIResponse msgs = do
     }
 
 -- | Convert a universal message to OpenAI format
-messageToOpenAI :: forall provider model.
-                   Message model provider
+messageToOpenAI :: forall m.
+                   Message m
                 -> Either Text OpenAIMessage
 messageToOpenAI (UserText txt) = Right $ OpenAIMessage
   { role = "user"

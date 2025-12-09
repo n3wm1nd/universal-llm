@@ -8,10 +8,13 @@
 module Main (main) where
 
 import UniversalLLM
-import UniversalLLM.Providers.Anthropic (Anthropic(..), withMagicSystemPrompt, oauthHeaders)
+import UniversalLLM.Providers.OpenAI (OpenAI(..))
+import qualified UniversalLLM.Providers.OpenAI as OpenAIProvider
+import UniversalLLM.Providers.Anthropic (Anthropic(..))
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
-import UniversalLLM.Protocols.OpenAI
-import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
+import UniversalLLM.Protocols.Anthropic
+import qualified UniversalLLM.Protocols.OpenAI as OpenAIProto
+import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import Proxy.OpenAICompat
 
 import Network.Wai
@@ -36,15 +39,15 @@ import Network.HTTP.Simple (httpLBS, setRequestBodyLBS, setRequestHeaders, parse
 -- Define the specific model we're using in this proxy
 data ClaudeSonnet45 = ClaudeSonnet45 deriving (Show, Eq)
 
-instance ModelName Anthropic ClaudeSonnet45 where
-  modelName _ = "claude-sonnet-4.5-20250514"
+instance ModelName (Model ClaudeSonnet45 Anthropic) where
+  modelName _ = "claude-sonnet-4.5-20250929"
 
-instance HasTools ClaudeSonnet45 Anthropic where
+instance HasTools (Model ClaudeSonnet45 Anthropic) where
   withTools = AnthropicProvider.anthropicTools
 
 -- Composable provider for ClaudeSonnet45 with tools
-claudeSonnet45ComposableProvider :: ComposableProvider Anthropic ClaudeSonnet45 ((), ())
-claudeSonnet45ComposableProvider = withTools `chainProviders` AnthropicProvider.baseComposableProvider @ClaudeSonnet45
+claudeSonnet45ComposableProvider :: ComposableProvider (Model ClaudeSonnet45 Anthropic) ((), ())
+claudeSonnet45ComposableProvider = withTools `chainProviders` AnthropicProvider.baseComposableProvider @(Model ClaudeSonnet45 Anthropic)
 
 -- ============================================================================
 -- Configuration
@@ -53,28 +56,24 @@ claudeSonnet45ComposableProvider = withTools `chainProviders` AnthropicProvider.
 type BackendProvider = Anthropic
 type BackendModel = ClaudeSonnet45
 
-backendProvider :: BackendProvider
-backendProvider = Anthropic
-
-backendModel :: BackendModel
-backendModel = ClaudeSonnet45
+backendModel :: Model ClaudeSonnet45 Anthropic
+backendModel = Model ClaudeSonnet45 Anthropic
 
 -- ============================================================================
 -- HTTP Transport (copied from examples, will be shared eventually)
 -- ============================================================================
 
--- | Make an HTTP call to the Anthropic backend
-callBackend :: String  -- ^ OAuth Token
+-- | Make an HTTP call to the backend LLM provider
+callBackend :: String  -- ^ API Key
             -> AnthropicRequest
             -> IO (Either LLMError AnthropicResponse)
-callBackend oauthToken request = do
+callBackend apiKey request = do
   let url = "https://api.anthropic.com/v1/messages"
-      -- Convert oauthHeaders (Text, Text) to proper HTTP headers
-      headersRaw = oauthHeaders $ T.pack oauthToken
-      headers = map (\(k, v) -> (mk $ TE.encodeUtf8 k, TE.encodeUtf8 v)) headersRaw
-      -- Apply magic system prompt transformation
-      requestWithMagic = withMagicSystemPrompt request
-      reqBody = Aeson.encode $ toJSONViaCodec requestWithMagic
+      headers = [ (mk "x-api-key", TE.encodeUtf8 $ T.pack apiKey)
+                , (mk "Content-Type", "application/json")
+                , (mk "anthropic-version", "2023-06-01")
+                ]
+      reqBody = Aeson.encode $ toJSONViaCodec request
       httpReq = parseRequest_ url
       httpReq' = setRequestMethod "POST"
                $ setRequestHeaders headers
@@ -103,14 +102,14 @@ handleProxy apiKey reqBody = do
     Left err -> throwE $ ParseError $ "Failed to decode JSON: " <> T.pack err
     Right v -> return v
 
-  oaiRequest <- case parseEither parseJSONViaCodec jsonValue of
+  oaiRequest <- case parseEither (parseJSONViaCodec @OpenAIRequest) jsonValue of
     Left err -> throwE $ ParseError $ "Failed to parse OpenAI request: " <> T.pack err
-    Right req -> return req
+    Right (req :: OpenAIRequest) -> return req
 
-  liftIO $ putStrLn $ "📥 Received request for model: " <> T.unpack (model oaiRequest)
+  liftIO $ putStrLn $ "📥 Received request for model: " <> T.unpack (OpenAIProto.model oaiRequest)
 
   -- 2. Convert to universal format (Messages + Config)
-  proxyConfig <- case parseOpenAIRequest @BackendProvider @BackendModel oaiRequest of
+  proxyConfig <- case parseOpenAIRequest oaiRequest of
     Left err -> throwE $ ParseError $ "Failed to parse request: " <> err
     Right cfg -> return cfg
 
@@ -118,13 +117,12 @@ handleProxy apiKey reqBody = do
 
   -- 3. Convert universal format to backend provider request
   let backendRequest = snd $ toProviderRequest claudeSonnet45ComposableProvider
-                                                  backendProvider
-                                                  backendModel
-                                                  (proxyConfigs proxyConfig)
-                                                  ((), ())
-                                                  (proxyMessages proxyConfig)
+                                                 backendModel
+                                                 (proxyConfigs proxyConfig)
+                                                 ((), ())
+                                                 (proxyMessages proxyConfig)
 
-  liftIO $ putStrLn $ "📤 Sending to backend provider (Anthropic Claude Sonnet 4.5)"
+  liftIO $ putStrLn $ "📤 Sending to backend provider (Anthropic Claude-3.5-Sonnet)"
 
   -- 4. Call backend
   backendResponse <- liftIO $ callBackend apiKey backendRequest
@@ -134,7 +132,6 @@ handleProxy apiKey reqBody = do
 
   -- 5. Parse backend response to universal messages
   universalMessages <- case fromProviderResponse claudeSonnet45ComposableProvider
-                                                 backendProvider
                                                  backendModel
                                                  (proxyConfigs proxyConfig)
                                                  ((), ())
@@ -145,7 +142,7 @@ handleProxy apiKey reqBody = do
   liftIO $ putStrLn $ "🔄 Converted to " <> show (length universalMessages) <> " universal messages"
 
   -- 6. Convert universal messages back to OpenAI format
-  oaiResponse <- case buildOpenAIResponse @BackendProvider @BackendModel universalMessages of
+  oaiResponse <- case buildOpenAIResponse universalMessages of
     Left err -> throwE $ ParseError $ "Failed to build OpenAI response: " <> err
     Right resp -> return resp
 
@@ -171,11 +168,11 @@ app apiKey req respond = do
         Left err ->
           respond $ responseLBS status500
             [(hContentType, "application/json")]
-            (Aeson.encode $ toJSONViaCodec $ OpenAIError $ OpenAIErrorResponse
-              { errorDetail = OpenAIErrorDetail
-                  { code = 500
-                  , errorMessage = T.pack $ show err
-                  , errorType = "proxy_error"
+            (Aeson.encode $ toJSONViaCodec $ OpenAIProto.OpenAIError $ OpenAIProto.OpenAIErrorResponse
+              { OpenAIProto.errorDetail = OpenAIProto.OpenAIErrorDetail
+                  { OpenAIProto.code = 500
+                  , OpenAIProto.errorMessage = T.pack $ show err
+                  , OpenAIProto.errorType = "proxy_error"
                   }
               })
     else
@@ -189,9 +186,9 @@ app apiKey req respond = do
 
 main :: IO ()
 main = do
-  oauthToken <- lookupEnv "ANTHROPIC_OAUTH_TOKEN" >>= \case
-    Nothing -> error "Set ANTHROPIC_OAUTH_TOKEN environment variable"
-    Just token -> return token
+  apiKey <- lookupEnv "ANTHROPIC_API_KEY" >>= \case
+    Nothing -> error "Set ANTHROPIC_API_KEY environment variable"
+    Just key -> return key
 
   let port = 8081
   putStrLn $ "🚀 Universal LLM Proxy (Anthropic Backend) starting on port " <> show port
@@ -200,4 +197,4 @@ main = do
   putStrLn $ "💡 Accepts OpenAI-format requests, translates to Anthropic"
   putStrLn ""
 
-  run port (app oauthToken)
+  run port (app apiKey)
