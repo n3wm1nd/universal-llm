@@ -432,14 +432,14 @@ data DeltaContent
 mergeOpenAIDelta :: OpenAIResponse -> Value -> OpenAIResponse
 mergeOpenAIDelta acc chunk =
     case acc of
-        OpenAISuccess (OpenAISuccessResponse choices) ->
+        OpenAISuccess (OpenAISuccessResponse successChoices) ->
             case extractDelta chunk of
                 Just (ContentDelta txt) ->
-                    OpenAISuccess $ OpenAISuccessResponse $ mergeContentDelta choices txt
+                    OpenAISuccess $ OpenAISuccessResponse $ mergeContentDelta successChoices txt
                 Just (ReasoningContentDelta txt) ->
-                    OpenAISuccess $ OpenAISuccessResponse $ mergeReasoningContentDelta choices txt
+                    OpenAISuccess $ OpenAISuccessResponse $ mergeReasoningContentDelta successChoices txt
                 Just (ToolCallsDelta toolCallDeltas) ->
-                    OpenAISuccess $ OpenAISuccessResponse $ mergeToolCallsDelta choices toolCallDeltas
+                    OpenAISuccess $ OpenAISuccessResponse $ mergeToolCallsDelta successChoices toolCallDeltas
                 Just EmptyDelta ->
                     -- Empty delta (e.g., role only, or finish_reason), keep accumulator
                     acc
@@ -537,7 +537,7 @@ mergeOpenAIDelta acc chunk =
     mergeToolCallsByIndex :: Maybe [OpenAIToolCall] -> [(Int, OpenAIToolCall)] -> [OpenAIToolCall]
     mergeToolCallsByIndex Nothing indexedCalls = buildToolCallList indexedCalls
     mergeToolCallsByIndex (Just existing) indexedCalls =
-        foldl (\acc (idx, newCall) -> mergeToolCallAtIndex acc idx newCall) existing indexedCalls
+        foldl (\accumulated (idx, newCall) -> mergeToolCallAtIndex accumulated idx newCall) existing indexedCalls
 
     -- Merge a single tool call at a specific index
     mergeToolCallAtIndex :: [OpenAIToolCall] -> Int -> OpenAIToolCall -> [OpenAIToolCall]

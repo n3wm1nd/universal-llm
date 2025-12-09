@@ -450,18 +450,6 @@ mergeAnthropicDelta acc chunk =
         in AnthropicSuccess emptyResp
     initializeFromMessageStart _ = AnthropicError (AnthropicErrorResponse "unknown" "Failed to initialize")
 
-    appendText :: AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
-    appendText resp text =
-        case responseContent resp of
-            [] -> resp { responseContent = [AnthropicTextBlock text Nothing] }
-            blocks -> resp { responseContent = updateTextBlock blocks }
-      where
-        updateTextBlock [] = []
-        updateTextBlock (AnthropicTextBlock existing cc : rest) =
-            AnthropicTextBlock (existing <> text) cc : rest
-        updateTextBlock (block : rest) =
-            block : updateTextBlock rest
-
     setStopReason :: AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
     setStopReason resp reason = resp { responseStopReason = Just reason }
 
@@ -504,41 +492,9 @@ mergeAnthropicDelta acc chunk =
     addContentBlock resp block =
         resp { responseContent = responseContent resp ++ [block] }
 
-    appendToolInput :: AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
-    appendToolInput resp jsonDelta =
-        case responseContent resp of
-            [] -> resp  -- No tool block to append to
-            blocks -> case last blocks of
-                AnthropicToolUseBlock toolId toolName currentInput cc ->
-                    -- Accumulate the JSON delta string
-                    let accumulatedJson = case currentInput of
-                            Aeson.String s -> s <> jsonDelta
-                            _ -> jsonDelta
-                        -- Try to parse the accumulated JSON as an object
-                        -- If it's still incomplete, keep as string; once complete, it will parse
-                        parsedInput = case Aeson.decode (BSL.fromStrict (encodeUtf8 accumulatedJson)) of
-                            Just val -> val
-                            Nothing -> Aeson.String accumulatedJson  -- Keep as string if not yet valid JSON
-                        updatedBlocks = init blocks ++ [AnthropicToolUseBlock toolId toolName parsedInput cc]
-                    in resp { responseContent = updatedBlocks }
-                _ -> resp  -- Not a tool use block
-
     extractThinkingDelta :: Value -> Maybe Text
     extractThinkingDelta (Aeson.Object obj) = do
         Aeson.Object delta <- KM.lookup "delta" obj
         Aeson.String thinking <- KM.lookup "thinking" delta
         return thinking
     extractThinkingDelta _ = Nothing
-
-    appendThinking :: AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
-    appendThinking resp thinkingDelta =
-        case responseContent resp of
-            [] -> resp  -- No thinking block to append to
-            blocks -> case last blocks of
-                block@AnthropicThinkingBlock{..} ->
-                    -- Accumulate the thinking deltas
-                    let accumulatedThinking = thinkingText <> thinkingDelta
-                        updatedBlock = block { thinkingText = accumulatedThinking }
-                        updatedBlocks = init blocks ++ [updatedBlock]
-                    in resp { responseContent = updatedBlocks }
-                _ -> resp  -- Not a thinking block

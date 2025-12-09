@@ -15,7 +15,7 @@ module UniversalLLM.Core.ProviderM
 
 import Control.Monad.State.Strict (StateT, runStateT, get, put, lift)
 import Control.Monad.Trans (MonadTrans)
-import Data.Monoid (Monoid)
+import Data.Monoid ()
 import Data.Default (Default, def)
 
 import UniversalLLM.Core.Types

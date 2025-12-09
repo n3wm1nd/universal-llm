@@ -136,8 +136,8 @@ deserializeToolResult val = Aeson.parseMaybe parseObj val
             return $ Right v)
       return $ ToolResult call output
 
--- | Serialize tool messages (requires HasTools constraint)
-serializeToolMessages :: HasTools m => Message m -> Maybe Value
+-- | Serialize tool messages
+serializeToolMessages :: Message m -> Maybe Value
 serializeToolMessages (AssistantTool tc) = Just $ Aeson.object
   [ "type" .= ("AssistantTool" :: Text)
   , "tool_call" .= serializeToolCall tc
@@ -171,8 +171,8 @@ deserializeToolMessages val = Aeson.parseMaybe parseObj val
 -- Vision Messages (requires HasVision constraint)
 -- ============================================================================
 
--- | Serialize vision messages (requires HasVision constraint)
-serializeVisionMessages :: HasVision m => Message m -> Maybe Value
+-- | Serialize vision messages
+serializeVisionMessages :: Message m -> Maybe Value
 serializeVisionMessages (UserImage mediaType imageData) = Just $ Aeson.object
   [ "type" .= ("UserImage" :: Text)
   , "media_type" .= mediaType
@@ -197,8 +197,8 @@ deserializeVisionMessages val = Aeson.parseMaybe parseObj val
 -- JSON Messages (requires HasJSON constraint)
 -- ============================================================================
 
--- | Serialize JSON messages (requires HasJSON constraint)
-serializeJSONMessages :: HasJSON m => Message m -> Maybe Value
+-- | Serialize JSON messages
+serializeJSONMessages :: Message m -> Maybe Value
 serializeJSONMessages (UserRequestJSON query schema) = Just $ Aeson.object
   [ "type" .= ("UserRequestJSON" :: Text)
   , "query" .= query
@@ -230,8 +230,8 @@ deserializeJSONMessages val = Aeson.parseMaybe parseObj val
 -- Reasoning Messages (requires HasReasoning constraint)
 -- ============================================================================
 
--- | Serialize reasoning messages (requires HasReasoning constraint)
-serializeReasoningMessages :: HasReasoning m => Message m -> Maybe Value
+-- | Serialize reasoning messages
+serializeReasoningMessages :: Message m -> Maybe Value
 serializeReasoningMessages (AssistantReasoning txt) = Just $ Aeson.object
   [ "type" .= ("AssistantReasoning" :: Text)
   , "text" .= txt

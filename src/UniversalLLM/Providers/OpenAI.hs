@@ -307,22 +307,22 @@ handleReasoningMessage msg req = case msg of
 
 -- Base composable provider: model name, basic config, text messages
 baseComposableProvider :: forall m. (ModelName m, ProviderRequest m ~ OpenAIRequest, ProviderResponse m ~ OpenAIResponse) => ComposableProvider m ()
-baseComposableProvider model configs _s = noopHandler
+baseComposableProvider modelProxy configs _s = noopHandler
   { cpToRequest = \msg req ->
-      let req' = req { model = modelName model
+      let reqWithModel = req { model = modelName modelProxy
                      , temperature = getFirst [t | Temperature t <- configs]
                      , max_tokens = getFirst [mt | MaxTokens mt <- configs]
                      , seed = getFirst [s | Seed s <- configs]
                      }
-      in handleTextMessage msg req'
+      in handleTextMessage msg reqWithModel
   , cpConfigHandler = \req ->
       let systemPrompts = [sp | SystemPrompt sp <- configs]
           sysMessages = map systemMessage systemPrompts
-          req1 = modifyMessages (sysMessages <>) req
+          reqWithSysMessages = modifyMessages (sysMessages <>) req
           streamEnabled = case [s | Streaming s <- configs] of
             (s:_) -> Just s
-            [] -> stream req1
-      in req1 { stream = streamEnabled }
+            [] -> stream reqWithSysMessages
+      in reqWithSysMessages { stream = streamEnabled }
   , cpFromResponse = parseTextResponse
   , cpSerializeMessage = serializeBaseMessage
   , cpDeserializeMessage = deserializeBaseMessage
@@ -391,17 +391,17 @@ openAIReasoning _m configs _s = noopHandler
     orderReasoningBeforeText :: [Message m] -> [Message m]
     orderReasoningBeforeText = go [] []
       where
-        go accum reasoning [] = reasoning ++ accum
-        go accum reasoning (m@(AssistantReasoning _) : rest) =
+        go accum reasonMsgs [] = reasonMsgs ++ accum
+        go accum reasonMsgs (msg@(AssistantReasoning _) : rest) =
           let hasText = any isAssistantText accum
           in if hasText
              -- Text comes before reasoning, so put reasoning first in output
-             then [m] ++ reasoning ++ accum ++ go [] [] rest
-             else go accum (reasoning ++ [m]) rest
-        go accum reasoning (m@(AssistantText _) : rest) =
-          go (accum ++ [m]) reasoning rest
-        go accum reasoning (m : rest) =
-          go (accum ++ [m]) reasoning rest
+             then [msg] ++ reasonMsgs ++ accum ++ go [] [] rest
+             else go accum (reasonMsgs ++ [msg]) rest
+        go accum reasonMsgs (msg@(AssistantText _) : rest) =
+          go (accum ++ [msg]) reasonMsgs rest
+        go accum reasonMsgs (msg : rest) =
+          go (accum ++ [msg]) reasonMsgs rest
 
     isAssistantText (AssistantText _) = True
     isAssistantText _ = False
@@ -513,9 +513,9 @@ openRouterReasoning _m configs state = noopHandler
     -- Lookup reasoning_details when creating request
     handleReasoningMessageWithState :: OpenRouterReasoningState -> MessageEncoder m
     handleReasoningMessageWithState st msg req = case msg of
-      AssistantReasoning reasoning ->
+      AssistantReasoning reasoningTxt ->
         -- Lookup reasoning_details from state map by reasoning text
-        case Map.lookup reasoning (reasoningTextToDetails st) of
+        case Map.lookup reasoningTxt (reasoningTextToDetails st) of
           Just details ->
             -- Found details in state - this is an echoed reasoning from a previous API response
             -- Create a proper message with the reasoning_details preserved
@@ -531,7 +531,7 @@ openRouterReasoning _m configs state = noopHandler
             -- No details found - this is a reasoning message that wasn't from the API
             -- (e.g., deserialized from storage or created programmatically)
             -- Just use reasoning_content without details
-            appendMessage (reasoningMessage reasoning) req
+            appendMessage (reasoningMessage reasoningTxt) req
       _ -> req
 
     -- Verify chain-of-thought and add reasoning_details
@@ -571,6 +571,7 @@ openRouterReasoning _m configs state = noopHandler
                 Nothing -> True  -- No reasoning_content means we don't need to look it up
               hasToolCallDetails = case tool_calls msg of
                 Just (tc:_) -> Map.member (callId tc) (toolCallToDetails st)
+                Just [] -> True  -- Empty tool calls list means we don't need to look up details
                 Nothing -> True  -- No tool calls means we don't need to look up details
           in hasReasoningContent && hasToolCallDetails
 
@@ -592,6 +593,7 @@ openRouterReasoning _m configs state = noopHandler
           let -- Try to lookup by tool call ID first
               detailsFromToolCall = case tool_calls msg of
                 Just (tc:_) -> Map.lookup (callId tc) (toolCallToDetails st)
+                Just [] -> Nothing  -- Empty tool calls list means no details to lookup
                 Nothing -> Nothing
               -- Try to lookup by reasoning_content
               detailsFromReasoning = case reasoning_content msg of
@@ -608,17 +610,17 @@ openRouterReasoning _m configs state = noopHandler
     orderReasoningBeforeText :: [Message m] -> [Message m]
     orderReasoningBeforeText = go [] []
       where
-        go accum reasoning [] = reasoning ++ accum
-        go accum reasoning (m@(AssistantReasoning _) : rest) =
+        go accum reasonMsgs [] = reasonMsgs ++ accum
+        go accum reasonMsgs (msg@(AssistantReasoning _) : rest) =
           let hasText = any isAssistantText accum
           in if hasText
              -- Text comes before reasoning, so put reasoning first in output
-             then [m] ++ reasoning ++ accum ++ go [] [] rest
-             else go accum (reasoning ++ [m]) rest
-        go accum reasoning (m@(AssistantText _) : rest) =
-          go (accum ++ [m]) reasoning rest
-        go accum reasoning (m : rest) =
-          go (accum ++ [m]) reasoning rest
+             then [msg] ++ reasonMsgs ++ accum ++ go [] [] rest
+             else go accum (reasonMsgs ++ [msg]) rest
+        go accum reasonMsgs (msg@(AssistantText _) : rest) =
+          go (accum ++ [msg]) reasonMsgs rest
+        go accum reasonMsgs (msg : rest) =
+          go (accum ++ [msg]) reasonMsgs rest
 
     isAssistantText (AssistantText _) = True
     isAssistantText _ = False
@@ -685,13 +687,13 @@ openAIJSON _m _configs _s = noopHandler
 
 -- | Convenience wrapper: Apply base composable provider's model name and config handling (without message processing)
 handleBase :: forall m. (ModelName m, ProviderRequest m ~ OpenAIRequest) => m -> [ModelConfig m] -> MessageEncoder m
-handleBase model configs _msg req =
-  let req' = req { model = modelName model
-                 , temperature = getFirst [t | Temperature t <- configs]
-                 , max_tokens = getFirst [mt | MaxTokens mt <- configs]
-                 , seed = getFirst [s | Seed s <- configs]
-                 }
-  in req'
+handleBase modelProxy configs _msg req =
+  let reqWithModel = req { model = modelName modelProxy
+                         , temperature = getFirst [t | Temperature t <- configs]
+                         , max_tokens = getFirst [mt | MaxTokens mt <- configs]
+                         , seed = getFirst [s | Seed s <- configs]
+                         }
+  in reqWithModel
   where
     getFirst [] = Nothing
     getFirst (x:_) = Just x
@@ -714,18 +716,16 @@ modifyCompletionRequest = id
 
 -- Prompt handler: Set the prompt and model name
 handlePrompt :: forall m.
-                (
-                 CompletionRequest m ~ OpenAICompletionRequest,
-                 ModelName m)
+                (ModelName m)
              =>PromptHandler m
-handlePrompt model _configs prmpt req =
-  req { completionModel = modelName model
-      , prompt = prmpt
+handlePrompt modelProxy _configs promptTxt req =
+  req { completionModel = modelName modelProxy
+      , prompt = promptTxt
       }
 
 -- Config handler: Apply temperature, max_tokens, and stop sequences
 configureCompletion :: forall m.
-                       (CompletionRequest m ~ OpenAICompletionRequest)
+                       ()
                     =>CompletionConfigHandler m
 configureCompletion _m configs req = foldl applyConfig req configs
   where
@@ -737,7 +737,7 @@ configureCompletion _m configs req = foldl applyConfig req configs
 
 -- Response parser: Extract text from first completion choice
 parseCompletionResponse :: forall m.
-                           (CompletionResponse m ~ OpenAICompletionResponse)
+                           ()
                         =>CompletionParser m
 parseCompletionResponse _m _configs _prompt resp =
   case resp of
@@ -749,9 +749,7 @@ parseCompletionResponse _m _configs _prompt resp =
 
 -- Base completion provider
 baseCompletionProvider :: forall m.
-                          (CompletionRequest m ~ OpenAICompletionRequest,
-                           CompletionResponse m ~ OpenAICompletionResponse,
-                           ModelName m)
+                          (ModelName m)
                        =>ComposableCompletionProvider m
 baseCompletionProvider = ComposableCompletionProvider
   { ccpToRequest = handlePrompt @m

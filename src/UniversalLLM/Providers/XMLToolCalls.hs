@@ -71,7 +71,7 @@ parseXMLFromResponse txt =
 -- | Parse XML tool calls from responses (provider has native tool support)
 -- This ONLY handles response parsing - tool definitions use native format
 withXMLResponseParsing ::
-  forall m s s'.
+  forall m s.
   (HasTools m) =>
   ComposableProvider m s ->
   ComposableProvider m ((), s)
@@ -111,7 +111,7 @@ extractXMLFromMessages acc =
 -- Handles: system prompt injection, tool results as text, XML response parsing
 
 withFullXMLToolSupport ::
-  forall m s s'.
+  forall m s.
   (ProviderRequest m ~ OpenAIRequest, HasTools m) =>
    -- FIXME: we need a way to modify [Config] to make this work with all providers by putting it in SystemPrompt
   ComposableProvider m s -> ComposableProvider m ((), s)

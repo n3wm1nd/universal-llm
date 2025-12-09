@@ -90,9 +90,8 @@ addConversationCacheControl req =
       AnthropicToolUseBlock tid tname tinput (Just (CacheControl "ephemeral" "5m"))
     addCacheControlToBlock (AnthropicToolResultBlock rid rcontent _) =
       AnthropicToolResultBlock rid rcontent (Just (CacheControl "ephemeral" "5m"))
-    addCacheControlToBlock block@AnthropicThinkingBlock{..} =
+    addCacheControlToBlock block@AnthropicThinkingBlock{} =
       block { thinkingCacheControl = Just (CacheControl "ephemeral" "5m") }
-    addCacheControlToBlock block = block
 
 -- | Append a content block to messages, grouping with last message if same role
 appendContentBlock :: Text -> AnthropicContentBlock -> AnthropicRequest -> AnthropicRequest

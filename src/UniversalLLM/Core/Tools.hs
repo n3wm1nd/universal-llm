@@ -263,7 +263,7 @@ checkMetaLength p metas =
 -- | Simple constructor for tool with automatic parameter names
 -- Uses default names (text_0, number_1, etc.) from ToolParameter instances
 mkTool :: forall tool params r result.
-          ( Callable tool r params result  -- Note: needed for type inference in tests, despite warning
+          ( Callable tool r params result  -- Note: needed for type inference, despite redundant-constraints warning
           , DefaultParamMeta params)
        =>Text -> Text -> tool -> ToolWrapped tool params
 mkTool name desc fn = ToolWrapped name desc (defaultParamMeta (Proxy @params)) fn
@@ -302,7 +302,7 @@ instance BuildParamMeta rest => BuildParamMeta (a, rest) where
 --     "x" "first number"
 --     "y" "second number"
 mkToolWithMeta :: forall tool params r result.
-                  ( Callable tool r params result  -- Note: needed for type inference in tests, despite warning
+                  ( Callable tool r params result  -- Note: needed for type inference, despite redundant-constraints warning
                   , BuildParamMeta params
                   , DefaultParamMeta params)
                =>Text  -- ^ Tool name
