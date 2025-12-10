@@ -8,6 +8,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -455,25 +456,26 @@ mergeOpenAIDelta acc chunk =
         Aeson.Object choice <- listToMaybe (V.toList choicesArr)
         Aeson.Object delta <- KM.lookup "delta" choice
 
-        -- Try content first
-        case KM.lookup "content" delta of
-            Just (Aeson.String txt) -> return $ ContentDelta txt
-            _ ->
-                -- Try reasoning_content
-                case KM.lookup "reasoning_content" delta of
-                    Just (Aeson.String txt) -> return $ ReasoningContentDelta txt
-                    _ ->
-                        -- Try tool_calls
-                        case KM.lookup "tool_calls" delta of
-                            Just (Aeson.Array toolCallsArr) -> do
-                                -- Manually parse each tool call from the array
-                                -- Each delta has an "index" field indicating which tool call it updates
-                                let parsedCalls = [(idx, tc) | Aeson.Object tcObj <- V.toList toolCallsArr
-                                                             , Just (idx, tc) <- [parseToolCallDelta tcObj]]
-                                if null parsedCalls
-                                    then return EmptyDelta
-                                    else return $ ToolCallsDelta parsedCalls
-                            _ -> return EmptyDelta  -- No content, reasoning_content, or tool_calls
+        -- Try different delta fields using Alternative (<|>)
+        let contentDelta = KM.lookup "content" delta >>= \case
+                Aeson.String txt -> Just $ ContentDelta txt
+                _ -> Nothing
+            reasoningContentDelta = KM.lookup "reasoning_content" delta >>= \case
+                Aeson.String txt -> Just $ ReasoningContentDelta txt
+                _ -> Nothing
+            reasoningDelta = KM.lookup "reasoning" delta >>= \case
+                Aeson.String txt -> Just $ ReasoningContentDelta txt
+                _ -> Nothing
+            toolCallsDelta = KM.lookup "tool_calls" delta >>= \case
+                Aeson.Array toolCallsArr -> do
+                    let parsedCalls = [(idx, tc) | Aeson.Object tcObj <- V.toList toolCallsArr
+                                                 , Just (idx, tc) <- [parseToolCallDelta tcObj]]
+                    if null parsedCalls
+                        then Just EmptyDelta
+                        else Just $ ToolCallsDelta parsedCalls
+                _ -> Nothing
+
+        contentDelta <|> reasoningContentDelta <|> reasoningDelta <|> toolCallsDelta <|> Just EmptyDelta
     extractDelta _ = Nothing
 
     -- Parse a single tool call delta from JSON object

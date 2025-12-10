@@ -12,6 +12,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Aeson (object, (.=))
 import Data.Default (def)
+import Control.Monad (when)
 import TestCache (ResponseProvider)
 import TestModels
 import UniversalLLM.Core.Types
@@ -125,13 +126,24 @@ spec getResponse = do
       BSL.null sseBody `shouldBe` False
 
       let bodyStr = BSLC.unpack sseBody
+          bodyText = T.pack bodyStr
 
       -- Check if response is an error
-      if T.isInfixOf "\"error\"" (T.pack bodyStr)
+      if T.isInfixOf "\"error\"" bodyText
         then expectationFailure $ "Provider returned error: " ++ take 200 bodyStr
         else do
           -- Check for SSE data markers
-          T.isInfixOf "data:" (T.pack bodyStr) `shouldBe` True
+          T.isInfixOf "data:" bodyText `shouldBe` True
+
+          -- Check for reasoning in streaming response - OpenRouter may use either:
+          -- 1. reasoning_content (OpenAI native format)
+          -- 2. reasoning_details (OpenRouter format with array of {text: "..."})
+          let hasReasoningContent = T.isInfixOf "\"reasoning_content\"" bodyText
+              hasReasoningDetails = T.isInfixOf "\"reasoning_details\"" bodyText
+
+          -- At least one reasoning format should be present
+          when (not hasReasoningContent && not hasReasoningDetails) $
+            expectationFailure $ "No reasoning found in SSE response. Expected either reasoning_content or reasoning_details. Response preview: " ++ take 500 bodyStr
 
     it "sends streaming request with reasoning and tools, receives SSE response with both" $ do
       let model = GLM45
