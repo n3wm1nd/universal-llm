@@ -378,18 +378,20 @@ openAIReasoning _m configs _s = noopHandler
       case respChoices of
         (OpenAIChoice msg:rest) ->
           case reasoning_content msg of
-            Just txt ->
+            Just txt | not (T.null txt) ->
               -- Extract reasoning but preserve content and other fields in the choice
+              -- Skip empty reasoning (prevents empty AssistantReasoning messages)
               let updatedMsg = msg { reasoning_content = Nothing }
                   newChoices = OpenAIChoice updatedMsg : rest
               in Right (Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse newChoices)))
-            Nothing -> Right Nothing
+            _ -> Right Nothing
         [] -> Right Nothing
 
     -- Move reasoning messages before text in the same sequence
     -- When we encounter reasoning after text, put reasoning first, then text
+    -- Also filter out empty reasoning and text messages
     orderReasoningBeforeText :: [Message m] -> [Message m]
-    orderReasoningBeforeText = go [] []
+    orderReasoningBeforeText = go [] [] . filter (not . isEmptyMessage)
       where
         go accum reasonMsgs [] = reasonMsgs ++ accum
         go accum reasonMsgs (msg@(AssistantReasoning _) : rest) =
@@ -405,6 +407,10 @@ openAIReasoning _m configs _s = noopHandler
 
     isAssistantText (AssistantText _) = True
     isAssistantText _ = False
+
+    isEmptyMessage (AssistantText txt) = T.null (T.strip txt)
+    isEmptyMessage (AssistantReasoning txt) = T.null (T.strip txt)
+    isEmptyMessage _ = False
 
 -- OpenRouter reasoning provider - handles reasoning_details preservation
 -- This is specifically for OpenRouter which requires reasoning_details to be preserved
@@ -456,21 +462,23 @@ openRouterReasoning _m configs state = noopHandler
         (OpenAIChoice msg:rest) ->
           -- Try reasoning_content first (OpenAI format)
           case reasoning_content msg of
-            Just txt ->
+            Just txt | not (T.null txt) ->
               -- Extract reasoning but preserve content and other fields in the choice
+              -- Skip empty reasoning (prevents empty AssistantReasoning messages)
               let updatedMsg = msg { reasoning_content = Nothing }
                   newChoices = OpenAIChoice updatedMsg : rest
               in Right (Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse newChoices)))
-            Nothing ->
+            _ ->
               -- Try reasoning_details (OpenRouter format)
               case extractReasoningFromDetails (reasoning_details msg) of
-                Just txt ->
+                Just txt | not (T.null txt) ->
                   -- Clear reasoning_details after extraction to prevent infinite unfold loop
                   -- (State preservation happens in cpPostResponse via storeReasoningDetailsFromResponse)
+                  -- Skip empty reasoning (prevents empty AssistantReasoning messages)
                   let updatedMsg = msg { reasoning_details = Nothing }
                       newChoices = OpenAIChoice updatedMsg : rest
                   in Right (Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse newChoices)))
-                Nothing -> Right Nothing
+                _ -> Right Nothing
         [] -> Right Nothing
 
     -- Extract reasoning text from OpenRouter reasoning_details array
@@ -607,8 +615,9 @@ openRouterReasoning _m configs state = noopHandler
 
     -- Move reasoning messages before text in the same sequence
     -- When we encounter reasoning after text, put reasoning first, then text
+    -- Also filter out empty reasoning and text messages
     orderReasoningBeforeText :: [Message m] -> [Message m]
-    orderReasoningBeforeText = go [] []
+    orderReasoningBeforeText = go [] [] . filter (not . isEmptyMessage)
       where
         go accum reasonMsgs [] = reasonMsgs ++ accum
         go accum reasonMsgs (msg@(AssistantReasoning _) : rest) =
@@ -624,6 +633,10 @@ openRouterReasoning _m configs state = noopHandler
 
     isAssistantText (AssistantText _) = True
     isAssistantText _ = False
+
+    isEmptyMessage (AssistantText txt) = T.null (T.strip txt)
+    isEmptyMessage (AssistantReasoning txt) = T.null (T.strip txt)
+    isEmptyMessage _ = False
 
 -- Standalone tools provider
 openAITools :: forall m . (HasTools m, ProviderRequest m ~ OpenAIRequest, ProviderResponse m ~ OpenAIResponse) => ComposableProvider m ()
