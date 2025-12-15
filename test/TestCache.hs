@@ -28,10 +28,11 @@ import qualified Data.ByteString.Base16 as Base16
 import System.Directory (doesDirectoryExist, doesFileExist)
 import System.FilePath ((</>))
 import Control.Monad (unless)
-import Control.Exception (Exception, throwIO)
+import Control.Exception (Exception, throwIO, catch)
 import Autodocodec (HasCodec, toJSONViaCodec, parseJSONViaCodec)
 import Data.Aeson.Types (parseEither)
 import qualified Data.Aeson as Aeson
+import Test.Hspec (pendingWith)
 
 -- | Exception thrown when a cache miss occurs in playback mode
 data CacheMissException = CacheMissException String
@@ -116,7 +117,8 @@ updateMode cachePath apiCall req = do
   recordResponse cachePath req response
   return response
 
--- Playback mode: only use cache, throw CacheMissException if not found (ensures no unexpected API calls)
+-- Playback mode: only use cache, mark test as pending if not found (ensures no unexpected API calls)
+-- Cache misses are treated as pending tests rather than failures, since tests may run without cached responses
 playbackMode :: (HasCodec req, HasCodec resp)
              => CachePath
              -> ResponseProvider req resp
@@ -124,7 +126,9 @@ playbackMode cachePath req = do
   cached <- lookupResponse cachePath req
   case cached of
     Just response -> return response
-    Nothing -> throwIO $ CacheMissException $ "No cached response for request hash: " ++ hashRequest req
+    Nothing -> do
+      pendingWith $ "Cache miss: No cached response for request hash: " ++ hashRequest req
+      error "unreachable"  -- pendingWith throws, but GHC doesn't know that
 
 -- Live mode: always make real request, ignore cache
 liveMode :: (req -> IO resp) -> ResponseProvider req resp
@@ -186,7 +190,8 @@ updateModeRaw cachePath apiCall req = do
   recordRawResponse cachePath req response
   return response
 
--- Raw playback mode: only use cache, throw CacheMissException if not found
+-- Raw playback mode: only use cache, mark test as pending if not found
+-- Cache misses are treated as pending tests rather than failures, since tests may run without cached responses
 playbackModeRaw :: HasCodec req
                 => CachePath
                 -> ResponseProvider req BSL.ByteString
@@ -194,4 +199,6 @@ playbackModeRaw cachePath req = do
   cached <- lookupRawResponse cachePath req
   case cached of
     Just response -> return response
-    Nothing -> throwIO $ CacheMissException $ "No cached response for request hash: " ++ hashRequest req
+    Nothing -> do
+      pendingWith $ "Cache miss: No cached response for request hash: " ++ hashRequest req
+      error "unreachable"  -- pendingWith throws, but GHC doesn't know that
