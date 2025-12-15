@@ -16,7 +16,10 @@ import UniversalLLM.Core.Serialization
 import UniversalLLM.Protocols.Anthropic
 import Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Data.Text.Encoding as TE
 import Data.Aeson (Value)
+import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Lazy as BSL
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Default (Default(..))
@@ -126,7 +129,7 @@ fromToolResult (ToolResult toolCall output) =
   let callId = getToolCallId toolCall
       resultContent = case output of
         Left errMsg -> errMsg
-        Right jsonVal -> Text.pack $ show jsonVal
+        Right jsonVal -> TE.decodeUtf8 . BSL.toStrict . Aeson.encode $ jsonVal
   in AnthropicToolResultBlock callId resultContent Nothing
 
 -- | Convert text to a text content block
