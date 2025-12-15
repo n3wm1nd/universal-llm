@@ -323,26 +323,36 @@ reasoningWithTools = StandardTest $ \cp model initialState getResponse -> do
           mockToolResult _ =
             object ["result" .= ("success" :: Text)]
 
-      -- Continue conversation with tool results
+      -- First continuation: Send tool results and let model respond
       -- This is where reasoning_details preservation is critical
-      -- Use a prompt that encourages reasoning
-      let msgs2 = msgs ++ parsedMsgs1 ++ toolResults ++ [UserText "Thank you. What do you think they are used for?"]
-          (_, req2) = toProviderRequest cp model configs state2 msgs2
+      let msgs2 = msgs ++ parsedMsgs1 ++ toolResults
+          (state3, req2) = toProviderRequest cp model configs state2 msgs2
 
       resp2 <- getResponse req2
-      let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
+      let (state4, parsedMsgs2) = either (error . show) id $ fromProviderResponse cp model configs state3 resp2
 
-      -- Should successfully handle the continuation with both reasoning and text
-      -- When Reasoning True is in configs, we expect the model to reason about the tool results
+      -- Should get response to tool results
+      -- Models may or may not provide reasoning here - some just summarize tool results
       length parsedMsgs2 `shouldSatisfy` (> 0)
 
-      -- Check that we got reasoning (AssistantReasoning) in the response
-      let hasReasoning = any isReasoningMsg parsedMsgs2
-          hasText = any isTextMsg parsedMsgs2
+      -- Second continuation: User follow-up question
+      -- This should trigger reasoning since it's a new user request
+      let msgs3 = msgs2 ++ parsedMsgs2 ++ [UserText "Thank you. What do you think they are used for?"]
+          (_, req3) = toProviderRequest cp model configs state4 msgs3
 
-      -- We expect both reasoning and text in a reasoning-enabled conversation
-      -- hasReasoning `shouldBe` True  -- optional for some models
-      hasText `shouldBe` True
+      resp3 <- getResponse req3
+      let parsedMsgs3 = either (error . show) snd $ fromProviderResponse cp model configs state4 resp3
+
+      -- Should get response to follow-up with reasoning
+      -- When Reasoning is enabled and we ask a new question, we expect reasoning
+      length parsedMsgs3 `shouldSatisfy` (> 0)
+
+      let hasReasoning3 = any isReasoningMsg parsedMsgs3
+          hasText3 = any isTextMsg parsedMsgs3
+
+      -- The follow-up question should trigger both reasoning and text
+      hasReasoning3 `shouldBe` True
+      hasText3 `shouldBe` True
 
   where
     isReasoningMsg (AssistantReasoning _) = True
