@@ -422,29 +422,27 @@ openRouterReasoning _m configs state = noopHandler
       let -- Verify and add reasoning_details based on chain-of-thought verification
           req1 = verifyAndAddReasoningDetails state req
 
-          -- Check if any message has reasoning_details (after verification)
-          hasReasoningDetails = any (\msg -> case reasoning_details msg of
-                                       Just _ -> True
-                                       Nothing -> False) (messages req1)
-
           -- Check if last message is a user message
           lastMessageRole = case reverse (messages req1) of
             (msg:_) -> role msg
             [] -> ""
           isUserMessage = lastMessageRole == "user"
 
-          -- Set reasoning field only if:
-          -- 1. Reasoning True in configs
-          -- 2. Last message is a user message (we're requesting new reasoning)
-          -- 3. No messages have reasoning_details (not continuing a reasoning conversation)
-          reasoningConfig = case [r | Reasoning r <- configs] of
-            (True:_) | isUserMessage && not hasReasoningDetails -> Just OpenAIReasoningConfig
+          -- Validate reasoning chain from last user message backwards
+          -- Returns True if we should request reasoning (valid chain or fresh start)
+          shouldRequestReasoning = case [r | Reasoning r <- configs] of
+            (True:_) | isUserMessage -> validateReasoningChain (messages req1)
+            _ -> False
+
+          -- Set reasoning field if validated
+          reasoningConfig = if shouldRequestReasoning
+            then Just OpenAIReasoningConfig
               { reasoning_enabled = Just True
               , reasoning_max_tokens = Nothing
               , reasoning_effort = Just "low"
               , reasoning_exclude = Just False
               }
-            _ -> Nothing
+            else Nothing
 
           req2 = req1 { reasoning = reasoningConfig }
       in req2
@@ -455,6 +453,37 @@ openRouterReasoning _m configs state = noopHandler
   , cpDeserializeMessage = deserializeReasoningMessages
   }
   where
+    -- Validate that the reasoning chain is complete from the last user message
+    -- Returns True if we should request reasoning (either fresh start or valid continuation)
+    validateReasoningChain :: [OpenAIMessage] -> Bool
+    validateReasoningChain msgs =
+      let -- Find the tool call chain from last user message backwards
+          toolChain = extractToolChainFromLastUser (reverse msgs)
+      in case toolChain of
+           [] -> True  -- No tool chain = fresh conversation, request reasoning
+           chain -> all hasReasoningDetails chain
+      where
+        hasReasoningDetails msg = case reasoning_details msg of
+          Just _ -> True
+          Nothing -> False
+
+    -- Extract tool call chain: all assistant messages with tool_calls between
+    -- the most recent user message and the previous user message (or start)
+    extractToolChainFromLastUser :: [OpenAIMessage] -> [OpenAIMessage]
+    extractToolChainFromLastUser [] = []
+    extractToolChainFromLastUser msgs =
+      let -- Skip to first user message (most recent)
+          afterFirstUser = dropWhile (\m -> role m /= "user") msgs
+          -- Get messages between first and second user (or end)
+          betweenUsers = takeWhile (\m -> role m /= "user") (drop 1 afterFirstUser)
+          -- Filter to assistant messages with tool_calls
+          toolCallMsgs = filter isToolCallMessage betweenUsers
+      in toolCallMsgs
+      where
+        isToolCallMessage msg = role msg == "assistant" && case tool_calls msg of
+          Just (_:_) -> True
+          _ -> False
+
     parseReasoningResponse (OpenAIError err) =
       Left $ ModelError $ errorMessage (errorDetail err)
     parseReasoningResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =

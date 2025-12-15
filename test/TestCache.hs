@@ -55,14 +55,18 @@ hashRequest req =
 
 -- Record a response for a given request
 -- Requires cache directory to already exist
+-- Also saves the request for debugging purposes
 recordResponse :: (HasCodec req, HasCodec resp) => CachePath -> req -> resp -> IO ()
 recordResponse cachePath req resp = do
   dirExists <- doesDirectoryExist cachePath
   unless dirExists $ error $ "Cache directory does not exist: " ++ cachePath
   let cacheKey = hashRequest req
-      cachePath' = cachePath </> cacheKey <> ".json"
+      responsePath = cachePath </> cacheKey <> ".json"
+      requestPath = cachePath </> cacheKey <> "-request.json"
       responseJson = Aeson.encode $ toJSONViaCodec resp
-  BSL.writeFile cachePath' responseJson
+      requestJson = Aeson.encode $ toJSONViaCodec req
+  BSL.writeFile responsePath responseJson
+  BSL.writeFile requestPath requestJson
 
 -- Look up a cached response for a request
 lookupResponse :: (HasCodec req, HasCodec resp) => CachePath -> req -> IO (Maybe resp)
@@ -128,13 +132,17 @@ liveMode apiCall req = apiCall req
 
 -- Cache raw ByteString responses (e.g., SSE streams) without JSON encoding
 -- Stores as .sse file instead of .json
+-- Also saves the request for debugging purposes
 recordRawResponse :: HasCodec req => CachePath -> req -> BSL.ByteString -> IO ()
 recordRawResponse cachePath req responseBody = do
   dirExists <- doesDirectoryExist cachePath
   unless dirExists $ error $ "Cache directory does not exist: " ++ cachePath
   let cacheKey = hashRequest req
-      cachePath' = cachePath </> cacheKey <> ".sse"
-  BSL.writeFile cachePath' responseBody
+      responsePath = cachePath </> cacheKey <> ".sse"
+      requestPath = cachePath </> cacheKey <> "-request.json"
+      requestJson = Aeson.encode $ toJSONViaCodec req
+  BSL.writeFile responsePath responseBody
+  BSL.writeFile requestPath requestJson
 
 -- Look up a cached raw ByteString response
 lookupRawResponse :: HasCodec req => CachePath -> req -> IO (Maybe BSL.ByteString)

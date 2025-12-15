@@ -310,20 +310,46 @@ reasoningWithTools = StandardTest $ \cp model initialState getResponse -> do
       -- Should get back messages (reasoning and/or tool calls)
       length parsedMsgs1 `shouldSatisfy` (> 0)
 
-      -- If there are tool calls, add mock tool results
-      let toolResults = [ ToolResultMsg (ToolResult tc (Right (object ["result" .= ("success" :: Text)])))
+      -- If there are tool calls, add mock tool results with realistic data
+      let toolResults = [ ToolResultMsg (ToolResult tc (Right (mockToolResult tc)))
                         | AssistantTool tc <- parsedMsgs1 ]
+
+          -- Generate realistic mock results based on tool name
+          mockToolResult :: ToolCall -> Value
+          mockToolResult (ToolCall _ "list_files" _) =
+            object ["files" .= (["README.md", "CHANGELOG.md", "TODO.md"] :: [Text])]
+          mockToolResult (InvalidToolCall _ "list_files" _ _) =
+            object ["files" .= (["README.md", "CHANGELOG.md", "TODO.md"] :: [Text])]
+          mockToolResult _ =
+            object ["result" .= ("success" :: Text)]
 
       -- Continue conversation with tool results
       -- This is where reasoning_details preservation is critical
-      let msgs2 = msgs ++ parsedMsgs1 ++ toolResults ++ [UserText "Thank you, now tell me more about those files."]
+      -- Use a prompt that encourages reasoning
+      let msgs2 = msgs ++ parsedMsgs1 ++ toolResults ++ [UserText "Thank you. What do you think they are used for?"]
           (_, req2) = toProviderRequest cp model configs state2 msgs2
 
       resp2 <- getResponse req2
       let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
 
-      -- Should successfully handle the continuation
+      -- Should successfully handle the continuation with both reasoning and text
+      -- When Reasoning True is in configs, we expect the model to reason about the tool results
       length parsedMsgs2 `shouldSatisfy` (> 0)
+
+      -- Check that we got reasoning (AssistantReasoning) in the response
+      let hasReasoning = any isReasoningMsg parsedMsgs2
+          hasText = any isTextMsg parsedMsgs2
+
+      -- We expect both reasoning and text in a reasoning-enabled conversation
+      -- hasReasoning `shouldBe` True  -- optional for some models
+      hasText `shouldBe` True
+
+  where
+    isReasoningMsg (AssistantReasoning _) = True
+    isReasoningMsg _ = False
+
+    isTextMsg (AssistantText _) = True
+    isTextMsg _ = False
 
 -- OpenAI-specific test to verify reasoning_details preservation
 openAIReasoningDetailsPreservation :: ( Monoid (ProviderRequest m)
