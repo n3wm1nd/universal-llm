@@ -14,6 +14,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 module UniversalLLM.Core.Types where
 
@@ -492,22 +493,22 @@ instance Default TemperatureSetting where
 instance Default MaxTokensSetting where
   def = MaxTokensSetting 4096
 
--- | Apply a setting to generate ModelConfig values
+-- | Apply a setting to generate a ModelConfig value
 -- Instances are constraint-based, ensuring only valid settings can be applied
 class ApplySetting setting model where
-  applySetting :: setting -> [ModelConfig model]
+  applySetting :: setting -> ModelConfig model
 
 instance SupportsStreaming (ProviderOf model) => ApplySetting StreamingSetting model where
-  applySetting (StreamingSetting b) = [Streaming b]
+  applySetting (StreamingSetting b) = Streaming b
 
 instance HasReasoning model => ApplySetting ReasoningSetting model where
-  applySetting (ReasoningSetting b) = [Reasoning b]
+  applySetting (ReasoningSetting b) = Reasoning b
 
 instance SupportsTemperature (ProviderOf model) => ApplySetting TemperatureSetting model where
-  applySetting (TemperatureSetting t) = [Temperature t]
+  applySetting (TemperatureSetting t) = Temperature t
 
 instance SupportsMaxTokens (ProviderOf model) => ApplySetting MaxTokensSetting model where
-  applySetting (MaxTokensSetting n) = [MaxTokens n]
+  applySetting (MaxTokensSetting n) = MaxTokens n
 
 -- | Generic machinery for applying all settings in a config record
 class GApplySettings f model where
@@ -534,11 +535,11 @@ class GApplySettingsField a model where
   gApplySettingsField :: a -> [ModelConfig model]
 
 instance {-# OVERLAPPABLE #-} ApplySetting a model => GApplySettingsField a model where
-  gApplySettingsField x = applySetting x
+  gApplySettingsField x = [applySetting x]
 
 instance {-# OVERLAPPING #-} ApplySetting a model => GApplySettingsField (Maybe a) model where
   gApplySettingsField Nothing = []
-  gApplySettingsField (Just x) = applySetting x
+  gApplySettingsField (Just x) = [applySetting x]
 
 -- | Generic default config derivation
 class GDefault f where
@@ -563,9 +564,12 @@ instance GDefault f => GDefault (C1 c f) where
 defaultConfig :: (Generic cfg, GDefault (Rep cfg)) => cfg
 defaultConfig = to gDefault
 
+-- | Constraint for valid model configuration records
+-- A config record must be Generic and all fields must be ApplySetting instances
+type ModelSettings cfg model = (Generic cfg, GApplySettings (Rep cfg) model)
+
 -- | Convert a config record to [ModelConfig model] using Generic derivation
-toModelConfigs :: (Generic cfg, GApplySettings (Rep cfg) model)
-               => cfg -> [ModelConfig model]
+toModelConfigs :: ModelSettings cfg model => cfg -> [ModelConfig model]
 toModelConfigs cfg = gApplySettings (from cfg)
 
 -- ============================================================================
