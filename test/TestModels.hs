@@ -179,6 +179,22 @@ instance HasReasoning (Model Gemini3ProPreview OpenRouter) where
 openRouterGemini3ProPreview :: ComposableProvider (Model Gemini3ProPreview OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ()))
 openRouterGemini3ProPreview = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Gemini3ProPreview OpenRouter)
 
+-- Google Gemini 3 Flash Preview via OpenRouter
+data Gemini3FlashPreview = Gemini3FlashPreview deriving (Show, Eq)
+
+instance ModelName (Model Gemini3FlashPreview OpenRouter) where
+  modelName (Model _ _) = "google/gemini-3-flash-preview"
+
+instance HasTools (Model Gemini3FlashPreview OpenRouter) where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning (Model Gemini3FlashPreview OpenRouter) where
+  type ReasoningState (Model Gemini3FlashPreview OpenRouter) = OpenAI.OpenRouterReasoningState
+  withReasoning = OpenAI.openRouterReasoning
+
+openRouterGemini3FlashPreview :: ComposableProvider (Model Gemini3FlashPreview OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ()))
+openRouterGemini3FlashPreview = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Gemini3FlashPreview OpenRouter)
+
 -- Basic text-only model (for compile-time safety tests)
 data BasicTextModel = BasicTextModel deriving (Show, Eq)
 

@@ -72,6 +72,11 @@ modelTests providers = do
     testModel TestModels.openRouterGemini3ProPreview (Model TestModels.Gemini3ProPreview OpenRouter) (openrouterProvider providers)
       [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
 
+  -- Google Gemini 3 Flash Preview via OpenRouter - High speed reasoning model with tool use
+  describe "Gemini 3 Flash Preview (OpenRouter)" $
+    testModel TestModels.openRouterGemini3FlashPreview (Model TestModels.Gemini3FlashPreview OpenRouter) (openrouterProvider providers)
+      [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+
   -- ZAI Models
   -- GLM 4.5 via ZAI coding endpoint
   describe "GLM 4.5 (ZAI)" $
