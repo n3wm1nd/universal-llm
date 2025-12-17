@@ -151,7 +151,7 @@ zaiGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `c
 data Nova2Lite = Nova2Lite deriving (Show, Eq)
 
 instance ModelName (Model Nova2Lite OpenRouter) where
-  modelName (Model _ _) = "amazon/nova-2-lite-v1:free"
+  modelName (Model _ _) = "amazon/nova-2-lite-v1"
 
 instance HasTools (Model Nova2Lite OpenRouter) where
   withTools = OpenAI.openAITools
