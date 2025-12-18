@@ -253,3 +253,24 @@ toolCallingWithReasoning makeRequest modelName = do
 
     -- Step 3: Verify we get a valid response
     assertHasAssistantText resp2
+
+-- | Probe: Consecutive user messages
+--
+-- __Tests:__ Does the API accept multiple user messages in a row?
+--
+-- __Checks:__ Response succeeds with two consecutive user messages
+--
+-- __Expected to pass:__ Most models (semantically valid)
+--
+-- __Expected to fail:__ Models/APIs with strict alternating message requirements
+--
+-- __Note:__ Semantically, consecutive user messages make sense (user adds context
+-- or asks follow-up before assistant responds), but some APIs enforce strict
+-- user/assistant alternation.
+consecutiveUserMessages :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+consecutiveUserMessages makeRequest modelName = do
+  it "accepts consecutive user messages" $ do
+    let req = (Protocol.OpenAI.consecutiveUserMessages "Here is some context." "Now answer this question: what is 2+2?")
+          { model = modelName }
+    resp <- makeRequest req
+    assertHasAssistantText resp

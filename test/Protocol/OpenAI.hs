@@ -96,6 +96,12 @@ userMessage txt = emptyMessage { role = "user", content = Just txt }
 simpleUserRequest :: Text -> OpenAIRequest
 simpleUserRequest txt = mempty { messages = [userMessage txt] }
 
+-- | Create a request with consecutive user messages
+--
+-- Used to test if the API accepts multiple user messages in a row
+consecutiveUserMessages :: Text -> Text -> OpenAIRequest
+consecutiveUserMessages msg1 msg2 = mempty { messages = [userMessage msg1, userMessage msg2] }
+
 -- | Create a simple tool definition with parameters
 --
 -- Example: simpleTool "get_weather" "Get current weather" [("location", "string", "City name")]

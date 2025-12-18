@@ -64,6 +64,7 @@ testsOpenRouter provider = do
       basicText provider "z-ai/glm-4.5-air:free"
       toolCalling provider "z-ai/glm-4.5-air:free"
       acceptsToolResults provider "z-ai/glm-4.5-air:free"
+      consecutiveUserMessages provider "z-ai/glm-4.5-air:free"
       reasoningViaDetails provider "z-ai/glm-4.5-air:free"
 
     describe "Standard Tests" $
@@ -83,6 +84,7 @@ testsLlamaCpp provider modelName = do
       basicText provider modelName
       toolCallingViaXML provider modelName  -- GLM-4.5 returns XML tool calls in content
       acceptsToolResults provider modelName
+      consecutiveUserMessages provider modelName
       reasoning provider modelName  -- llama.cpp uses standard reasoning_content
 
     describe "Standard Tests" $
