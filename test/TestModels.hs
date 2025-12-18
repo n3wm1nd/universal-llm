@@ -144,6 +144,29 @@ zaiGLM45 :: ComposableProvider (Model GLM45 ZAI) ((), ((), ((), ())))
 zaiGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45 ZAI)
 
 -- ============================================================================
+-- Qwen Models
+-- ============================================================================
+
+-- Qwen 3 Coder - Code-specialized model supporting tools
+-- Available via llama.cpp
+data Qwen3Coder = Qwen3Coder deriving (Show, Eq)
+
+-- Model name varies based on GGUF filename
+instance ModelName (Model Qwen3Coder LlamaCpp) where
+  modelName (Model _ _) = "Qwen3-Coder-30B-Instruct"  -- Common canonicalized name
+
+-- Capability instances
+instance HasTools (Model Qwen3Coder LlamaCpp) where
+  withTools = OpenAI.openAITools
+
+instance HasJSON (Model Qwen3Coder LlamaCpp) where
+  withJSON = OpenAI.openAIJSON
+
+-- Composable provider
+llamaCppQwen3Coder :: ComposableProvider (Model Qwen3Coder LlamaCpp) ((), ((), ()))
+llamaCppQwen3Coder = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen3Coder LlamaCpp)
+
+-- ============================================================================
 -- OpenRouter-specific Models
 -- ============================================================================
 
