@@ -274,3 +274,22 @@ consecutiveUserMessages makeRequest modelName = do
           { model = modelName }
     resp <- makeRequest req
     assertHasAssistantText resp
+
+-- | Probe: History starting with assistant message
+--
+-- __Tests:__ Does the API accept conversation history starting with assistant?
+--
+-- __Checks:__ Response succeeds with assistant message before user message
+--
+-- __Expected to pass:__ Some models/APIs
+--
+-- __Expected to fail:__ Models/APIs requiring user message first
+--
+-- __Note:__ Some APIs/templates require conversation to start with user message.
+-- Others accept assistant-first messages for system-like introductions or priming.
+startsWithAssistant :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+startsWithAssistant makeRequest modelName = do
+  it "accepts history starting with assistant message" $ do
+    let req = Protocol.OpenAI.startsWithAssistant { model = modelName }
+    resp <- makeRequest req
+    assertHasAssistantText resp

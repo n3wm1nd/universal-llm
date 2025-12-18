@@ -48,6 +48,7 @@ testsLlamaCpp provider modelName = do
       toolCalling provider modelName  -- Uses proper tool_calls (not XML)
       acceptsToolResults provider modelName
       consecutiveUserMessages provider modelName
+      startsWithAssistant provider modelName
 
     describe "Standard Tests" $
       testModel TestModels.llamaCppQwen3Coder (Model TestModels.Qwen3Coder LlamaCpp) provider

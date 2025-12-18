@@ -56,6 +56,7 @@ testsOpenRouter provider = do
       -- acceptsToolResultsWithoutReasoning provider "google/gemini-3-flash-preview"
 
       consecutiveUserMessages provider "google/gemini-3-flash-preview"
+      startsWithAssistant provider "google/gemini-3-flash-preview"
       reasoningViaDetails provider "google/gemini-3-flash-preview"
       toolCallingWithReasoning provider "google/gemini-3-flash-preview"
 

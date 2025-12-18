@@ -102,6 +102,21 @@ simpleUserRequest txt = mempty { messages = [userMessage txt] }
 consecutiveUserMessages :: Text -> Text -> OpenAIRequest
 consecutiveUserMessages msg1 msg2 = mempty { messages = [userMessage msg1, userMessage msg2] }
 
+-- | Create an assistant message
+assistantMessage :: Text -> OpenAIMessage
+assistantMessage txt = emptyMessage { role = "assistant", content = Just txt }
+
+-- | Create a request starting with an assistant message
+--
+-- Used to test if the API accepts history starting with assistant (no initial user message)
+startsWithAssistant :: OpenAIRequest
+startsWithAssistant = mempty
+  { messages =
+      [ assistantMessage "I'm a helpful assistant."
+      , userMessage "What is 2+2?"
+      ]
+  }
+
 -- | Create a simple tool definition with parameters
 --
 -- Example: simpleTool "get_weather" "Get current weather" [("location", "string", "City name")]
