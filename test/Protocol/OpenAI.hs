@@ -136,6 +136,50 @@ enableReasoning req = req
   { reasoning = Just $ emptyReasoningConfig { reasoning_enabled = Just True }
   }
 
+-- | Create an assistant message with a tool call
+--
+-- Example: assistantToolCallMessage "call_123" "get_weather" "{\"location\": \"London\"}"
+assistantToolCallMessage :: Text -> Text -> Text -> OpenAIMessage
+assistantToolCallMessage callId functionName arguments = emptyMessage
+  { role = "assistant"
+  , tool_calls = Just [OpenAIToolCall
+      { callId = callId
+      , toolCallType = "function"
+      , toolFunction = OpenAIToolFunction
+          { toolFunctionName = functionName
+          , toolFunctionArguments = arguments
+          }
+      }]
+  }
+
+-- | Create a tool response message
+--
+-- Example: toolResponseMessage "call_123" "{\"temperature\": 72, \"condition\": \"sunny\"}"
+toolResponseMessage :: Text -> Text -> OpenAIMessage
+toolResponseMessage callId result = emptyMessage
+  { role = "tool"
+  , tool_call_id = Just callId
+  , content = Just result
+  }
+
+-- | Create a request with fabricated tool call history
+--
+-- This creates a conversation with:
+-- 1. User asks question that should trigger tool
+-- 2. Assistant makes tool call
+-- 3. Tool returns result (automated, from us)
+-- (Next message should be assistant responding to the tool result)
+--
+-- Used to test if the API accepts tool results in the expected format.
+requestWithToolCallHistory :: OpenAIRequest
+requestWithToolCallHistory = mempty
+  { messages =
+      [ userMessage "What's the weather in London?"
+      , assistantToolCallMessage "call_abc123" "get_weather" "{\"location\": \"London\"}"
+      , toolResponseMessage "call_abc123" "{\"temperature\": 72, \"condition\": \"sunny\"}"
+      ]
+  }
+
 -- ============================================================================
 -- Response Helpers
 --

@@ -179,3 +179,23 @@ toolCallingViaXML makeRequest modelName = do
           }
     resp <- makeRequest req
     assertHasXMLToolCall "get_weather" resp
+
+-- | Probe: Accepts tool call responses
+--
+-- __Tests:__ Does the API accept tool results in conversation history?
+--
+-- __Checks:__ Response succeeds with fabricated tool call + result in history
+--
+-- __Expected to pass:__ All models that support tool calling
+--
+-- __Expected to fail:__ Models without tool support
+--
+-- __Note:__ This tests if the wire protocol accepts the format we send,
+-- not the full conversation flow (that's covered by StandardTests).
+-- We use fabricated history because we only care about format acceptance.
+acceptsToolResults :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsToolResults makeRequest modelName = do
+  it "accepts tool results in conversation history" $ do
+    let req = requestWithToolCallHistory { model = modelName }
+    resp <- makeRequest req
+    assertHasAssistantText resp
