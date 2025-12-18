@@ -55,6 +55,12 @@ testsOpenRouter provider = do
       -- Gemini still requires thought_signature in tool calls. Cannot use fabricated history.
       -- acceptsToolResultsWithoutReasoning provider "google/gemini-3-flash-preview"
 
+      -- Note: All tool result/history probes would fail - requires thought_signature
+      -- acceptsToolResultNoTools provider "google/gemini-3-flash-preview"
+      -- acceptsToolResultToolGone provider "google/gemini-3-flash-preview"
+      -- acceptsStaleToolInHistory provider "google/gemini-3-flash-preview"
+      -- acceptsOldToolCallStillAvailable provider "google/gemini-3-flash-preview"
+
       consecutiveUserMessages provider "google/gemini-3-flash-preview"
       startsWithAssistant provider "google/gemini-3-flash-preview"
       reasoningViaDetails provider "google/gemini-3-flash-preview"

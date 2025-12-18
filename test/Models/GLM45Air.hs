@@ -64,6 +64,10 @@ testsOpenRouter provider = do
       basicText provider "z-ai/glm-4.5-air:free"
       toolCalling provider "z-ai/glm-4.5-air:free"
       acceptsToolResults provider "z-ai/glm-4.5-air:free"
+      acceptsToolResultNoTools provider "z-ai/glm-4.5-air:free"
+      acceptsToolResultToolGone provider "z-ai/glm-4.5-air:free"
+      acceptsStaleToolInHistory provider "z-ai/glm-4.5-air:free"
+      acceptsOldToolCallStillAvailable provider "z-ai/glm-4.5-air:free"
       consecutiveUserMessages provider "z-ai/glm-4.5-air:free"
       startsWithAssistant provider "z-ai/glm-4.5-air:free"
       reasoningViaDetails provider "z-ai/glm-4.5-air:free"
@@ -85,6 +89,10 @@ testsLlamaCpp provider modelName = do
       basicText provider modelName
       toolCallingViaXML provider modelName  -- GLM-4.5 returns XML tool calls in content
       acceptsToolResults provider modelName
+      acceptsToolResultNoTools provider modelName
+      acceptsToolResultToolGone provider modelName
+      acceptsStaleToolInHistory provider modelName
+      acceptsOldToolCallStillAvailable provider modelName
       consecutiveUserMessages provider modelName
       startsWithAssistant provider modelName
       reasoning provider modelName  -- llama.cpp uses standard reasoning_content

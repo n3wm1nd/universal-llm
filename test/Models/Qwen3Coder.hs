@@ -47,6 +47,10 @@ testsLlamaCpp provider modelName = do
       basicText provider modelName
       toolCalling provider modelName  -- Uses proper tool_calls (not XML)
       acceptsToolResults provider modelName
+      acceptsToolResultNoTools provider modelName
+      acceptsToolResultToolGone provider modelName
+      acceptsStaleToolInHistory provider modelName
+      acceptsOldToolCallStillAvailable provider modelName
       consecutiveUserMessages provider modelName
       startsWithAssistant provider modelName
 

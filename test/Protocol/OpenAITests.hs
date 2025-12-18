@@ -293,3 +293,90 @@ startsWithAssistant makeRequest modelName = do
     let req = Protocol.OpenAI.startsWithAssistant { model = modelName }
     resp <- makeRequest req
     assertHasAssistantText resp
+
+-- | Probe: Tool result with no tools defined
+--
+-- __Tests:__ Does the API accept tool results when tools field is None/empty?
+--
+-- __Checks:__ Response succeeds with tool call + result in history but no tools defined
+--
+-- __Expected to pass:__ Flexible APIs that don't require tool definitions for historical calls
+--
+-- __Expected to fail:__ APIs that require tools field when tool results are present (Nova)
+--
+-- __Note:__ This is the most restrictive case - no tools at all.
+-- Tests if tool definitions are required even for completed tool interactions.
+acceptsToolResultNoTools :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsToolResultNoTools makeRequest modelName = do
+  it "accepts tool result when no tools defined" $ do
+    let req = requestWithToolResultNoTools { model = modelName }
+    resp <- makeRequest req
+    -- Just verify no error - response might be text or empty
+    case checkError resp of
+      OpenAISuccess _ -> return ()
+      OpenAIError _ -> error "Should have succeeded"
+
+-- | Probe: Tool result but the called tool no longer available
+--
+-- __Tests:__ Does the API accept tool results when the specific tool is gone?
+--
+-- __Checks:__ Response succeeds with get_weather call+result but only calculator available
+--
+-- __Expected to pass:__ Flexible APIs
+--
+-- __Expected to fail:__ APIs requiring the called tool to be present (Nova)
+--
+-- __Note:__ This tests immediate removal - tool call just returned but tool is gone.
+-- Different from acceptsStaleToolInHistory which has assistant message after.
+acceptsToolResultToolGone :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsToolResultToolGone makeRequest modelName = do
+  it "accepts tool result when called tool no longer available" $ do
+    let req = requestWithToolResultToolGone { model = modelName }
+    resp <- makeRequest req
+    -- Just verify no error - response might be text or empty
+    case checkError resp of
+      OpenAISuccess _ -> return ()
+      OpenAIError _ -> error "Should have succeeded"
+
+-- | Probe: Tool call in history but tool no longer available (further back)
+--
+-- __Tests:__ Does the API accept tool calls in history when tool is no longer in tool set?
+--
+-- __Checks:__ Model responds successfully (might call tool, or respond with text)
+--
+-- __Expected to pass:__ Flexible APIs that don't validate historical tool calls
+--
+-- __Expected to fail:__ APIs that require all tools referenced in history to be available
+--
+-- __Note:__ This tests tool call further back in history (after assistant responded).
+-- Informs how careful we need to be when modifying tool sets during conversations.
+-- We ask "calculate 5 * 7" with calculator tool, but the key test is API accepts
+-- the request with stale get_weather tool in history.
+acceptsStaleToolInHistory :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsStaleToolInHistory makeRequest modelName = do
+  it "accepts tool call in history when tool no longer available" $ do
+    let req = requestWithStaleToolInHistory { model = modelName }
+    resp <- makeRequest req
+    -- Just verify request succeeds - model behavior may vary
+    case checkError resp of
+      OpenAISuccess _ -> return ()
+      OpenAIError _ -> error "Should have succeeded"
+
+-- | Probe: Old tool call in history with tool still available
+--
+-- __Tests:__ Does conversation work when tool from history is still available but conversation moved on?
+--
+-- __Checks:__ Response succeeds with old get_weather in history, weather tool available, asking about math
+--
+-- __Expected to pass:__ Most models (tool still available)
+--
+-- __Expected to fail:__ Models that get confused when available tool doesn't match current intent
+--
+-- __Note:__ This is the "safe" case - tool is still available even though conversation moved on.
+-- Contrasts with acceptsStaleToolInHistory where tool is removed.
+acceptsOldToolCallStillAvailable :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsOldToolCallStillAvailable makeRequest modelName = do
+  it "accepts old tool call in history with tool still available" $ do
+    let req = requestWithOldToolCallStillAvailable { model = modelName }
+    resp <- makeRequest req
+    assertHasAssistantText resp

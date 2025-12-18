@@ -198,6 +198,7 @@ toolResponseMessage callId result = emptyMessage
 -- (Next message should be assistant responding to the tool result)
 --
 -- Used to test if the API accepts tool results in the expected format.
+-- Includes the tool definition since the tool call references it.
 requestWithToolCallHistory :: OpenAIRequest
 requestWithToolCallHistory = mempty
   { messages =
@@ -205,6 +206,73 @@ requestWithToolCallHistory = mempty
       , assistantToolCallMessage "call_abc123" "get_weather" "{\"location\": \"London\"}"
       , toolResponseMessage "call_abc123" "{\"temperature\": 72, \"condition\": \"sunny\"}"
       ]
+  , tools = Just [weatherTool]
+  }
+
+-- | Create a request with tool call history but tool no longer available
+--
+-- This tests if the API accepts tool calls in history where the tool definition
+-- is no longer in the current tool set. This happens when tools are added/removed
+-- between requests.
+--
+-- History contains a get_weather tool call, but only calculator tool is available now.
+requestWithStaleToolInHistory :: OpenAIRequest
+requestWithStaleToolInHistory = mempty
+  { messages =
+      [ userMessage "What's the weather in London?"
+      , assistantToolCallMessage "call_abc123" "get_weather" "{\"location\": \"London\"}"
+      , toolResponseMessage "call_abc123" "{\"temperature\": 72, \"condition\": \"sunny\"}"
+      , assistantMessage "It's 72 degrees and sunny in London."
+      , userMessage "Now calculate 5 * 7"
+      ]
+  , tools = Just [simpleTool "calculator" "Perform calculations" [("expression", "string", "Math expression")]]
+  }
+
+-- | Create a request with tool call result but no tools defined
+--
+-- This tests if the API accepts tool results when tools field is empty/null.
+-- Some APIs (like Nova) require tool definitions even when processing results.
+requestWithToolResultNoTools :: OpenAIRequest
+requestWithToolResultNoTools = mempty
+  { messages =
+      [ userMessage "What's the weather in London?"
+      , assistantToolCallMessage "call_abc123" "get_weather" "{\"location\": \"London\"}"
+      , toolResponseMessage "call_abc123" "{\"temperature\": 72, \"condition\": \"sunny\"}"
+      ]
+  , tools = Nothing  -- No tools defined
+  }
+
+-- | Create a request with tool call result but the specific tool no longer available
+--
+-- This tests if the API accepts tool results when the tool that was called
+-- is no longer in the tool set. Different from requestWithStaleToolInHistory
+-- which has the tool call + result deep in history - this is immediately after
+-- the tool call returns.
+requestWithToolResultToolGone :: OpenAIRequest
+requestWithToolResultToolGone = mempty
+  { messages =
+      [ userMessage "What's the weather in London?"
+      , assistantToolCallMessage "call_abc123" "get_weather" "{\"location\": \"London\"}"
+      , toolResponseMessage "call_abc123" "{\"temperature\": 72, \"condition\": \"sunny\"}"
+      ]
+  , tools = Just [simpleTool "calculator" "Perform calculations" [("expression", "string", "Math expression")]]
+  }
+
+-- | Create a request with old tool call in history, new user message, tool still available
+--
+-- This tests if tools in history must remain in the tool set even after
+-- the conversation has moved on. The get_weather call is in history but conversation
+-- has continued - does the tool need to stay available?
+requestWithOldToolCallStillAvailable :: OpenAIRequest
+requestWithOldToolCallStillAvailable = mempty
+  { messages =
+      [ userMessage "What's the weather in London?"
+      , assistantToolCallMessage "call_abc123" "get_weather" "{\"location\": \"London\"}"
+      , toolResponseMessage "call_abc123" "{\"temperature\": 72, \"condition\": \"sunny\"}"
+      , assistantMessage "It's 72 degrees and sunny in London."
+      , userMessage "Now calculate 5 * 7"
+      ]
+  , tools = Just [weatherTool]  -- weather still available, though conversation moved to math
   }
 
 -- | Create a request with tool result from a previous response
