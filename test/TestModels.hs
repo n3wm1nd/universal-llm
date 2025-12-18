@@ -160,8 +160,8 @@ instance HasReasoning (Model Nova2Lite OpenRouter) where
   type ReasoningState (Model Nova2Lite OpenRouter) = OpenAI.OpenRouterReasoningState
   withReasoning = OpenAI.openRouterReasoning
 
-openRouterNova2Lite :: ComposableProvider (Model Nova2Lite OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ()))
-openRouterNova2Lite = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Nova2Lite OpenRouter)
+openRouterNova2Lite :: ComposableProvider (Model Nova2Lite OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+openRouterNova2Lite = withReasoning `chainProviders` withTools `chainProviders` OpenAI.normalizeEmptyContent `chainProviders` OpenAI.baseComposableProvider @(Model Nova2Lite OpenRouter)
 
 -- Google Gemini 3 Pro Preview via OpenRouter
 data Gemini3ProPreview = Gemini3ProPreview deriving (Show, Eq)

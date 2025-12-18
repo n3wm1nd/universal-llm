@@ -20,7 +20,6 @@ import qualified ToolsSpec
 import qualified TestCache
 import qualified TestHTTP
 import qualified ModelRegistry
-import qualified Nova2DebugSpec
 import qualified ReasoningConfigSpec
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse, OpenAICompletionRequest, OpenAICompletionResponse)
@@ -349,9 +348,6 @@ main = do
           , ModelRegistry.zaiProvider = zaiProvider
           }
     describe "Model Registry" $ ModelRegistry.modelTests providers
-
-    -- Debug tests
-    describe "Nova 2 Lite Debug" $ Nova2DebugSpec.spec openrouterProvider
 
     -- Reasoning config tests (unit tests)
     describe "Reasoning Config" ReasoningConfigSpec.spec

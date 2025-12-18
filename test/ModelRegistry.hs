@@ -62,10 +62,12 @@ modelTests providers = do
     testModel TestModels.openRouterGLM45 (Model TestModels.GLM45 OpenRouter) (openrouterProvider providers)
       [ ST.text, ST.tools, ST.reasoning ]
 
-  -- Amazon Nova 2 Lite via OpenRouter - Note: Nova doesn't return AssistantReasoning via OpenRouter
+  -- Amazon Nova 2 Lite via OpenRouter
+  -- Note: Uses normalizeEmptyContent to work with Bedrock, so can't do verbatim preservation
+  -- Nova doesn't return AssistantReasoning via OpenRouter
   describe "Amazon Nova 2 Lite (OpenRouter)" $
     testModel TestModels.openRouterNova2Lite (Model TestModels.Nova2Lite OpenRouter) (openrouterProvider providers)
-      [ ST.text, ST.tools, ST.openAIReasoningDetailsPreservation ]
+      [ ST.text, ST.tools ]
 
   -- Google Gemini 3 Pro Preview via OpenRouter - Test reasoning_details preservation with tool calls
   describe "Gemini 3 Pro Preview (OpenRouter)" $

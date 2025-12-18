@@ -724,6 +724,24 @@ openAIJSON _m _configs _s = noopHandler
 -- They're defined in the HasTools/HasReasoning/HasJSON instances
 
 -- ============================================================================
+-- Provider-Specific Fixes
+-- ============================================================================
+
+-- | Normalize empty content to Nothing for providers that reject empty strings
+-- Amazon Bedrock (via OpenRouter) rejects assistant messages with empty content strings.
+-- This provider normalizes `content: ""` to `content: null` (omitted in JSON) before sending.
+-- Use this for Nova and other Bedrock models via OpenRouter.
+normalizeEmptyContent :: forall m. (ProviderRequest m ~ OpenAIRequest) => ComposableProvider m ()
+normalizeEmptyContent _m _configs _state = noopHandler
+  { cpConfigHandler = \req -> req { messages = map normalizeMessage (messages req) }
+  }
+  where
+    normalizeMessage :: OpenAIMessage -> OpenAIMessage
+    normalizeMessage msg = case content msg of
+      Just "" -> msg { content = Nothing }
+      _ -> msg
+
+-- ============================================================================
 -- Test Helper Functions (Convenience Wrappers)
 -- ============================================================================
 

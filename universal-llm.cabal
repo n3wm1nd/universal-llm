@@ -100,7 +100,6 @@ test-suite universal-llm-tests
     CachedIntegrationSpec
     ModelRegistry
     StandardTests
-    Nova2DebugSpec
     ReasoningConfigSpec
   hs-source-dirs: test
 
