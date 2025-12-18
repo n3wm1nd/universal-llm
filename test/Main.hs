@@ -275,26 +275,33 @@ main = do
     _ -> return ()
 
   -- Helper: Check if requested model matches any of the loaded model variants
-  -- Returns True if models match or if we don't know the loaded model
-  let modelMatches :: OpenAIRequest -> Bool
+  -- Returns (matches, error message) for better pending messages
+  let modelMatches :: OpenAIRequest -> (Bool, String)
       modelMatches req = case llamacppLoadedModel of
-        Nothing -> True  -- No loaded model info, proceed anyway
+        Nothing -> (True, "")  -- No loaded model info, proceed anyway
         Just loadedModels ->
           let requestedModel = T.unpack (OpenAI.model req)
-          in requestedModel `elem` loadedModels
+              matches = requestedModel `elem` loadedModels
+              loadedModelName = case loadedModels of
+                (first:_) -> show first
+                [] -> "unknown"
+              errMsg = if matches then ""
+                       else "Skipped: loaded model " ++ loadedModelName
+                            ++ " does not match requested model " ++ show requestedModel
+          in (matches, errMsg)
 
   -- Build llama.cpp response provider
   -- Only makes live requests if model name matches the request's model field
   let llamacppProvider :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
       llamacppProvider = case mode of
         Just "record" | Just url <- llamacppUrl ->
-          TestCache.recordModeWithFilter cachePath modelMatches $
+          TestCache.recordModeWithFilterMsg cachePath modelMatches $
             TestHTTP.httpCall (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
         Just "update" | Just url <- llamacppUrl ->
-          TestCache.updateModeWithFilter cachePath modelMatches $
+          TestCache.updateModeWithFilterMsg cachePath modelMatches $
             TestHTTP.httpCall (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
         Just "live" | Just url <- llamacppUrl ->
-          TestCache.liveModeWithFilter modelMatches $
+          TestCache.liveModeWithFilterMsg modelMatches $
             TestHTTP.httpCall (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
         _ -> TestCache.playbackMode cachePath
 

@@ -9,11 +9,14 @@ module TestCache
   , cachedRequest
   , recordMode
   , recordModeWithFilter
+  , recordModeWithFilterMsg
   , updateMode
   , updateModeWithFilter
+  , updateModeWithFilterMsg
   , playbackMode
   , liveMode
   , liveModeWithFilter
+  , liveModeWithFilterMsg
   , recordRawResponse
   , lookupRawResponse
   , cachedRawRequest
@@ -150,6 +153,28 @@ recordModeWithFilter cachePath filterFn apiCall req =
       pendingWith $ "Skipped: Request filter returned False for hash: " ++ hashRequest req
       error "unreachable"
 
+-- Record mode with filter and custom message
+-- Note: Checks cache FIRST before applying filter (record = use cache if available, otherwise make request)
+recordModeWithFilterMsg :: (HasCodec req, HasCodec resp)
+                        => CachePath
+                        -> (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
+                        -> (req -> IO resp)
+                        -> ResponseProvider req resp
+recordModeWithFilterMsg cachePath filterFn apiCall req = do
+  -- Check cache first
+  cached <- lookupResponse cachePath req
+  case cached of
+    Just response -> return response  -- Cache hit, use it
+    Nothing ->  -- Cache miss, check filter
+      case filterFn req of
+        (True, _) -> do
+          response <- apiCall req
+          recordResponse cachePath req response
+          return response
+        (False, msg) -> do
+          pendingWith msg
+          error "unreachable"
+
 -- Update mode with filter: skip request if filter returns False (mark as pending)
 updateModeWithFilter :: (HasCodec req, HasCodec resp)
                      => CachePath
@@ -163,6 +188,19 @@ updateModeWithFilter cachePath filterFn apiCall req =
       pendingWith $ "Skipped: Request filter returned False for hash: " ++ hashRequest req
       error "unreachable"
 
+-- Update mode with filter and custom message
+updateModeWithFilterMsg :: (HasCodec req, HasCodec resp)
+                        => CachePath
+                        -> (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
+                        -> (req -> IO resp)
+                        -> ResponseProvider req resp
+updateModeWithFilterMsg cachePath filterFn apiCall req =
+  case filterFn req of
+    (True, _) -> updateMode cachePath apiCall req
+    (False, msg) -> do
+      pendingWith msg
+      error "unreachable"
+
 -- Live mode with filter: skip request if filter returns False (mark as pending)
 liveModeWithFilter :: (req -> Bool)  -- ^ Filter: returns True if request should proceed
                    -> (req -> IO resp)
@@ -172,6 +210,17 @@ liveModeWithFilter filterFn apiCall req =
     then apiCall req
     else do
       pendingWith $ "Skipped: Request filter returned False"
+      error "unreachable"
+
+-- Live mode with filter and custom message
+liveModeWithFilterMsg :: (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
+                      -> (req -> IO resp)
+                      -> ResponseProvider req resp
+liveModeWithFilterMsg filterFn apiCall req =
+  case filterFn req of
+    (True, _) -> apiCall req
+    (False, msg) -> do
+      pendingWith msg
       error "unreachable"
 
 -- Cache raw ByteString responses (e.g., SSE streams) without JSON encoding
