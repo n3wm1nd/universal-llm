@@ -37,12 +37,12 @@ import qualified StandardTests as ST
 import TestCache (ResponseProvider)
 import TestHelpers (testModel)
 import qualified TestModels
-import Test.Hspec (Spec, describe)
+import Test.Hspec (Spec, describe, HasCallStack)
 
 -- | Test Amazon Nova 2 Lite via OpenRouter
 --
 -- Includes both protocol probes (wire format) and standard tests (high-level API).
-testsOpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsOpenRouter :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsOpenRouter provider = do
   describe "Amazon Nova 2 Lite (OpenRouter)" $ do
     describe "Protocol" $ do

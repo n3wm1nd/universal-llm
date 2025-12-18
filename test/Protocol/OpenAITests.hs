@@ -73,7 +73,7 @@ import UniversalLLM.Protocols.OpenAI
 import Protocol.OpenAI  -- unqualified - we mainly call these
 import Data.Text (Text)
 import qualified Data.Text as T
-import Test.Hspec (Spec, describe, it, shouldSatisfy)
+import Test.Hspec (Spec, describe, it, shouldSatisfy, HasCallStack)
 
 -- ============================================================================
 -- Capability Probes
@@ -89,7 +89,7 @@ import Test.Hspec (Spec, describe, it, shouldSatisfy)
 -- __Checks:__ Response contains non-empty assistant text
 --
 -- __Expected to pass:__ Almost all models
-basicText :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+basicText :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
 basicText makeRequest modelName = do
   it "returns assistant text for simple question" $ do
     let req = (simpleUserRequest "What is 2+2?") { model = modelName }
@@ -106,7 +106,7 @@ basicText makeRequest modelName = do
 --
 -- __Note:__ This only tests if the model CAN call tools, not if it does
 -- so correctly or appropriately. Use StandardTests for that.
-toolCalling :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolCalling :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
 toolCalling makeRequest modelName = do
   it "makes tool calls when tools are available" $ do
     let req = (simpleUserRequest "Use the get_weather function to check the weather in London.")
@@ -127,7 +127,7 @@ toolCalling makeRequest modelName = do
 -- __Expected to fail:__ OpenRouter (uses reasoning_details instead)
 --
 -- __See also:__ 'reasoningViaDetails' for the OpenRouter variant
-reasoning :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+reasoning :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
 reasoning makeRequest modelName = do
   it "returns reasoning content when enabled" $ do
     let req = enableReasoning (simpleUserRequest "Think step by step: What is 15 * 23?")
@@ -148,7 +148,7 @@ reasoning makeRequest modelName = do
 -- __Provider quirk:__ OpenRouter uses reasoning_details instead of
 -- reasoning_content. This requires a handler in ComposableProvider
 -- to translate the field for our Message abstraction.
-reasoningViaDetails :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+reasoningViaDetails :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
 reasoningViaDetails makeRequest modelName = do
   it "returns reasoning in reasoning_details field" $ do
     let req = enableReasoning (simpleUserRequest "Think step by step: What is 15 * 23?")
@@ -170,7 +170,7 @@ reasoningViaDetails makeRequest modelName = do
 -- __Model quirk:__ Some models trained for XML tool format return tools in
 -- the content field instead of using the tool_calls field. This requires
 -- withXMLResponseParsing handler in ComposableProvider.
-toolCallingViaXML :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolCallingViaXML :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
 toolCallingViaXML makeRequest modelName = do
   it "returns tool calls as XML in content field" $ do
     let req = (simpleUserRequest "Use the get_weather function to check the weather in London.")
@@ -194,7 +194,7 @@ toolCallingViaXML makeRequest modelName = do
 -- not the full conversation flow (that's covered by StandardTests).
 -- We use fabricated history because we only care about format acceptance.
 -- Some models (Gemini) may reject this - use acceptsToolResultsWithoutReasoning instead.
-acceptsToolResults :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsToolResults :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
 acceptsToolResults makeRequest modelName = do
   it "accepts tool results in conversation history" $ do
     let req = requestWithToolCallHistory { model = modelName }
@@ -214,7 +214,7 @@ acceptsToolResults makeRequest modelName = do
 -- __Note:__ This explicitly disables reasoning to test if fabricated tool histories
 -- work when we're not in reasoning mode. Some models (Gemini) require reasoning_details
 -- to be preserved in history, but might accept fabricated history if reasoning is disabled.
-acceptsToolResultsWithoutReasoning :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsToolResultsWithoutReasoning :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
 acceptsToolResultsWithoutReasoning makeRequest modelName = do
   it "accepts tool results with reasoning disabled" $ do
     let req = disableReasoning requestWithToolCallHistory { model = modelName }
@@ -234,7 +234,7 @@ acceptsToolResultsWithoutReasoning makeRequest modelName = do
 -- __Note:__ This uses a real conversation flow (can't fabricate reasoning_details).
 -- Some models (like Gemini) require reasoning_details to be preserved in history
 -- or they fail/behave incorrectly on subsequent responses.
-toolCallingWithReasoning :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolCallingWithReasoning :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
 toolCallingWithReasoning makeRequest modelName = do
   it "preserves reasoning through tool call chains" $ do
     -- Step 1: Get model to make a tool call with reasoning
@@ -267,7 +267,7 @@ toolCallingWithReasoning makeRequest modelName = do
 -- __Note:__ Semantically, consecutive user messages make sense (user adds context
 -- or asks follow-up before assistant responds), but some APIs enforce strict
 -- user/assistant alternation.
-consecutiveUserMessages :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+consecutiveUserMessages :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
 consecutiveUserMessages makeRequest modelName = do
   it "accepts consecutive user messages" $ do
     let req = (Protocol.OpenAI.consecutiveUserMessages "Here is some context." "Now answer this question: what is 2+2?")
@@ -287,7 +287,7 @@ consecutiveUserMessages makeRequest modelName = do
 --
 -- __Note:__ Some APIs/templates require conversation to start with user message.
 -- Others accept assistant-first messages for system-like introductions or priming.
-startsWithAssistant :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+startsWithAssistant :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
 startsWithAssistant makeRequest modelName = do
   it "accepts history starting with assistant message" $ do
     let req = Protocol.OpenAI.startsWithAssistant { model = modelName }
@@ -306,14 +306,13 @@ startsWithAssistant makeRequest modelName = do
 --
 -- __Note:__ This is the most restrictive case - no tools at all.
 -- Tests if tool definitions are required even for completed tool interactions.
-acceptsToolResultNoTools :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsToolResultNoTools :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
 acceptsToolResultNoTools makeRequest modelName = do
   it "accepts tool result when no tools defined" $ do
     let req = requestWithToolResultNoTools { model = modelName }
     resp <- makeRequest req
     -- Just verify no error - response might be text or empty
-    _ <- return $ expectSuccess resp
-    return ()
+    wasSuccessful resp
 
 -- | Probe: Tool result but the called tool no longer available
 --
@@ -327,14 +326,13 @@ acceptsToolResultNoTools makeRequest modelName = do
 --
 -- __Note:__ This tests immediate removal - tool call just returned but tool is gone.
 -- Different from acceptsStaleToolInHistory which has assistant message after.
-acceptsToolResultToolGone :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsToolResultToolGone :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
 acceptsToolResultToolGone makeRequest modelName = do
   it "accepts tool result when called tool no longer available" $ do
     let req = requestWithToolResultToolGone { model = modelName }
     resp <- makeRequest req
     -- Just verify no error - response might be text or empty
-    _ <- return $ expectSuccess resp
-    return ()
+    wasSuccessful resp
 
 -- | Probe: Tool call in history but tool no longer available (further back)
 --
@@ -350,14 +348,13 @@ acceptsToolResultToolGone makeRequest modelName = do
 -- Informs how careful we need to be when modifying tool sets during conversations.
 -- We ask "calculate 5 * 7" with calculator tool, but the key test is API accepts
 -- the request with stale get_weather tool in history.
-acceptsStaleToolInHistory :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsStaleToolInHistory :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
 acceptsStaleToolInHistory makeRequest modelName = do
   it "accepts tool call in history when tool no longer available" $ do
     let req = requestWithStaleToolInHistory { model = modelName }
     resp <- makeRequest req
     -- Just verify request succeeds - model behavior may vary
-    _ <- return $ expectSuccess resp
-    return ()
+    wasSuccessful resp
 
 -- | Probe: Old tool call in history with tool still available
 --
@@ -371,7 +368,7 @@ acceptsStaleToolInHistory makeRequest modelName = do
 --
 -- __Note:__ This is the "safe" case - tool is still available even though conversation moved on.
 -- Contrasts with acceptsStaleToolInHistory where tool is removed.
-acceptsOldToolCallStillAvailable :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsOldToolCallStillAvailable :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
 acceptsOldToolCallStillAvailable makeRequest modelName = do
   it "accepts old tool call in history with tool still available" $ do
     let req = requestWithOldToolCallStillAvailable { model = modelName }
@@ -391,7 +388,7 @@ acceptsOldToolCallStillAvailable makeRequest modelName = do
 -- __Note:__ This verifies that OpenAIError is treated as a VALID protocol response,
 -- not a failure. We test this by triggering an error condition (invalid model name)
 -- and verifying we get a well-formed error response.
-providerErrorResponse :: (OpenAIRequest -> IO OpenAIResponse) -> Spec
+providerErrorResponse :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Spec
 providerErrorResponse makeRequest = do
   it "returns well-formed error response for invalid model" $ do
     let req = (simpleUserRequest "What is 2+2?") { model = "invalid-model-name-that-does-not-exist" }

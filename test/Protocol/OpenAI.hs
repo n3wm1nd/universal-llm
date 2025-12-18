@@ -49,7 +49,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
-import Test.Hspec (Spec, it, shouldSatisfy, Expectation)
+import Test.Hspec (Spec, it, shouldSatisfy, Expectation, HasCallStack)
 
 -- ============================================================================
 -- Empty/Default Objects
@@ -307,7 +307,7 @@ requestWithToolResult resp =
 --
 -- Note: This throws on OpenAIError, which is a VALID protocol response.
 -- If you want to test error handling, use 'expectError' instead.
-expectSuccess :: OpenAIResponse -> OpenAISuccessResponse
+expectSuccess :: HasCallStack => OpenAIResponse -> OpenAISuccessResponse
 expectSuccess (OpenAIError (OpenAIErrorResponse details)) =
   let typeInfo = case errorType details of
         Just t -> " (" <> t <> ")"
@@ -369,10 +369,18 @@ getErrorDetail (OpenAIErrorResponse details) = details
 -- These check specific protocol behaviors and throw descriptive errors.
 -- ============================================================================
 
+-- | Assert that response was successful (not an error)
+--
+-- Use this when you just need to verify no error occurred.
+-- Throws if provider returned error, succeeds if response is valid.
+-- Useful for tests that just need to check acceptance without inspecting content.
+wasSuccessful :: HasCallStack => OpenAIResponse -> Expectation
+wasSuccessful resp = expectSuccess resp `seq` return ()
+
 -- | Assert that response is a provider error (not a success)
 --
 -- Use this to test error handling - verifies we got an OpenAIError response
-assertIsProviderError :: OpenAIResponse -> Expectation
+assertIsProviderError :: HasCallStack => OpenAIResponse -> Expectation
 assertIsProviderError resp = do
   let details = getErrorDetail . expectError $ resp
   -- Verify it has error details
@@ -381,13 +389,13 @@ assertIsProviderError resp = do
 -- | Assert that response contains assistant text
 --
 -- Use this in protocol tests to verify basic text responses
-assertHasAssistantText :: OpenAIResponse -> Expectation
+assertHasAssistantText :: HasCallStack => OpenAIResponse -> Expectation
 assertHasAssistantText resp = do
   let text = getAssistantText . expectSuccess $ resp
   T.length text `shouldSatisfy` (> 0)
 
 -- | Assert that response contains tool calls
-assertHasToolCalls :: OpenAIResponse -> Expectation
+assertHasToolCalls :: HasCallStack => OpenAIResponse -> Expectation
 assertHasToolCalls resp = do
   let msg = getFirstMessage . expectSuccess $ resp
   case msg.tool_calls of
@@ -396,7 +404,7 @@ assertHasToolCalls resp = do
     Nothing -> error "Message has no tool_calls field"
 
 -- | Assert that response contains reasoning content
-assertHasReasoningContent :: OpenAIResponse -> Expectation
+assertHasReasoningContent :: HasCallStack => OpenAIResponse -> Expectation
 assertHasReasoningContent resp = do
   let msg = getFirstMessage . expectSuccess $ resp
   case msg.reasoning_content of
@@ -407,7 +415,7 @@ assertHasReasoningContent resp = do
 -- | Assert that response contains reasoning_details
 --
 -- Some providers (like OpenRouter) put reasoning in reasoning_details instead
-assertHasReasoningDetails :: OpenAIResponse -> Expectation
+assertHasReasoningDetails :: HasCallStack => OpenAIResponse -> Expectation
 assertHasReasoningDetails resp = do
   let msg = getFirstMessage . expectSuccess $ resp
   case msg.reasoning_details of
@@ -419,7 +427,7 @@ assertHasReasoningDetails resp = do
 -- Some models (like GLM-4.5 via llama.cpp) return tool calls as XML in the content field
 -- instead of using the proper tool_calls field. This checks for the presence of
 -- <tool_call>function_name in the response body.
-assertHasXMLToolCall :: Text -> OpenAIResponse -> Expectation
+assertHasXMLToolCall :: HasCallStack => Text -> OpenAIResponse -> Expectation
 assertHasXMLToolCall functionName resp = do
   let msg = getFirstMessage . expectSuccess $ resp
   case msg.content of
