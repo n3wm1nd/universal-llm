@@ -171,7 +171,7 @@ app apiKey req respond = do
               { errorDetail = OpenAIErrorDetail
                   { code = 500
                   , errorMessage = T.pack $ show err
-                  , errorType = "proxy_error"
+                  , errorType = Just "proxy_error"
                   }
               })
     else

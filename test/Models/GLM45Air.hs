@@ -71,6 +71,7 @@ testsOpenRouter provider = do
       consecutiveUserMessages provider "z-ai/glm-4.5-air:free"
       startsWithAssistant provider "z-ai/glm-4.5-air:free"
       reasoningViaDetails provider "z-ai/glm-4.5-air:free"
+      providerErrorResponse provider
 
     describe "Standard Tests" $
       testModel TestModels.openRouterGLM45 (Model TestModels.GLM45 OpenRouter) provider

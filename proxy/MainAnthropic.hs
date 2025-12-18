@@ -172,7 +172,7 @@ app apiKey req respond = do
               { OpenAIProto.errorDetail = OpenAIProto.OpenAIErrorDetail
                   { OpenAIProto.code = 500
                   , OpenAIProto.errorMessage = T.pack $ show err
-                  , OpenAIProto.errorType = "proxy_error"
+                  , OpenAIProto.errorType = Just "proxy_error"
                   }
               })
     else

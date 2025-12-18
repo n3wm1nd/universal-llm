@@ -49,7 +49,10 @@ parseOpenAIResponse :: TestModel
                     -> OpenAIResponse
                     -> Either LLMError [Message TestModel]
 parseOpenAIResponse model configs _history (OpenAIError (OpenAIErrorResponse errDetail)) =
-  Left $ ProviderError (code errDetail) $ errorMessage errDetail <> " (" <> errorType errDetail <> ")"
+  let typeInfo = case errorType errDetail of
+        Just t -> " (" <> t <> ")"
+        Nothing -> ""
+  in Left $ ProviderError (code errDetail) $ errorMessage errDetail <> typeInfo
 parseOpenAIResponse model configs _history resp =
   let msgs = parseOpenAIResponseGeneric TestModels.openRouterGLM45 model configs (def, ((), ((), ()))) resp
   in if null msgs

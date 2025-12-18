@@ -282,46 +282,85 @@ requestWithOldToolCallStillAvailable = mempty
 --
 -- Used to test if reasoning/metadata is preserved through tool call chains.
 requestWithToolResult :: OpenAIResponse -> OpenAIRequest
-requestWithToolResult resp = case checkError resp of
-  OpenAISuccess (OpenAISuccessResponse (OpenAIChoice assistantMsg : _)) ->
-    mempty
-      { messages =
-          [ userMessage "Use the get_weather function to check the weather in London."
-          , assistantMsg  -- Preserve all fields (including reasoning_details)
-          , toolResponseMessage "call_abc123" "{\"temperature\": 72, \"condition\": \"sunny\"}"
-          ]
-      }
-  _ -> error "Response doesn't contain assistant message"
+requestWithToolResult resp =
+  let assistantMsg = getFirstMessage . expectSuccess $ resp
+  in mempty
+    { messages =
+        [ userMessage "Use the get_weather function to check the weather in London."
+        , assistantMsg  -- Preserve all fields (including reasoning_details)
+        , toolResponseMessage "call_abc123" "{\"temperature\": 72, \"condition\": \"sunny\"}"
+        ]
+    }
 
 -- ============================================================================
 -- Response Helpers
 --
 -- Functions to extract data from responses and check for errors.
--- Use 'checkError' first in composition chains to catch API errors early.
+-- Use 'expectSuccess' when you expect a successful response.
+-- Use 'expectError' when testing error handling.
 -- ============================================================================
+
+-- | Expect a success response - unwrap and return OpenAISuccessResponse
+--
+-- Use this when you expect the request to succeed:
+-- >>> text <- getAssistantText . expectSuccess $ resp
+--
+-- Note: This throws on OpenAIError, which is a VALID protocol response.
+-- If you want to test error handling, use 'expectError' instead.
+expectSuccess :: OpenAIResponse -> OpenAISuccessResponse
+expectSuccess (OpenAIError (OpenAIErrorResponse details)) =
+  let typeInfo = case errorType details of
+        Just t -> " (" <> t <> ")"
+        Nothing -> ""
+  in error $ T.unpack $ "Expected success but got provider error: " <> errorMessage details <> typeInfo
+expectSuccess (OpenAISuccess success) = success
+
+-- | Expect an error response - unwrap and return OpenAIErrorResponse
+--
+-- Use this when testing error handling:
+-- >>> errResp <- expectError resp
+-- >>> errorMessage (errorDetail errResp) `shouldContain` "invalid"
+expectError :: OpenAIResponse -> OpenAIErrorResponse
+expectError (OpenAISuccess _) =
+  error "Expected provider error but got success response"
+expectError (OpenAIError err) = err
 
 -- | Check if response is an error - throw if so, otherwise pass through
 --
--- Use this first in a composition chain to catch API errors:
--- >>> getAssistantText . checkError $ resp
+-- DEPRECATED: Use 'expectSuccess' instead for clarity.
+-- This name is confusing because it doesn't "check" - it throws on error.
+{-# DEPRECATED checkError "Use expectSuccess instead" #-}
 checkError :: OpenAIResponse -> OpenAIResponse
-checkError (OpenAIError (OpenAIErrorResponse details)) =
-  error $ T.unpack $ "API error: " <> errorMessage details <> " (" <> errorType details <> ")"
-checkError resp = resp
+checkError resp = OpenAISuccess (expectSuccess resp)
 
--- | Extract assistant text from response
+-- | Extract the single message from success response
 --
--- Throws if no choices or no content. Use after checkError:
--- >>> getAssistantText . checkError $ resp
-getAssistantText :: OpenAIResponse -> Text
-getAssistantText (OpenAISuccess (OpenAISuccessResponse [])) =
+-- Throws if no choices or multiple choices. Use this to avoid repeated pattern matching:
+-- >>> msg <- getFirstMessage . expectSuccess $ resp
+getFirstMessage :: OpenAISuccessResponse -> OpenAIMessage
+getFirstMessage (OpenAISuccessResponse []) =
   error "No choices in response"
-getAssistantText (OpenAISuccess (OpenAISuccessResponse (OpenAIChoice msg : _))) =
-  case msg.content of
+getFirstMessage (OpenAISuccessResponse [OpenAIChoice msg]) = msg
+getFirstMessage (OpenAISuccessResponse choices) =
+  error $ "Expected exactly one choice, got " ++ show (length choices)
+
+-- | Extract assistant text from success response
+--
+-- Throws if no choices or no content. Use after expectSuccess:
+-- >>> getAssistantText . expectSuccess $ resp
+getAssistantText :: OpenAISuccessResponse -> Text
+getAssistantText success =
+  case (getFirstMessage success).content of
     Just txt -> txt
     Nothing -> error "Assistant message has no content"
-getAssistantText (OpenAIError _) =
-  error "Cannot get assistant text from error response (use checkError first)"
+
+-- | Extract error details from error response
+--
+-- Throws if response is not an error. Use to test error handling:
+-- >>> details <- getErrorDetail . expectError $ resp
+-- >>> errorMessage details `shouldContain` "invalid"
+getErrorDetail :: OpenAIErrorResponse -> OpenAIErrorDetail
+getErrorDetail (OpenAIErrorResponse details) = details
 
 -- ============================================================================
 -- Protocol Assertions
@@ -330,56 +369,50 @@ getAssistantText (OpenAIError _) =
 -- These check specific protocol behaviors and throw descriptive errors.
 -- ============================================================================
 
+-- | Assert that response is a provider error (not a success)
+--
+-- Use this to test error handling - verifies we got an OpenAIError response
+assertIsProviderError :: OpenAIResponse -> Expectation
+assertIsProviderError resp = do
+  let details = getErrorDetail . expectError $ resp
+  -- Verify it has error details
+  T.length (errorMessage details) `shouldSatisfy` (> 0)
+
 -- | Assert that response contains assistant text
 --
 -- Use this in protocol tests to verify basic text responses
 assertHasAssistantText :: OpenAIResponse -> Expectation
 assertHasAssistantText resp = do
-  let text = getAssistantText . checkError $ resp
+  let text = getAssistantText . expectSuccess $ resp
   T.length text `shouldSatisfy` (> 0)
 
 -- | Assert that response contains tool calls
 assertHasToolCalls :: OpenAIResponse -> Expectation
 assertHasToolCalls resp = do
-  case checkError resp of
-    OpenAISuccess (OpenAISuccessResponse []) ->
-      error "No choices in response"
-    OpenAISuccess (OpenAISuccessResponse (OpenAIChoice msg : _)) ->
-      case msg.tool_calls of
-        Just (_:_) -> return ()
-        Just [] -> error "Message has empty tool_calls list"
-        Nothing -> error "Message has no tool_calls field"
-    OpenAIError _ ->
-      error "Cannot check tool calls on error response (use checkError first)"
+  let msg = getFirstMessage . expectSuccess $ resp
+  case msg.tool_calls of
+    Just (_:_) -> return ()
+    Just [] -> error "Message has empty tool_calls list"
+    Nothing -> error "Message has no tool_calls field"
 
 -- | Assert that response contains reasoning content
 assertHasReasoningContent :: OpenAIResponse -> Expectation
 assertHasReasoningContent resp = do
-  case checkError resp of
-    OpenAISuccess (OpenAISuccessResponse []) ->
-      error "No choices in response"
-    OpenAISuccess (OpenAISuccessResponse (OpenAIChoice msg : _)) ->
-      case msg.reasoning_content of
-        Just txt | T.length txt > 0 -> return ()
-        Just _ -> error "Message has empty reasoning_content"
-        Nothing -> error "Message has no reasoning_content field"
-    OpenAIError _ ->
-      error "Cannot check reasoning content on error response (use checkError first)"
+  let msg = getFirstMessage . expectSuccess $ resp
+  case msg.reasoning_content of
+    Just txt | T.length txt > 0 -> return ()
+    Just _ -> error "Message has empty reasoning_content"
+    Nothing -> error "Message has no reasoning_content field"
 
 -- | Assert that response contains reasoning_details
 --
 -- Some providers (like OpenRouter) put reasoning in reasoning_details instead
 assertHasReasoningDetails :: OpenAIResponse -> Expectation
 assertHasReasoningDetails resp = do
-  case checkError resp of
-    OpenAISuccess (OpenAISuccessResponse []) ->
-      error "No choices in response"
-    OpenAISuccess (OpenAISuccessResponse (OpenAIChoice msg : _)) ->
-      case msg.reasoning_details of
-        Just _ -> return ()  -- It's a Value, just check it exists
-        Nothing -> error "Message has no reasoning_details field"
-    OpenAIError _ ->
-      error "Cannot check reasoning details on error response (use checkError first)"
+  let msg = getFirstMessage . expectSuccess $ resp
+  case msg.reasoning_details of
+    Just _ -> return ()  -- It's a Value, just check it exists
+    Nothing -> error "Message has no reasoning_details field"
 
 -- | Assert that response contains an XML-style tool call in the content
 --
@@ -388,13 +421,8 @@ assertHasReasoningDetails resp = do
 -- <tool_call>function_name in the response body.
 assertHasXMLToolCall :: Text -> OpenAIResponse -> Expectation
 assertHasXMLToolCall functionName resp = do
-  case checkError resp of
-    OpenAISuccess (OpenAISuccessResponse []) ->
-      error "No choices in response"
-    OpenAISuccess (OpenAISuccessResponse (OpenAIChoice msg : _)) ->
-      case msg.content of
-        Just txt | T.isInfixOf ("<tool_call>" <> functionName) txt -> return ()
-        Just txt -> error $ "Message content does not contain <tool_call>" <> T.unpack functionName <> ", got: " <> T.unpack txt
-        Nothing -> error "Message has no content field"
-    OpenAIError _ ->
-      error "Cannot check XML tool call on error response (use checkError first)"
+  let msg = getFirstMessage . expectSuccess $ resp
+  case msg.content of
+    Just txt | T.isInfixOf ("<tool_call>" <> functionName) txt -> return ()
+    Just txt -> error $ "Message content does not contain <tool_call>" <> T.unpack functionName <> ", got: " <> T.unpack txt
+    Nothing -> error "Message has no content field"

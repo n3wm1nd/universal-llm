@@ -32,7 +32,10 @@ parseCompletion :: forall m. (CompletionProviderImplementation m, ModelName m)
                 -> CompletionResponse m
                 -> Either LLMError Text
 parseCompletion model configs prompt (OpenAICompletionError (OpenAIErrorResponse errDetail)) =
-  Left $ ProviderError (code errDetail) $ errorMessage errDetail <> " (" <> errorType errDetail <> ")"
+  let typeInfo = case errorType errDetail of
+        Just t -> " (" <> t <> ")"
+        Nothing -> ""
+  in Left $ ProviderError (code errDetail) $ errorMessage errDetail <> typeInfo
 parseCompletion model configs prompt resp =
   let text = fromCompletionResponse model configs prompt resp
   in if T.null text

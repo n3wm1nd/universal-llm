@@ -140,7 +140,7 @@ data OpenAIErrorResponse = OpenAIErrorResponse
 data OpenAIErrorDetail = OpenAIErrorDetail
   { code :: Int
   , errorMessage :: Text
-  , errorType :: Text
+  , errorType :: Maybe Text  -- Optional: OpenRouter doesn't include this field
   } deriving (Generic, Show, Eq)
 
 instance HasCodec OpenAIRequest where
@@ -227,7 +227,7 @@ instance HasCodec OpenAIErrorDetail where
     OpenAIErrorDetail
       <$> requiredField "code" "Error code" .= code
       <*> requiredField "message" "Error message" .= errorMessage
-      <*> requiredField "type" "Error type" .= errorType
+      <*> optionalField "type" "Error type (not included by all providers)" .= errorType
 
 -- Helper: Convert ToolDefinition to OpenAI wire format
 toOpenAIToolDef :: ToolDefinition -> OpenAIToolDefinition

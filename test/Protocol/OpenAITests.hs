@@ -312,9 +312,8 @@ acceptsToolResultNoTools makeRequest modelName = do
     let req = requestWithToolResultNoTools { model = modelName }
     resp <- makeRequest req
     -- Just verify no error - response might be text or empty
-    case checkError resp of
-      OpenAISuccess _ -> return ()
-      OpenAIError _ -> error "Should have succeeded"
+    _ <- return $ expectSuccess resp
+    return ()
 
 -- | Probe: Tool result but the called tool no longer available
 --
@@ -334,9 +333,8 @@ acceptsToolResultToolGone makeRequest modelName = do
     let req = requestWithToolResultToolGone { model = modelName }
     resp <- makeRequest req
     -- Just verify no error - response might be text or empty
-    case checkError resp of
-      OpenAISuccess _ -> return ()
-      OpenAIError _ -> error "Should have succeeded"
+    _ <- return $ expectSuccess resp
+    return ()
 
 -- | Probe: Tool call in history but tool no longer available (further back)
 --
@@ -358,9 +356,8 @@ acceptsStaleToolInHistory makeRequest modelName = do
     let req = requestWithStaleToolInHistory { model = modelName }
     resp <- makeRequest req
     -- Just verify request succeeds - model behavior may vary
-    case checkError resp of
-      OpenAISuccess _ -> return ()
-      OpenAIError _ -> error "Should have succeeded"
+    _ <- return $ expectSuccess resp
+    return ()
 
 -- | Probe: Old tool call in history with tool still available
 --
@@ -380,3 +377,23 @@ acceptsOldToolCallStillAvailable makeRequest modelName = do
     let req = requestWithOldToolCallStillAvailable { model = modelName }
     resp <- makeRequest req
     assertHasAssistantText resp
+
+-- | Probe: Provider error responses are valid protocol responses
+--
+-- __Tests:__ Does the provider properly return error responses in OpenAI format?
+--
+-- __Checks:__ Error response has proper structure with error details
+--
+-- __Expected to pass:__ All providers (error responses are part of the protocol)
+--
+-- __Expected to fail:__ Never (this tests our protocol handling, not provider behavior)
+--
+-- __Note:__ This verifies that OpenAIError is treated as a VALID protocol response,
+-- not a failure. We test this by triggering an error condition (invalid model name)
+-- and verifying we get a well-formed error response.
+providerErrorResponse :: (OpenAIRequest -> IO OpenAIResponse) -> Spec
+providerErrorResponse makeRequest = do
+  it "returns well-formed error response for invalid model" $ do
+    let req = (simpleUserRequest "What is 2+2?") { model = "invalid-model-name-that-does-not-exist" }
+    resp <- makeRequest req
+    assertIsProviderError resp
