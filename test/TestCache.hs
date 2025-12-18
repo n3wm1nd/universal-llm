@@ -8,9 +8,12 @@ module TestCache
   , lookupResponse
   , cachedRequest
   , recordMode
+  , recordModeWithFilter
   , updateMode
+  , updateModeWithFilter
   , playbackMode
   , liveMode
+  , liveModeWithFilter
   , recordRawResponse
   , lookupRawResponse
   , cachedRawRequest
@@ -133,6 +136,43 @@ playbackMode cachePath req = do
 -- Live mode: always make real request, ignore cache
 liveMode :: (req -> IO resp) -> ResponseProvider req resp
 liveMode apiCall req = apiCall req
+
+-- Record mode with filter: skip request if filter returns False (mark as pending)
+recordModeWithFilter :: (HasCodec req, HasCodec resp)
+                     => CachePath
+                     -> (req -> Bool)  -- ^ Filter: returns True if request should proceed
+                     -> (req -> IO resp)
+                     -> ResponseProvider req resp
+recordModeWithFilter cachePath filterFn apiCall req =
+  if filterFn req
+    then recordMode cachePath apiCall req
+    else do
+      pendingWith $ "Skipped: Request filter returned False for hash: " ++ hashRequest req
+      error "unreachable"
+
+-- Update mode with filter: skip request if filter returns False (mark as pending)
+updateModeWithFilter :: (HasCodec req, HasCodec resp)
+                     => CachePath
+                     -> (req -> Bool)  -- ^ Filter: returns True if request should proceed
+                     -> (req -> IO resp)
+                     -> ResponseProvider req resp
+updateModeWithFilter cachePath filterFn apiCall req =
+  if filterFn req
+    then updateMode cachePath apiCall req
+    else do
+      pendingWith $ "Skipped: Request filter returned False for hash: " ++ hashRequest req
+      error "unreachable"
+
+-- Live mode with filter: skip request if filter returns False (mark as pending)
+liveModeWithFilter :: (req -> Bool)  -- ^ Filter: returns True if request should proceed
+                   -> (req -> IO resp)
+                   -> ResponseProvider req resp
+liveModeWithFilter filterFn apiCall req =
+  if filterFn req
+    then apiCall req
+    else do
+      pendingWith $ "Skipped: Request filter returned False"
+      error "unreachable"
 
 -- Cache raw ByteString responses (e.g., SSE streams) without JSON encoding
 -- Stores as .sse file instead of .json

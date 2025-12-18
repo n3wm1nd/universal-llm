@@ -101,6 +101,10 @@ test-suite universal-llm-tests
     ModelRegistry
     StandardTests
     ReasoningConfigSpec
+    Protocol.OpenAI
+    Protocol.OpenAITests
+    Models.GLM45Air
+    Models.Qwen3Coder
   hs-source-dirs: test
 
   build-depends:

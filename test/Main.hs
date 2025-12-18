@@ -4,6 +4,7 @@
 module Main where
 
 import Test.Hspec
+import Data.List (intercalate, nub, isInfixOf)
 import qualified CachedIntegrationSpec
 import qualified ComposableHandlersSpec
 import qualified OpenAIComposableSpec
@@ -21,8 +22,12 @@ import qualified TestCache
 import qualified TestHTTP
 import qualified ModelRegistry
 import qualified ReasoningConfigSpec
+import qualified Protocol.OpenAITests
+import qualified Models.GLM45Air
+import qualified Models.Qwen3Coder
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
-import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse, OpenAICompletionRequest, OpenAICompletionResponse)
+import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse(..), OpenAIErrorResponse(..), OpenAIErrorDetail(..), OpenAICompletionRequest, OpenAICompletionResponse)
+import qualified UniversalLLM.Protocols.OpenAI as OpenAI
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
 import System.Environment (lookupEnv)
 import qualified Data.Text as T
@@ -32,65 +37,108 @@ import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Vector as V
 import Control.Exception (catch, SomeException)
 import System.FilePath (takeBaseName, takeExtension)
+import Data.Char (toLower, isDigit, isUpper)
 
--- | Canonicalize a GGUF filename to a model name
--- Extracts the model name from filenames like "/models/GLM-4.5-Air-Q4_K_M-00001-of-00002.gguf"
--- Returns "GLM-4.5-Air" by removing quantization info, part numbers, and extension
--- Works from the back step by step:
---   1. Extract basename and drop extension (using FilePath functions)
---   2. Drop "xxxx-of-yyyy" multi-part suffix (if present)
---   3. Drop quantization suffix like "Q4_K_M" (if present)
-canonicalizeGGUFName :: String -> String
-canonicalizeGGUFName filename =
-  let -- Step 1: Get basename without path or extension
-      base = takeBaseName filename
-      -- Step 2: Drop multi-part suffix (0001-of-0002)
-      step2 = dropMultiPartSuffix base
-      -- Step 3: Drop quantization suffix (Q4_K_M, etc.)
-      step3 = dropQuantizationSuffix step2
-  in step3
+-- | Predicates to identify different types of model name parts
+-- These are intentionally overlapping - context determines meaning
+
+-- | Multi-part file indicators: "0001", "of", "0002"
+isMultiPart :: String -> Bool
+isMultiPart "of" = True
+isMultiPart p = all isDigit p && length p >= 4
+
+-- | Quantization methods: "Q8_K_XL", "Q4_K_M"
+isQuantization :: String -> Bool
+isQuantization ('Q':d:rest) | isDigit d && '_' `elem` rest = True
+isQuantization _ = False
+
+-- | Short version/variant tags: "UD", "A3B"
+-- Must NOT be a size parameter (those end in B/M and should be kept)
+isVersionTag :: String -> Bool
+isVersionTag p = length p <= 3
+              && all isUpperOrDigit p
+              && any isUpper p
+              && not (isSizeParam p)  -- Don't treat size params as version tags
+  where isUpperOrDigit c = isUpper c || isDigit c
+
+-- | Parameter count: "30B", "7B", "1.5B"
+isSizeParam :: String -> Bool
+isSizeParam p = case reverse p of
+  ('B':rest) | not (null rest) && all isDigitOrDot rest -> True
+  ('M':rest) | not (null rest) && all isDigitOrDot rest -> True
+  _ -> False
+  where isDigitOrDot c = isDigit c || c == '.'
+
+-- | Known tuning/training indicators
+isTuning :: String -> Bool
+isTuning "Instruct" = True
+isTuning "Chat" = True
+isTuning "Code" = True
+isTuning "Coder" = True
+isTuning _ = False
+
+-- | Split string on delimiter
+splitOn :: Char -> String -> [String]
+splitOn _ "" = []
+splitOn delim str =
+  let (before, remainder) = break (== delim) str
+  in before : case remainder of
+                [] -> []
+                (_:after) -> splitOn delim after
+
+-- | Canonicalize a GGUF filename to possible model names
+-- Example: "Qwen3-Coder-30B-A3B-Instruct-UD-Q8_K_XL.gguf"
+-- Returns: Multiple variants including:
+--   - Progressive truncation: "Qwen3-Coder-30B-Instruct", "Qwen3-Coder-30B", "Qwen3-Coder"
+--   - Without size params: "Qwen3-Coder-Instruct"
+--   - Dash variants: "Qwen-3-Coder"
+--   - Lowercase versions of all
+canonicalizeGGUFNames :: String -> [String]
+canonicalizeGGUFNames filename =
+  let base = takeBaseName filename
+      parts = splitOn '-' base
+      -- Drop junk from the END (quantization, version tags, multi-part)
+      cleaned = reverse $ dropWhile isJunk (reverse parts)
+      -- Generate variants
+      progressive = [intercalate "-" (take n cleaned) | n <- reverse [1..length cleaned], n > 0]
+      -- Generate progressive variants on the cleaned list (with version tags removed)
+      noVersions = filter (not . isVersionTag) cleaned
+      progressiveNoVer = [intercalate "-" (take n noVersions) | n <- reverse [1..length noVersions], n > 0]
+      -- Also generate variants with optional parts filtered out
+      withoutOptional = [intercalate "-" (filter isCore cleaned)]  -- Drop size + version
+      allVariants = nub (progressive ++ progressiveNoVer ++ withoutOptional)
+      -- Add dash-in-name variants ("Qwen3" -> "Qwen-3")
+      withDashes = concatMap addDashInName allVariants
+      -- Add lowercase
+      withCase = nub (withDashes ++ map (map toLower) withDashes)
+      -- Filter out empty strings
+      valid = filter (not . null) withCase
+  in valid
   where
-    -- Drop "xxxx-of-yyyy" from the end if present
-    dropMultiPartSuffix :: String -> String
-    dropMultiPartSuffix s =
-      case reverse (splitOn '-' s) of
-        (lastNum : "of" : prevNum : rest)
-          | all isDigit lastNum && all isDigit prevNum -> intercalate "-" (reverse rest)
-        _ -> s
+    -- Parts to drop from the end only
+    isJunk p = isMultiPart p || isQuantization p || isVersionTag p
 
-    -- Drop quantization suffix like "Q4_K_M" if present
-    -- Pattern: starts with Q, followed by digit, contains underscores
-    dropQuantizationSuffix :: String -> String
-    dropQuantizationSuffix s =
-      case reverse (splitOn '-' s) of
-        (quant : rest) | isQuantization quant -> intercalate "-" (reverse rest)
-        _ -> s
+    -- Core parts to keep when filtering (not size params or version tags)
+    isCore p = not (isSizeParam p || isVersionTag p)
 
-    -- Check if string looks like quantization: Q<digit>_<letters>
-    isQuantization :: String -> Bool
-    isQuantization s = case s of
-      ('Q':d:rest) | isDigit d && '_' `elem` rest -> True
-      _ -> False
+    -- Add dash before first digit in parts: "Qwen3-Coder" -> "Qwen-3-Coder"
+    addDashInName :: String -> [String]
+    addDashInName s =
+      let parts' = splitOn '-' s
+          transformed = map dashBeforeDigit parts'
+          result = intercalate "-" transformed
+      in if result == s then [s] else [s, result]
 
-    isDigit :: Char -> Bool
-    isDigit c = c `elem` ("0123456789" :: String)
-
-    splitOn :: Char -> String -> [String]
-    splitOn _ "" = []
-    splitOn delim str =
-      let (before, remainder) = break (== delim) str
-      in before : case remainder of
-                    [] -> []
-                    (_:after) -> splitOn delim after
-
-    intercalate :: String -> [String] -> String
-    intercalate _ [] = ""
-    intercalate _ [x] = x
-    intercalate sep (x:xs) = x ++ sep ++ intercalate sep xs
+    -- "Qwen3" -> "Qwen-3", but "4.5" stays "4.5"
+    dashBeforeDigit :: String -> String
+    dashBeforeDigit part = case break isDigit part of
+      (prefix, suffix) | not (null prefix) && not (null suffix) && head suffix /= '.'
+        -> prefix ++ "-" ++ suffix
+      _ -> part
 
 -- | Query llama.cpp server for loaded model information
--- Returns the canonicalized model name if successful
-queryLlamaCppModel :: String -> IO (Maybe String)
+-- Returns the list of possible canonicalized model names
+queryLlamaCppModel :: String -> IO (Maybe [String])
 queryLlamaCppModel baseUrl = do
   let url = baseUrl ++ "/v1/models"
   catch (do
@@ -104,12 +152,30 @@ queryLlamaCppModel baseUrl = do
               Aeson.Object modelObj -> do
                 case KeyMap.lookup "id" modelObj of
                   Just (Aeson.String modelId) ->
-                    return $ Just (canonicalizeGGUFName $ T.unpack modelId)
+                    return $ Just (canonicalizeGGUFNames $ T.unpack modelId)
                   _ -> return Nothing
               _ -> return Nothing
           _ -> return Nothing
       _ -> return Nothing
     ) (\(_ :: SomeException) -> return Nothing)
+
+-- | Test suite for canonicalization
+canonicalizationTests :: Spec
+canonicalizationTests = describe "GGUF Name Canonicalization" $ do
+  it "handles GLM-4.5-Air with quantization" $ do
+    let result = canonicalizeGGUFNames "GLM-4.5-Air-Q4_K_M.gguf"
+    result `shouldContain` ["GLM-4.5-Air"]
+    result `shouldContain` ["glm-4.5-air"]
+    result `shouldContain` ["GLM-4.5"]
+    result `shouldContain` ["GLM"]
+
+  it "handles Qwen with size param and variants" $ do
+    let result = canonicalizeGGUFNames "Qwen3-Coder-30B-A3B-Instruct-UD-Q8_K_XL.gguf"
+    result `shouldContain` ["Qwen3-Coder-30B-Instruct"]
+    result `shouldContain` ["Qwen3-Coder-Instruct"]  -- Without size
+    result `shouldContain` ["Qwen3-Coder"]
+    result `shouldContain` ["Qwen-3-Coder"]  -- Dash variant
+    result `shouldContain` ["qwen-3-coder"]  -- Lowercase
 
 main :: IO ()
 main = do
@@ -202,24 +268,33 @@ main = do
 
   -- Print info about llama.cpp model
   case (llamacppUrl, llamacppLoadedModel) of
-    (Just url, Just loadedModel) ->
-      putStrLn $ "llama.cpp server at " ++ url ++ " has model loaded: " ++ loadedModel
+    (Just url, Just loadedModels) ->
+      putStrLn $ "llama.cpp server at " ++ url ++ " has model loaded. Variants: " ++ show loadedModels
     (Just url, Nothing) ->
       putStrLn $ "Warning: Could not query llama.cpp server at " ++ url
     _ -> return ()
+
+  -- Helper: Check if requested model matches any of the loaded model variants
+  -- Returns True if models match or if we don't know the loaded model
+  let modelMatches :: OpenAIRequest -> Bool
+      modelMatches req = case llamacppLoadedModel of
+        Nothing -> True  -- No loaded model info, proceed anyway
+        Just loadedModels ->
+          let requestedModel = T.unpack (OpenAI.model req)
+          in requestedModel `elem` loadedModels
 
   -- Build llama.cpp response provider
   -- Only makes live requests if model name matches the request's model field
   let llamacppProvider :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
       llamacppProvider = case mode of
         Just "record" | Just url <- llamacppUrl ->
-          TestCache.recordMode cachePath $
+          TestCache.recordModeWithFilter cachePath modelMatches $
             TestHTTP.httpCall (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
         Just "update" | Just url <- llamacppUrl ->
-          TestCache.updateMode cachePath $
+          TestCache.updateModeWithFilter cachePath modelMatches $
             TestHTTP.httpCall (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
         Just "live" | Just url <- llamacppUrl ->
-          TestCache.liveMode $
+          TestCache.liveModeWithFilter modelMatches $
             TestHTTP.httpCall (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
         _ -> TestCache.playbackMode cachePath
 
@@ -313,6 +388,12 @@ main = do
         _ -> TestCache.playbackMode cachePath
 
   hspec $ do
+    -- Model-specific tests (enshrined capabilities)
+    describe "Models" $ do
+      Models.GLM45Air.modelTestsOpenRouter openrouterProvider
+      Models.GLM45Air.modelTestsLlamaCpp llamacppProvider "GLM-4.5-Air"
+      Models.Qwen3Coder.modelTestsLlamaCpp llamacppProvider "Qwen-3-Coder"
+
     describe "Composable Handlers" ComposableHandlersSpec.spec
 
     -- Property-based tests (QuickCheck)
@@ -354,3 +435,6 @@ main = do
 
     -- Cache infrastructure tests
     describe "Test Cache" CachedIntegrationSpec.spec
+
+    -- Canonicalization tests
+    canonicalizationTests
