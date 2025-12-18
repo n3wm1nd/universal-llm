@@ -388,11 +388,11 @@ main = do
         _ -> TestCache.playbackMode cachePath
 
   hspec $ do
-    -- Model-specific tests (enshrined capabilities)
+    -- Model-specific tests (protocol probes + standard tests)
     describe "Models" $ do
-      Models.GLM45Air.modelTestsOpenRouter openrouterProvider
-      Models.GLM45Air.modelTestsLlamaCpp llamacppProvider "GLM-4.5-Air"
-      Models.Qwen3Coder.modelTestsLlamaCpp llamacppProvider "Qwen-3-Coder"
+      Models.GLM45Air.testsOpenRouter openrouterProvider
+      Models.GLM45Air.testsLlamaCpp llamacppProvider "GLM-4.5-Air"
+      Models.Qwen3Coder.testsLlamaCpp llamacppProvider "Qwen-3-Coder"
 
     describe "Composable Handlers" ComposableHandlersSpec.spec
 
