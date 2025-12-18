@@ -188,14 +188,68 @@ toolCallingViaXML makeRequest modelName = do
 --
 -- __Expected to pass:__ All models that support tool calling
 --
--- __Expected to fail:__ Models without tool support
+-- __Expected to fail:__ Models without tool support, or models requiring reasoning preservation (Gemini)
 --
 -- __Note:__ This tests if the wire protocol accepts the format we send,
 -- not the full conversation flow (that's covered by StandardTests).
 -- We use fabricated history because we only care about format acceptance.
+-- Some models (Gemini) may reject this - use acceptsToolResultsWithoutReasoning instead.
 acceptsToolResults :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
 acceptsToolResults makeRequest modelName = do
   it "accepts tool results in conversation history" $ do
     let req = requestWithToolCallHistory { model = modelName }
     resp <- makeRequest req
     assertHasAssistantText resp
+
+-- | Probe: Accepts tool call responses with reasoning disabled
+--
+-- __Tests:__ Does the API accept tool results when reasoning is explicitly disabled?
+--
+-- __Checks:__ Response succeeds with fabricated tool call + result, reasoning disabled
+--
+-- __Expected to pass:__ Models that support tool calling without reasoning
+--
+-- __Expected to fail:__ Models that always require reasoning (if any), or no tool support
+--
+-- __Note:__ This explicitly disables reasoning to test if fabricated tool histories
+-- work when we're not in reasoning mode. Some models (Gemini) require reasoning_details
+-- to be preserved in history, but might accept fabricated history if reasoning is disabled.
+acceptsToolResultsWithoutReasoning :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsToolResultsWithoutReasoning makeRequest modelName = do
+  it "accepts tool results with reasoning disabled" $ do
+    let req = disableReasoning requestWithToolCallHistory { model = modelName }
+    resp <- makeRequest req
+    assertHasAssistantText resp
+
+-- | Probe: Tool calling with reasoning preservation
+--
+-- __Tests:__ Does the model preserve reasoning through tool call chains?
+--
+-- __Checks:__ After tool call + result, model still responds correctly
+--
+-- __Expected to pass:__ Models that use reasoning_details and require preservation (Gemini via OpenRouter)
+--
+-- __Expected to fail:__ Models without reasoning support
+--
+-- __Note:__ This uses a real conversation flow (can't fabricate reasoning_details).
+-- Some models (like Gemini) require reasoning_details to be preserved in history
+-- or they fail/behave incorrectly on subsequent responses.
+toolCallingWithReasoning :: (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolCallingWithReasoning makeRequest modelName = do
+  it "preserves reasoning through tool call chains" $ do
+    -- Step 1: Get model to make a tool call with reasoning
+    let req1 = enableReasoning (simpleUserRequest "Use the get_weather function to check the weather in London.")
+          { model = modelName
+          , tools = Just [weatherTool]
+          }
+    resp1 <- makeRequest req1
+
+    -- Verify it has reasoning and tool calls
+    assertHasReasoningDetails resp1
+
+    -- Step 2: Build request with tool result (helper preserves assistant message)
+    let req2 = (requestWithToolResult resp1) { model = modelName }
+    resp2 <- makeRequest req2
+
+    -- Step 3: Verify we get a valid response
+    assertHasAssistantText resp2

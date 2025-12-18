@@ -136,6 +136,12 @@ enableReasoning req = req
   { reasoning = Just $ emptyReasoningConfig { reasoning_enabled = Just True }
   }
 
+-- | Disable reasoning on a request
+disableReasoning :: OpenAIRequest -> OpenAIRequest
+disableReasoning req = req
+  { reasoning = Just $ emptyReasoningConfig { reasoning_enabled = Just False }
+  }
+
 -- | Create an assistant message with a tool call
 --
 -- Example: assistantToolCallMessage "call_123" "get_weather" "{\"location\": \"London\"}"
@@ -179,6 +185,24 @@ requestWithToolCallHistory = mempty
       , toolResponseMessage "call_abc123" "{\"temperature\": 72, \"condition\": \"sunny\"}"
       ]
   }
+
+-- | Create a request with tool result from a previous response
+--
+-- This extracts the assistant message from the response (preserving all fields
+-- including reasoning_details), adds a mock tool result, and creates a new request.
+--
+-- Used to test if reasoning/metadata is preserved through tool call chains.
+requestWithToolResult :: OpenAIResponse -> OpenAIRequest
+requestWithToolResult resp = case checkError resp of
+  OpenAISuccess (OpenAISuccessResponse (OpenAIChoice assistantMsg : _)) ->
+    mempty
+      { messages =
+          [ userMessage "Use the get_weather function to check the weather in London."
+          , assistantMsg  -- Preserve all fields (including reasoning_details)
+          , toolResponseMessage "call_abc123" "{\"temperature\": 72, \"condition\": \"sunny\"}"
+          ]
+      }
+  _ -> error "Response doesn't contain assistant message"
 
 -- ============================================================================
 -- Response Helpers
