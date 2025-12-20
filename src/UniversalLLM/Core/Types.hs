@@ -101,28 +101,6 @@ data ModelConfig m where
 class ModelName m where
   modelName :: m -> Text
 
-providerReasoningTools ::
-  ( HasTools m, HasReasoning m, BaseComposableProvider m ) =>
-  ComposableProvider m
-  (ToolState m, (ReasoningState m, BaseState m))
-providerReasoningTools = withTools
-  `chainProviders` withReasoning
-  `chainProviders` baseProvider
-
-providerReasoning ::
-  ( HasReasoning m, BaseComposableProvider m ) =>
-  ComposableProvider m (ReasoningState m, BaseState m)
-providerReasoning = withReasoning
-  `chainProviders` baseProvider
-
-providerTools ::
-  ( HasTools m, BaseComposableProvider m ) =>
-  ComposableProvider m (ToolState m, BaseState m)
-providerTools = withTools
-  `chainProviders` baseProvider
-
-
-
 -- Tool use types
 -- Provider-agnostic tool definition (just metadata, no execution)
 data ToolDefinition = ToolDefinition
