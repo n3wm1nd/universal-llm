@@ -33,6 +33,7 @@ library
     UniversalLLM.Core.Tools
     UniversalLLM.Core.Serialization
     UniversalLLM.Core.ProviderM
+    UniversalLLM.Core.Settings
     UniversalLLM.Models.SimpleModel
     UniversalLLM.Models.FullFeaturedModel
     UniversalLLM.Protocols.OpenAI
