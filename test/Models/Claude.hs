@@ -56,4 +56,4 @@ testsSonnet45 provider = do
 
     describe "Standard Tests" $
       testModel TestModels.anthropicSonnet45Reasoning (Model TestModels.ClaudeSonnet45WithReasoning Anthropic) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]

@@ -17,6 +17,7 @@ module StandardTests
   , tools
   , reasoning
   , reasoningWithTools
+  , reasoningWithToolsModifiedReasoning
   , openAIReasoningDetailsPreservation
   ) where
 
@@ -360,6 +361,53 @@ reasoningWithTools = StandardTest $ \cp model initialState getResponse -> do
 
     isTextMsg (AssistantText _) = True
     isTextMsg _ = False
+
+-- | Test that composable providers gracefully handle modified reasoning data
+--
+-- When reasoning content is modified (e.g., user edits the reasoning text),
+-- the provider should fall back to non-reasoning mode rather than fail.
+-- This ensures robustness when reasoning metadata becomes invalid.
+reasoningWithToolsModifiedReasoning :: ( Monoid (ProviderRequest m)
+                                       , SupportsMaxTokens (ProviderOf m)
+                                       , HasReasoning m
+                                       , HasTools m
+                                       )
+                                    => StandardTest m state
+reasoningWithToolsModifiedReasoning = StandardTest $ \cp model initialState getResponse -> do
+  describe "Reasoning + Tools (Modified Reasoning)" $ do
+    it "falls back to non-reasoning when reasoning data is modified" $ do
+      -- First request: Get a response with reasoning and tools
+      let toolDef = ToolDefinition "get_info" "Get information about a topic"
+                      (object ["type" .= ("object" :: Text)])
+          configs = [MaxTokens 4096, Reasoning True, Tools [toolDef]]
+          msgs = [UserText "Think carefully: What is the capital of France?"]
+          (state1, req1) = toProviderRequest cp model configs initialState msgs
+
+      resp1 <- getResponse req1
+
+      let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp model configs state1 resp1
+
+      -- Should get back messages
+      length parsedMsgs1 `shouldSatisfy` (> 0)
+
+      -- Now modify any reasoning messages (simulating user editing the reasoning)
+      let modifiedMsgs1 = map modifyReasoning parsedMsgs1
+          msgs2 = msgs ++ modifiedMsgs1 ++ [UserText "Now use get_info to find more details."]
+          (state3, req2) = toProviderRequest cp model configs state2 msgs2
+
+      -- This request should succeed even though reasoning was modified
+      -- The provider should fall back to sending without reasoning metadata
+      resp2 <- getResponse req2
+      let (_, parsedMsgs2) = either (error . show) id $ fromProviderResponse cp model configs state3 resp2
+
+      -- Should get response (provider successfully fell back)
+      length parsedMsgs2 `shouldSatisfy` (> 0)
+
+  where
+    -- Modify reasoning content to simulate user edits
+    modifyReasoning :: Message m -> Message m
+    modifyReasoning (AssistantReasoning txt) = AssistantReasoning (txt <> " [MODIFIED]")
+    modifyReasoning msg = msg
 
 -- OpenAI-specific test to verify reasoning_details preservation
 openAIReasoningDetailsPreservation :: ( Monoid (ProviderRequest m)
