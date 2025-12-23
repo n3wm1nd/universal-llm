@@ -312,8 +312,9 @@ reasoningWithTools = StandardTest $ \cp model initialState getResponse -> do
       length parsedMsgs1 `shouldSatisfy` (> 0)
 
       -- If there are tool calls, add mock tool results with realistic data
-      let toolResults = [ ToolResultMsg (ToolResult tc (Right (mockToolResult tc)))
-                        | AssistantTool tc <- parsedMsgs1 ]
+      let toolCalls = [ tc | AssistantTool tc <- parsedMsgs1 ]
+          toolResults = [ ToolResultMsg (ToolResult tc (Right (mockToolResult tc)))
+                        | tc <- toolCalls ]
 
           -- Generate realistic mock results based on tool name
           mockToolResult :: ToolCall -> Value
@@ -324,21 +325,27 @@ reasoningWithTools = StandardTest $ \cp model initialState getResponse -> do
           mockToolResult _ =
             object ["result" .= ("success" :: Text)]
 
-      -- First continuation: Send tool results and let model respond
-      -- This is where reasoning_details preservation is critical
-      let msgs2 = msgs ++ parsedMsgs1 ++ toolResults
-          (state3, req2) = toProviderRequest cp model configs state2 msgs2
+      -- Only send tool results if there were tool calls
+      -- Otherwise we'd have consecutive assistant messages which is invalid
+      (state4, parsedMsgs2) <- if null toolResults
+        then return (state2, [])
+        else do
+          -- First continuation: Send tool results and let model respond
+          -- This is where reasoning_details preservation is critical
+          let msgs2 = msgs ++ parsedMsgs1 ++ toolResults
+              (state3, req2) = toProviderRequest cp model configs state2 msgs2
 
-      resp2 <- getResponse req2
-      let (state4, parsedMsgs2) = either (error . show) id $ fromProviderResponse cp model configs state3 resp2
+          resp2 <- getResponse req2
+          let (st4, pMsgs2) = either (error . show) id $ fromProviderResponse cp model configs state3 resp2
 
-      -- Should get response to tool results
-      -- Models may or may not provide reasoning here - some just summarize tool results
-      length parsedMsgs2 `shouldSatisfy` (> 0)
+          -- Should get response to tool results
+          -- Models may or may not provide reasoning here - some just summarize tool results
+          length pMsgs2 `shouldSatisfy` (> 0)
+          return (st4, pMsgs2)
 
       -- Second continuation: User follow-up question
       -- This should trigger reasoning since it's a new user request
-      let msgs3 = msgs2 ++ parsedMsgs2 ++ [UserText "Thank you. What do you think they are used for?"]
+      let msgs3 = msgs ++ parsedMsgs1 ++ toolResults ++ parsedMsgs2 ++ [UserText "Thank you. What do you think they are used for?"]
           (_, req3) = toProviderRequest cp model configs state4 msgs3
 
       resp3 <- getResponse req3

@@ -75,7 +75,7 @@ testsOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel TestModels.openRouterGLM45 (Model TestModels.GLM45 OpenRouter) provider
-        [ ST.text, ST.tools, ST.reasoning ]
+        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 4.5 Air via llama.cpp
 --
@@ -100,4 +100,4 @@ testsLlamaCpp provider modelName = do
 
     describe "Standard Tests" $
       testModel TestModels.llamaCppGLM45 (Model TestModels.GLM45 LlamaCpp) provider
-        [ ST.text, ST.tools, ST.reasoning ]
+        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]

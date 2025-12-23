@@ -68,4 +68,4 @@ testsOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel TestModels.openRouterGemini3FlashPreview (Model TestModels.Gemini3FlashPreview OpenRouter) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.openAIReasoningDetailsPreservation ]
