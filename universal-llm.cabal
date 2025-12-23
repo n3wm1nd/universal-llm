@@ -104,10 +104,13 @@ test-suite universal-llm-tests
     ReasoningConfigSpec
     Protocol.OpenAI
     Protocol.OpenAITests
+    Protocol.Anthropic
+    Protocol.AnthropicTests
     Models.GLM45Air
     Models.Qwen3Coder
     Models.Gemini3Flash
     Models.Nova2Lite
+    Models.Claude
   hs-source-dirs: test
 
   build-depends:
