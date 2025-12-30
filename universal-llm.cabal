@@ -7,7 +7,7 @@ description:
   for multiple LLM providers (OpenAI, Anthropic, etc.) with compile-time
   feature validation and runtime emulation support.
 
-license: Apache
+license: Apache-2.0
 author: .newmind
 maintainer: your.email@example.com
 category: AI, Machine Learning
