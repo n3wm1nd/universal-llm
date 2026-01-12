@@ -23,7 +23,7 @@ __llama.cpp:__
 
 module Models.Qwen3Coder (testsLlamaCpp) where
 
-import UniversalLLM.Core.Types (Model(..))
+import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..))
 import Protocol.OpenAITests

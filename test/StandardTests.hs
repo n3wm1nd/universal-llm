@@ -29,8 +29,8 @@ import Autodocodec (toJSONVia, codec, HasCodec(..))
 import qualified Autodocodec
 import Control.Monad (when)
 import Control.Monad.Catch (MonadCatch, SomeException, catch)
-import UniversalLLM.Core.Types
-import UniversalLLM.Core.Tools (LLMTool(..), llmToolToDefinition, executeToolCallFromList, ToolFunction(..), ToolParameter(..))
+import UniversalLLM
+import UniversalLLM.Tools (LLMTool(..), llmToolToDefinition, executeToolCallFromList, ToolFunction(..), ToolParameter(..))
 import TestCache (ResponseProvider)
 import qualified UniversalLLM.Protocols.OpenAI as OpenAI
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse(..), OpenAISuccessResponse(..), OpenAIChoice(..), OpenAIMessage(role, content, reasoning_content, reasoning_details, tool_calls), OpenAIReasoningConfig(..), OpenAIToolCall(callId))

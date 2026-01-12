@@ -29,7 +29,7 @@ __OpenRouter/Amazon Bedrock:__
 
 module Models.Nova2Lite (testsOpenRouter) where
 
-import UniversalLLM.Core.Types (Model(..))
+import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (OpenRouter(..))
 import Protocol.OpenAITests

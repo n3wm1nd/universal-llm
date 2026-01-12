@@ -42,7 +42,7 @@ module Models.GLM45Air
   , testsLlamaCpp
   ) where
 
-import UniversalLLM.Core.Types (Model(..))
+import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
 import qualified UniversalLLM.Providers.OpenAI as OpenAI

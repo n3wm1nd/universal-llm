@@ -30,7 +30,7 @@ __Anthropic API:__
 
 module Models.Claude (testsSonnet45) where
 
-import UniversalLLM.Core.Types (Model(..))
+import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
 import UniversalLLM.Providers.Anthropic (Anthropic(..))
 import Protocol.AnthropicTests

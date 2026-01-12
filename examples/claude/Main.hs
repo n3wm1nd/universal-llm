@@ -13,7 +13,7 @@
 module Main (main) where
 
 import UniversalLLM
-import UniversalLLM.Core.Tools
+import UniversalLLM.Tools
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
 import UniversalLLM.Providers.Anthropic (Anthropic(..), withMagicSystemPrompt, oauthHeaders)
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)

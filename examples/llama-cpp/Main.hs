@@ -14,7 +14,7 @@
 module Main (main) where
 
 import UniversalLLM
-import UniversalLLM.Core.Tools
+import UniversalLLM.Tools
 import UniversalLLM.Providers.OpenAI
 import Common.HTTP (LLMCall, mkLLMCall)
 import System.Environment (lookupEnv)

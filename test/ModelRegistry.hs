@@ -14,7 +14,7 @@ import Test.Hspec
 import qualified TestModels
 import qualified StandardTests as ST
 import TestHelpers (testModel)
-import UniversalLLM.Core.Types (Model(..), Via(..))
+import UniversalLLM (Model(..), Via(..))
 import UniversalLLM.Providers.Anthropic (Anthropic(..))
 import qualified UniversalLLM.Providers.OpenAI as OpenAIProvider
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))

@@ -11,8 +11,8 @@
 
 module UniversalLLM.Providers.Anthropic where
 
-import UniversalLLM.Core.Types
-import UniversalLLM.Core.Serialization
+import UniversalLLM
+import UniversalLLM.Serialization
 import UniversalLLM.Protocols.Anthropic
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -263,8 +263,8 @@ anthropicReasoning _m configs state = noopHandler
          else req
   , cpPostResponse = storeSignatureFromResponse
   , cpFromResponse = parseReasoningResponse
-  , cpSerializeMessage = UniversalLLM.Core.Serialization.serializeReasoningMessages
-  , cpDeserializeMessage = UniversalLLM.Core.Serialization.deserializeReasoningMessages
+  , cpSerializeMessage = UniversalLLM.Serialization.serializeReasoningMessages
+  , cpDeserializeMessage = UniversalLLM.Serialization.deserializeReasoningMessages
   }
   where
     isReasoningFalse (Reasoning False) = True

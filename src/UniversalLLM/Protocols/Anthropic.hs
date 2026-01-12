@@ -20,7 +20,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
 import GHC.Generics (Generic)
 import Control.Applicative ((<|>), asum)
-import UniversalLLM.Core.Types
+import UniversalLLM
 
 -- Request structure
 -- Extended thinking configuration

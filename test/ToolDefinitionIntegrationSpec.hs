@@ -17,8 +17,8 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Vector as V
 import Autodocodec (HasCodec(..), named, requiredField')
 import qualified Autodocodec as AC
-import UniversalLLM.Core.Types
-import UniversalLLM.Core.Tools
+import UniversalLLM
+import UniversalLLM.Tools
 import qualified UniversalLLM.Protocols.OpenAI as OpenAIProt
 import qualified UniversalLLM.Protocols.Anthropic as AnthropicProt
 import qualified UniversalLLM.Providers.OpenAI as OpenAI

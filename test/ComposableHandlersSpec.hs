@@ -7,7 +7,7 @@
 module ComposableHandlersSpec (spec) where
 
 import Test.Hspec
-import UniversalLLM.Core.Types
+import UniversalLLM
 import UniversalLLM.Providers.OpenAI as OpenAIProvider
 import UniversalLLM.Protocols.OpenAI hiding (model)
 import qualified UniversalLLM.Protocols.OpenAI as OAI

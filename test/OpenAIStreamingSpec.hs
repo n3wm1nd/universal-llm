@@ -15,7 +15,7 @@ import Data.Default (def)
 import Control.Monad (when)
 import TestCache (ResponseProvider)
 import TestModels
-import UniversalLLM.Core.Types
+import UniversalLLM
 import UniversalLLM.Protocols.OpenAI
 import qualified UniversalLLM.Protocols.OpenAI as Proto
 import qualified UniversalLLM.Providers.OpenAI as Provider

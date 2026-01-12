@@ -18,8 +18,8 @@ import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Functor.Identity (Identity(..))
 import Autodocodec (HasCodec(..), named, requiredField')
 import qualified Autodocodec as AC
-import UniversalLLM.Core.Types
-import UniversalLLM.Core.Tools
+import UniversalLLM
+import UniversalLLM.Tools
 
 -- ============================================================================
 -- Test Data Types and Tools

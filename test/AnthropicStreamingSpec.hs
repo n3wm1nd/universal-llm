@@ -13,7 +13,7 @@ import qualified Data.Text as T
 import Data.Aeson (object, (.=))
 import TestCache (ResponseProvider)
 import TestModels
-import UniversalLLM.Core.Types
+import UniversalLLM
 import UniversalLLM.Protocols.Anthropic
 import qualified UniversalLLM.Protocols.Anthropic as Proto
 import qualified UniversalLLM.Providers.Anthropic as Provider

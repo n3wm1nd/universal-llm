@@ -5,7 +5,7 @@
 module ReasoningConfigSpec (spec) where
 
 import Test.Hspec
-import UniversalLLM.Core.Types
+import UniversalLLM
 import UniversalLLM.Providers.OpenAI (OpenRouter(..), OpenAI(..))
 import UniversalLLM.Protocols.OpenAI
 import TestModels

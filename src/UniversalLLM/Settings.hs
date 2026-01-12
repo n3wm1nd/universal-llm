@@ -10,9 +10,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 
-module UniversalLLM.Core.Settings where
+module UniversalLLM.Settings where
 
-import UniversalLLM.Core.Types
+import UniversalLLM
 import GHC.Generics
 import Data.Default (Default(..))
 import Data.Text

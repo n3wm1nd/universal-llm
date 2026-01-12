@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module UniversalLLM.Core.Serialization
+module UniversalLLM.Serialization
   ( -- * Serialization helpers for ComposableProvider
     serializeBaseMessage
   , deserializeBaseMessage
@@ -29,7 +29,7 @@ import Data.Aeson (Value, (.=), (.:), (.:?))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as Aeson
 
-import UniversalLLM.Core.Types
+import UniversalLLM
   ( Message(..)
   , ToolCall(..)
   , ToolResult(..)

@@ -8,7 +8,7 @@
 
 module TestModels where
 
-import UniversalLLM.Core.Types
+import UniversalLLM
 import qualified UniversalLLM.Providers.Anthropic as Anthropic
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
 import UniversalLLM.Providers.Anthropic (Anthropic(..))

@@ -16,7 +16,7 @@ module UniversalLLM.Providers.XMLToolCalls
   , xmlResponseParser
   ) where
 
-import UniversalLLM.Core.Types
+import UniversalLLM
 import UniversalLLM.Protocols.OpenAI
 import UniversalLLM.ToolCall.XML
 import Data.Maybe (mapMaybe)

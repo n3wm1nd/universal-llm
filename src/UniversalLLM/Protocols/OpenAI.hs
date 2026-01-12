@@ -28,7 +28,7 @@ import GHC.Generics (Generic)
 import Control.Applicative ((<|>))
 import Data.Maybe (listToMaybe)
 import qualified Data.List
-import UniversalLLM.Core.Types
+import UniversalLLM
 
 -- | Reasoning configuration for OpenRouter
 data OpenAIReasoningConfig = OpenAIReasoningConfig

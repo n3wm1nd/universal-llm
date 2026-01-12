@@ -17,7 +17,7 @@ import Data.Aeson (Value, object, (.=))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
-import UniversalLLM.Core.Types
+import UniversalLLM
 import UniversalLLM.ToolCall.XML
 import UniversalLLM.Providers.XMLToolCalls
 import qualified UniversalLLM.Providers.OpenAI as OpenAI

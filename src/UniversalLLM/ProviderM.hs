@@ -4,7 +4,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module UniversalLLM.Core.ProviderM
+module UniversalLLM.ProviderM
   ( ProviderM
   , withProviderState
   , withProvider
@@ -18,7 +18,7 @@ import Control.Monad.Trans (MonadTrans)
 import Data.Monoid ()
 import Data.Default (Default, def)
 
-import UniversalLLM.Core.Types
+import UniversalLLM
   ( ComposableProvider
   , toProviderRequest
   , fromProviderResponse

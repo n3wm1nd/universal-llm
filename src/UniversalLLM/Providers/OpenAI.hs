@@ -12,8 +12,8 @@
 
 module UniversalLLM.Providers.OpenAI where
 
-import UniversalLLM.Core.Types
-import UniversalLLM.Core.Serialization
+import UniversalLLM
+import UniversalLLM.Serialization
 import UniversalLLM.Protocols.OpenAI
 import Data.Text (Text)
 import qualified Data.Text as T

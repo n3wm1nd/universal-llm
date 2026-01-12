@@ -7,7 +7,7 @@
 
 module UniversalLLM.Models.FullFeaturedModel where
 
-import UniversalLLM.Core.Types
+import UniversalLLM
 import UniversalLLM.Providers.OpenAI
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
 import UniversalLLM.Providers.Anthropic

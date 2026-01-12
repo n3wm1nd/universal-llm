@@ -13,7 +13,7 @@ import qualified Data.Text as T
 import Data.Aeson (Value, object, (.=))
 import qualified Data.Aeson as Aeson
 import Autodocodec (toJSONViaCodec)
-import UniversalLLM.Core.Types
+import UniversalLLM
 import qualified UniversalLLM.Protocols.Anthropic as AP
 import qualified UniversalLLM.Protocols.OpenAI as OP
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider

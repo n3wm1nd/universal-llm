@@ -29,11 +29,10 @@ library
   import: shared-properties
   exposed-modules:
     UniversalLLM
-    UniversalLLM.Core.Types
-    UniversalLLM.Core.Tools
-    UniversalLLM.Core.Serialization
-    UniversalLLM.Core.ProviderM
-    UniversalLLM.Core.Settings
+    UniversalLLM.Tools
+    UniversalLLM.Serialization
+    UniversalLLM.ProviderM
+    UniversalLLM.Settings
     UniversalLLM.Models.SimpleModel
     UniversalLLM.Models.FullFeaturedModel
     UniversalLLM.Protocols.OpenAI

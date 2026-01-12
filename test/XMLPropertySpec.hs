@@ -13,7 +13,7 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.List (sort, nub)
 import UniversalLLM.ToolCall.XML
-import UniversalLLM.Core.Types (ToolCall(..), ToolResult(..), ToolDefinition(..))
+import UniversalLLM (ToolCall(..), ToolResult(..), ToolDefinition(..))
 
 -- ============================================================================
 -- Generators for XML Tool Call Types

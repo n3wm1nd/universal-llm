@@ -21,7 +21,7 @@ import Data.Aeson (Value, Object)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
 
-import UniversalLLM.Core.Tools
+import UniversalLLM.Tools
 
 -- Test types for ToolFunction demonstrations
 data SearchResult = SearchResult

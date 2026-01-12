@@ -16,7 +16,7 @@ import qualified Data.Map.Strict as Map
 import Data.Default (def)
 import TestCache (ResponseProvider)
 import TestModels
-import UniversalLLM.Core.Types
+import UniversalLLM
 import UniversalLLM.Protocols.OpenAI
 import UniversalLLM.Providers.OpenAI
 

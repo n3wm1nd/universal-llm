@@ -7,7 +7,7 @@ module CachedIntegrationSpec (spec) where
 import Test.Hspec
 import TestCache
 import UniversalLLM.Protocols.OpenAI
-import UniversalLLM.Core.Types
+import UniversalLLM
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
 import TestModels
 import qualified Data.Aeson as Aeson

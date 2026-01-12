@@ -236,7 +236,7 @@ case response of
 {-# LANGUAGE OverloadedStrings #-}
 
 import UniversalLLM
-import UniversalLLM.Core.Tools
+import UniversalLLM.Tools
 import Data.Time
 
 -- 1. Define result type with ToolFunction instance

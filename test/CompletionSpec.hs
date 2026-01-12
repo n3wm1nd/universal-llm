@@ -12,7 +12,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import TestCache (ResponseProvider)
 import TestModels
-import UniversalLLM.Core.Types
+import UniversalLLM
 import UniversalLLM.Protocols.OpenAI
 import UniversalLLM.Providers.OpenAI
 

@@ -15,7 +15,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module UniversalLLM.Core.Tools
+module UniversalLLM.Tools
   ( -- * Core type classes
     ToolFunction(..)
   , GetParamMeta(..)
@@ -68,7 +68,7 @@ import Data.List (find)
 import Data.Functor.Identity (Identity(..))
 
 -- Re-export from Core.Types
-import UniversalLLM.Core.Types
+import UniversalLLM
   ( ToolDefinition(..)
   , ToolCall(..)
   , ToolResult(..)

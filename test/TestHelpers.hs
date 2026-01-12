@@ -11,7 +11,7 @@ module TestHelpers
 import Test.Hspec
 import Data.Default (Default, def)
 import StandardTests (StandardTest(..))
-import UniversalLLM.Core.Types
+import UniversalLLM
 import TestCache (ResponseProvider)
 
 -- | Run a list of standard tests against a model

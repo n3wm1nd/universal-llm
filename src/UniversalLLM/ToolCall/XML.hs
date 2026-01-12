@@ -30,7 +30,7 @@ import qualified Data.Aeson.Key as Key
 import Data.Aeson (Value)
 import GHC.Generics (Generic)
 import Autodocodec
-import UniversalLLM.Core.Types (ToolCall(..), ToolResult(..), ToolDefinition(..))
+import UniversalLLM (ToolCall(..), ToolResult(..), ToolDefinition(..))
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Text.Encoding as TE
 import Data.Hashable (hash)

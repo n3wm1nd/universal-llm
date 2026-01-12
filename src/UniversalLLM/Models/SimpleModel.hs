@@ -4,7 +4,7 @@
 
 module UniversalLLM.Models.SimpleModel where
 
-import UniversalLLM.Core.Types
+import UniversalLLM
 import Data.Text (Text)
 
 -- SimpleModel - minimal text-only model for basic use cases
