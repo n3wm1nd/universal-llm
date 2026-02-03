@@ -11,7 +11,7 @@ module TestModels where
 import UniversalLLM
 import qualified UniversalLLM.Providers.Anthropic as Anthropic
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
-import UniversalLLM.Providers.Anthropic (Anthropic(..))
+import UniversalLLM.Providers.Anthropic (Anthropic(..), AnthropicOAuth(..), OAuthToolsState)
 import UniversalLLM.Providers.OpenAI (OpenAI(..), LlamaCpp(..), OpenRouter(..), OpenAICompatible(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse, OpenAICompletionRequest, OpenAICompletionResponse)
 
@@ -72,6 +72,31 @@ instance HasReasoning (Model ClaudeSonnet45WithReasoning Anthropic) where
 
 anthropicSonnet45Reasoning :: ComposableProvider (Model ClaudeSonnet45WithReasoning Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
 anthropicSonnet45Reasoning = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45WithReasoning Anthropic)
+
+-- OAuth versions with tool name workarounds
+instance ModelName (Model ClaudeSonnet45 AnthropicOAuth) where
+  modelName (Model _ _) = "claude-sonnet-4-5-20250929"
+
+instance HasTools (Model ClaudeSonnet45 AnthropicOAuth) where
+  type ToolState (Model ClaudeSonnet45 AnthropicOAuth) = OAuthToolsState
+  withTools = Anthropic.anthropicOAuthTools
+
+anthropicSonnet45OAuth :: ComposableProvider (Model ClaudeSonnet45 AnthropicOAuth) (OAuthToolsState, ())
+anthropicSonnet45OAuth = withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45 AnthropicOAuth)
+
+instance ModelName (Model ClaudeSonnet45WithReasoning AnthropicOAuth) where
+  modelName (Model _ _) = "claude-sonnet-4-5-20250929"
+
+instance HasTools (Model ClaudeSonnet45WithReasoning AnthropicOAuth) where
+  type ToolState (Model ClaudeSonnet45WithReasoning AnthropicOAuth) = OAuthToolsState
+  withTools = Anthropic.anthropicOAuthTools
+
+instance HasReasoning (Model ClaudeSonnet45WithReasoning AnthropicOAuth) where
+  type ReasoningState (Model ClaudeSonnet45WithReasoning AnthropicOAuth) = Anthropic.AnthropicReasoningState
+  withReasoning = Anthropic.anthropicReasoning
+
+anthropicSonnet45ReasoningOAuth :: ComposableProvider (Model ClaudeSonnet45WithReasoning AnthropicOAuth) (Anthropic.AnthropicReasoningState, (OAuthToolsState, ()))
+anthropicSonnet45ReasoningOAuth = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45WithReasoning AnthropicOAuth)
 
 -- ============================================================================
 -- OpenAI-Compatible Models (GLM4.5 available via multiple backends)

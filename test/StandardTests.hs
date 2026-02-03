@@ -15,6 +15,7 @@ module StandardTests
   ( StandardTest(..)
   , text
   , tools
+  , toolWithName
   , reasoning
   , reasoningWithTools
   , reasoningWithToolsModifiedReasoning
@@ -30,7 +31,7 @@ import qualified Autodocodec
 import Control.Monad (when)
 import Control.Monad.Catch (MonadCatch, SomeException, catch)
 import UniversalLLM
-import UniversalLLM.Tools (LLMTool(..), llmToolToDefinition, executeToolCallFromList, ToolFunction(..), ToolParameter(..))
+import UniversalLLM.Tools (LLMTool(..), llmToolToDefinition, executeToolCallFromList, ToolFunction(..), ToolParameter(..), mkTool)
 import TestCache (ResponseProvider)
 import qualified UniversalLLM.Protocols.OpenAI as OpenAI
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse(..), OpenAISuccessResponse(..), OpenAIChoice(..), OpenAIMessage(role, content, reasoning_content, reasoning_details, tool_calls), OpenAIReasoningConfig(..), OpenAIToolCall(callId))
@@ -246,6 +247,59 @@ tools = StandardTest $ \cp model initialState getResponse -> do
         let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
 
         -- LLM should respond after receiving tool results (even if they're errors)
+        length parsedMsgs2 `shouldSatisfy` (> 0)
+
+-- ============================================================================
+-- Tool Name Tests
+-- ============================================================================
+
+-- | Test that a tool with a specific name works through a complete round-trip
+-- This is useful for testing that tool names are preserved correctly,
+-- regardless of any provider-specific transformations
+toolWithName :: ( Monoid (ProviderRequest m)
+                , SupportsMaxTokens (ProviderOf m)
+                , HasTools m
+                )
+             => Text
+             -> StandardTest m state
+toolWithName toolName = StandardTest $ \cp model initialState getResponse -> do
+  describe ("Tool with name: " <> T.unpack toolName) $ do
+    it "completes tool calling flow" $ do
+      -- Create a simple tool with the specified name using mkTool
+      let toolFunc :: Text -> IO Text
+          toolFunc input = return ("success: " <> input)
+          mockTool = LLMTool $ mkTool toolName ("Test tool for " <> toolName) toolFunc
+          toolDefs = [llmToolToDefinition mockTool]
+          configs = [MaxTokens 2048, Tools toolDefs]
+          msgs = [UserText ("Use the " <> toolName <> " tool")]
+          (state1, req1) = toProviderRequest cp model configs initialState msgs
+
+      -- First request should trigger tool use
+      resp1 <- getResponse req1
+
+      let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp model configs state1 resp1
+
+      -- Extract tool calls
+      let toolCalls = [ tc | AssistantTool tc <- parsedMsgs1 ]
+
+      -- If we got tool calls, verify the name is correct and complete the flow
+      when (not $ null toolCalls) $ do
+        -- Verify the tool name matches what we requested
+        let callNames = map getToolCallName toolCalls
+        any (== toolName) callNames `shouldBe` True
+
+        -- Execute tools
+        toolResults <- mapM (safeExecuteTool [mockTool]) toolCalls
+        let toolResultMsgs = map ToolResultMsg toolResults
+
+        -- Send tool results back
+        let msgs2 = msgs ++ parsedMsgs1 ++ toolResultMsgs
+            (_, req2) = toProviderRequest cp model configs state2 msgs2
+
+        resp2 <- getResponse req2
+        let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
+
+        -- Should get a response after tool execution
         length parsedMsgs2 `shouldSatisfy` (> 0)
 
 -- ============================================================================
