@@ -34,6 +34,7 @@ import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
 import UniversalLLM.Providers.Anthropic (Anthropic(..))
 import Protocol.AnthropicTests
+import qualified Protocol.AnthropicOAuthBlacklist as Blacklist
 import qualified StandardTests as ST
 import TestCache (ResponseProvider)
 import TestHelpers (testModel)
@@ -53,6 +54,9 @@ testsSonnet45 provider = do
       startsWithAssistant provider
       reasoning provider
       toolCallingWithReasoning provider
+
+    describe "OAuth Tool Name Blacklist" $ do
+      Blacklist.blacklistProbes provider
 
     describe "Standard Tests" $
       testModel TestModels.anthropicSonnet45Reasoning (Model TestModels.ClaudeSonnet45WithReasoning Anthropic) provider

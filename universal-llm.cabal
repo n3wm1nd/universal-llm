@@ -105,6 +105,7 @@ test-suite universal-llm-tests
     Protocol.OpenAITests
     Protocol.Anthropic
     Protocol.AnthropicTests
+    Protocol.AnthropicOAuthBlacklist
     Models.GLM45Air
     Models.Qwen3Coder
     Models.Gemini3Flash

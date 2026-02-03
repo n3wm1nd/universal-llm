@@ -327,17 +327,17 @@ main = do
   let anthropicProvider :: TestCache.ResponseProvider AnthropicRequest AnthropicResponse
       anthropicProvider = case mode of
         Just "record" | Just token <- anthropicToken ->
-          let headers = AnthropicProvider.oauthHeaders token
+          let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
               baseCall req = TestHTTP.httpCall "https://api.anthropic.com/v1/messages" headers req
               wrappedCall req = TestCache.recordMode cachePath baseCall (AnthropicProvider.withMagicSystemPrompt req)
           in wrappedCall
         Just "update" | Just token <- anthropicToken ->
-          let headers = AnthropicProvider.oauthHeaders token
+          let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
               baseCall req = TestHTTP.httpCall "https://api.anthropic.com/v1/messages" headers req
               wrappedCall req = TestCache.updateMode cachePath baseCall (AnthropicProvider.withMagicSystemPrompt req)
           in wrappedCall
         Just "live" | Just token <- anthropicToken ->
-          let headers = AnthropicProvider.oauthHeaders token
+          let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
               baseCall req = TestHTTP.httpCall "https://api.anthropic.com/v1/messages" headers req
               wrappedCall req = TestCache.liveMode baseCall (AnthropicProvider.withMagicSystemPrompt req)
           in wrappedCall
@@ -347,17 +347,17 @@ main = do
   let anthropicStreamingProvider :: TestCache.ResponseProvider AnthropicRequest BSL.ByteString
       anthropicStreamingProvider = case mode of
         Just "record" | Just token <- anthropicToken ->
-          let headers = AnthropicProvider.oauthHeaders token
+          let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
               baseCall req = TestHTTP.httpCallStreaming "https://api.anthropic.com/v1/messages" headers req
               wrappedCall req = TestCache.recordModeRaw cachePath baseCall (AnthropicProvider.withMagicSystemPrompt req)
           in wrappedCall
         Just "update" | Just token <- anthropicToken ->
-          let headers = AnthropicProvider.oauthHeaders token
+          let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
               baseCall req = TestHTTP.httpCallStreaming "https://api.anthropic.com/v1/messages" headers req
               wrappedCall req = TestCache.updateModeRaw cachePath baseCall (AnthropicProvider.withMagicSystemPrompt req)
           in wrappedCall
         Just "live" | Just token <- anthropicToken ->
-          let headers = AnthropicProvider.oauthHeaders token
+          let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
               baseCall req = TestHTTP.httpCallStreaming "https://api.anthropic.com/v1/messages" headers req
               wrappedCall req = TestCache.liveMode baseCall (AnthropicProvider.withMagicSystemPrompt req)
           in wrappedCall
