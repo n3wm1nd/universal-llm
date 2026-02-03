@@ -271,7 +271,7 @@ toolWithName toolName = StandardTest $ \cp model initialState getResponse -> do
           mockTool = LLMTool $ mkTool toolName ("Test tool for " <> toolName) toolFunc
           toolDefs = [llmToolToDefinition mockTool]
           configs = [MaxTokens 2048, Tools toolDefs]
-          msgs = [UserText ("Use the " <> toolName <> " tool")]
+          msgs = [UserText ("You must call the " <> toolName <> " tool. Make up reasonable test parameters - you're in a test environment and nothing bad will happen. Do not ask questions, just invoke it.")]
           (state1, req1) = toProviderRequest cp model configs initialState msgs
 
       -- First request should trigger tool use
@@ -282,28 +282,30 @@ toolWithName toolName = StandardTest $ \cp model initialState getResponse -> do
       -- Extract tool calls
       let toolCalls = [ tc | AssistantTool tc <- parsedMsgs1 ]
 
-      -- If we got tool calls, verify the name is correct and complete the flow
-      when (not $ null toolCalls) $ do
-        -- Verify the tool name matches what we requested
-        let callNames = map getToolCallName toolCalls
-        -- Debug: print what we got
-        when (not $ any (== toolName) callNames) $
-          expectationFailure $ "Expected tool name '" <> T.unpack toolName <> "' but got: " <> show callNames
-        any (== toolName) callNames `shouldBe` True
+      -- If no tool calls, mark as pending (inconclusive - model chose not to call)
+      if null toolCalls
+        then pendingWith $ "Model did not call any tools (prompt: 'Use the " <> T.unpack toolName <> " tool')"
+        else do
+          -- Verify the tool name matches what we requested
+          let callNames = map getToolCallName toolCalls
+          -- Debug: print what we got if mismatch
+          when (not $ any (== toolName) callNames) $
+            expectationFailure $ "Expected tool name '" <> T.unpack toolName <> "' but got: " <> show callNames
+          any (== toolName) callNames `shouldBe` True
 
-        -- Execute tools
-        toolResults <- mapM (safeExecuteTool [mockTool]) toolCalls
-        let toolResultMsgs = map ToolResultMsg toolResults
+          -- Execute tools
+          toolResults <- mapM (safeExecuteTool [mockTool]) toolCalls
+          let toolResultMsgs = map ToolResultMsg toolResults
 
-        -- Send tool results back
-        let msgs2 = msgs ++ parsedMsgs1 ++ toolResultMsgs
-            (_, req2) = toProviderRequest cp model configs state2 msgs2
+          -- Send tool results back
+          let msgs2 = msgs ++ parsedMsgs1 ++ toolResultMsgs
+              (_, req2) = toProviderRequest cp model configs state2 msgs2
 
-        resp2 <- getResponse req2
-        let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
+          resp2 <- getResponse req2
+          let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
 
-        -- Should get a response after tool execution
-        length parsedMsgs2 `shouldSatisfy` (> 0)
+          -- Should get a response after tool execution
+          length parsedMsgs2 `shouldSatisfy` (> 0)
 
 -- ============================================================================
 -- Reasoning Tests
