@@ -286,6 +286,9 @@ toolWithName toolName = StandardTest $ \cp model initialState getResponse -> do
       when (not $ null toolCalls) $ do
         -- Verify the tool name matches what we requested
         let callNames = map getToolCallName toolCalls
+        -- Debug: print what we got
+        when (not $ any (== toolName) callNames) $
+          expectationFailure $ "Expected tool name '" <> T.unpack toolName <> "' but got: " <> show callNames
         any (== toolName) callNames `shouldBe` True
 
         -- Execute tools

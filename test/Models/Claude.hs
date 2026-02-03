@@ -32,6 +32,7 @@ module Models.Claude (testsSonnet45) where
 
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
+import qualified UniversalLLM.Providers.Anthropic as Anthropic
 import UniversalLLM.Providers.Anthropic (Anthropic(..))
 import Protocol.AnthropicTests
 import qualified Protocol.AnthropicOAuthBlacklist as Blacklist
@@ -61,3 +62,12 @@ testsSonnet45 provider = do
     describe "Standard Tests" $
       testModel TestModels.anthropicSonnet45Reasoning (Model TestModels.ClaudeSonnet45WithReasoning Anthropic) provider
         [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+
+    describe "OAuth Provider Tests" $
+      testModel TestModels.anthropicSonnet45ReasoningOAuth (Model TestModels.ClaudeSonnet45WithReasoning Anthropic.AnthropicOAuth) provider
+        [ ST.text
+        , ST.tools
+        , ST.toolWithName "grep"      -- Blacklisted, should work via prefix/unprefix
+        , ST.toolWithName "read_file" -- Blacklisted, should work via prefix/unprefix
+        , ST.toolWithName "echo"      -- Not blacklisted, should work normally
+        ]

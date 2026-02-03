@@ -512,17 +512,11 @@ anthropicOAuthTools _m configs state = noopHandler
       in req2
 
   , cpPreRequest = \req state ->
-      -- Extract mappings from the request (tool definitions)
-      case tools req of
-        Nothing -> state
-        Just defs ->
-          let extractMapping def =
-                let name = anthropicToolName def
-                in if hasPrefix name
-                   then Map.singleton name (unprefix name)
-                   else Map.empty
-              mappings = Map.unions $ map extractMapping defs
-          in state { prefixedToOriginal = Map.union mappings (prefixedToOriginal state) }
+      -- Extract mappings from configs (since cpConfigHandler hasn't run yet!)
+      let toolDefs = [defs | Tools defs <- configs]
+          anthropicToolDefs = map toAnthropicToolDef (concat toolDefs)
+          (prefixedDefs, mappings) = prefixToolDefinitions anthropicToolDefs
+      in state { prefixedToOriginal = Map.union mappings (prefixedToOriginal state) }
 
   , cpToRequest = \msg req -> case msg of
       AssistantTool toolCall ->
