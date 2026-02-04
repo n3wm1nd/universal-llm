@@ -86,6 +86,7 @@ test-suite universal-llm-tests
     OpenAIStreamingSpec
     AnthropicComposableSpec
     AnthropicStreamingSpec
+    AnthropicStreamingThinkingSpec
     PropertySpec
     XMLPropertySpec
     XMLProvidersSpec

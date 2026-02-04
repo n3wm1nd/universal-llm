@@ -376,7 +376,7 @@ mergeAnthropicDelta acc chunk =
             case extractDeltaIndex chunk of
                 Nothing -> acc
                 Just idx ->
-                    case asum [fmap (appendTextAt idx resp) (extractTextDelta chunk), fmap (appendToolInputAt idx resp) (extractInputJsonDelta chunk), fmap (appendThinkingAt idx resp) (extractThinkingDelta chunk)] of
+                    case asum [fmap (appendTextAt idx resp) (extractTextDelta chunk), fmap (appendToolInputAt idx resp) (extractInputJsonDelta chunk), fmap (appendThinkingAt idx resp) (extractThinkingDelta chunk), fmap (appendSignatureAt idx resp) (extractSignatureDelta chunk)] of
                         Just updated -> AnthropicSuccess updated
                         Nothing -> acc
         (AnthropicSuccess resp, Just "message_delta") ->
@@ -426,6 +426,22 @@ mergeAnthropicDelta acc chunk =
             block { thinkingText = thinkingText <> t }
         appendToThinking _ block = block
 
+    appendSignatureAt :: Int -> AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
+    appendSignatureAt idx resp signatureDelta =
+        resp { responseContent = updateBlockAt idx (appendToSignature signatureDelta) (responseContent resp) }
+      where
+        appendToSignature sd block@AnthropicThinkingBlock{..} =
+            -- Accumulate signature as string, similar to tool input
+            let accumulatedSig = case thinkingSignature of
+                    Aeson.String s -> s <> sd
+                    _ -> sd
+                parsedSig = case Aeson.decode (BSL.fromStrict (encodeUtf8 accumulatedSig)) of
+                    Just val -> val
+                    -- If not valid JSON yet, keep as string for now
+                    Nothing -> Aeson.String accumulatedSig
+            in block { thinkingSignature = parsedSig }
+        appendToSignature _ block = block
+
     appendToolInputAt :: Int -> AnthropicSuccessResponse -> Text -> AnthropicSuccessResponse
     appendToolInputAt idx resp jsonDelta =
         resp { responseContent = updateBlockAt idx (appendToTool jsonDelta) (responseContent resp) }
@@ -436,7 +452,9 @@ mergeAnthropicDelta acc chunk =
                     _ -> jd
                 parsedInput = case Aeson.decode (BSL.fromStrict (encodeUtf8 accumulatedJson)) of
                     Just val -> val
-                    Nothing -> Aeson.String accumulatedJson
+                    -- Empty string or invalid JSON -> treat as empty object
+                    -- This handles tools with no parameters where Anthropic sends ""
+                    Nothing -> Aeson.Object KM.empty
             in AnthropicToolUseBlock toolId toolName parsedInput cc
         appendToTool _ block = block
 
@@ -471,8 +489,11 @@ mergeAnthropicDelta acc chunk =
                 let thinking = case KM.lookup "thinking" contentBlock of
                       Just (Aeson.String t) -> t
                       _ -> ""
-                -- Signature is required, look it up in content_block
-                signature <- KM.lookup "signature" contentBlock
+                -- Signature may start as empty string and be filled via signature_delta events
+                let signature = case KM.lookup "signature" contentBlock of
+                      Just (Aeson.String "") -> Aeson.String ""  -- Empty string, will be filled by deltas
+                      Just sig -> sig
+                      Nothing -> Aeson.String ""  -- Default to empty string if not present
                 return $ AnthropicThinkingBlock
                     { thinkingText = thinking
                     , thinkingSignature = signature
@@ -498,3 +519,10 @@ mergeAnthropicDelta acc chunk =
         Aeson.String thinking <- KM.lookup "thinking" delta
         return thinking
     extractThinkingDelta _ = Nothing
+
+    extractSignatureDelta :: Value -> Maybe Text
+    extractSignatureDelta (Aeson.Object obj) = do
+        Aeson.Object delta <- KM.lookup "delta" obj
+        Aeson.String signature <- KM.lookup "signature" delta
+        return signature
+    extractSignatureDelta _ = Nothing

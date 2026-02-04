@@ -11,6 +11,7 @@ import qualified OpenAIComposableSpec
 import qualified OpenAIStreamingSpec
 import qualified AnthropicComposableSpec
 import qualified AnthropicStreamingSpec
+import qualified AnthropicStreamingThinkingSpec
 import qualified PropertySpec
 import qualified XMLPropertySpec
 import qualified XMLProvidersSpec
@@ -428,6 +429,9 @@ main = do
     describe "OpenAI Streaming Provider (cached)" $ OpenAIStreamingSpec.spec openrouterStreamingProvider
     describe "Anthropic Composable Provider (cached)" $ AnthropicComposableSpec.spec anthropicProvider
     describe "Anthropic Streaming Provider (cached)" $ AnthropicStreamingSpec.spec anthropicStreamingProvider
+
+    -- Anthropic streaming thinking signature test
+    AnthropicStreamingThinkingSpec.spec
 
     -- Completion interface tests
     describe "OpenAI Completion Interface (cached)" $ CompletionSpec.spec completionProvider
