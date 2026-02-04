@@ -21,24 +21,24 @@ import qualified UniversalLLM.Providers.Anthropic as Provider
 import Data.Default (Default(..))
 
 -- Type alias for the test model
-type TestModel = Model TestModels.ClaudeSonnet45 Provider.Anthropic
+type TestModel = Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth
 
 -- Helper to build request for ClaudeSonnet45
 buildRequest :: TestModel
              -> [ModelConfig TestModel]
              -> [Message TestModel]
              -> AnthropicRequest
-buildRequest model = buildRequestGeneric TestModels.anthropicSonnet45 model ((), ())
+buildRequest model = buildRequestGeneric TestModels.anthropicSonnet45OAuth model (Provider.OAuthToolsState mempty, ((), ()))
 
 -- Type alias for the reasoning test model
-type TestModelWithReasoning = Model TestModels.ClaudeSonnet45WithReasoning Provider.Anthropic
+type TestModelWithReasoning = Model TestModels.ClaudeSonnet45WithReasoning Provider.AnthropicOAuth
 
 -- Helper to build request for ClaudeSonnet45WithReasoning
 buildRequestWithReasoning :: TestModelWithReasoning
                           -> [ModelConfig TestModelWithReasoning]
                           -> [Message TestModelWithReasoning]
                           -> AnthropicRequest
-buildRequestWithReasoning model = buildRequestGeneric TestModels.anthropicSonnet45Reasoning model (def, ((), ()))
+buildRequestWithReasoning model = buildRequestGeneric TestModels.anthropicSonnet45ReasoningOAuth model (def, (Provider.OAuthToolsState mempty, ((), ())))
 
 -- Generic helper to build request with explicit composable provider
 buildRequestGeneric :: forall m s. (ProviderRequest m ~ AnthropicRequest)
@@ -57,7 +57,7 @@ parseResponse :: TestModel
               -> AnthropicResponse
               -> Either LLMError [Message TestModel]
 parseResponse model configs _history resp =
-  let msgs = parseResponseGeneric TestModels.anthropicSonnet45 model configs ((), ()) resp
+  let msgs = parseResponseGeneric TestModels.anthropicSonnet45OAuth model configs (Provider.OAuthToolsState mempty, ((), ())) resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs
@@ -69,7 +69,7 @@ parseResponseWithReasoning :: TestModelWithReasoning
                            -> AnthropicResponse
                            -> Either LLMError [Message TestModelWithReasoning]
 parseResponseWithReasoning model configs _history resp =
-  let msgs = parseResponseGeneric TestModels.anthropicSonnet45Reasoning model configs (def, ((), ())) resp
+  let msgs = parseResponseGeneric TestModels.anthropicSonnet45ReasoningOAuth model configs (def, (Provider.OAuthToolsState mempty, ((), ()))) resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs
@@ -89,7 +89,7 @@ spec :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 spec getResponse = do
   describe "Anthropic Request Building (no API calls)" $ do
     it "can build and evaluate a request without looping" $ do
-      let model = Model ClaudeSonnet45 Provider.Anthropic
+      let model = Model ClaudeSonnet45 Provider.AnthropicOAuth
           configs = [Temperature 0.7, MaxTokens 200]
           msgs = [UserText "Test message"]
           req = buildRequest model configs msgs
@@ -105,7 +105,7 @@ spec getResponse = do
   describe "Anthropic Composable Provider - Basic Text" $ do
 
     it "sends message, receives response, and maintains conversation history" $ do
-      let model = Model ClaudeSonnet45 Provider.Anthropic
+      let model = Model ClaudeSonnet45 Provider.AnthropicOAuth
           configs = [MaxTokens 100, SystemPrompt "You are a helpful assistant."]
 
           -- First exchange
@@ -137,7 +137,7 @@ spec getResponse = do
         Left err -> expectationFailure $ "parseResponse failed: " ++ show err
 
     it "applies system prompt from config" $ do
-      let model = Model ClaudeSonnet45 Provider.Anthropic
+      let model = Model ClaudeSonnet45 Provider.AnthropicOAuth
           sysPrompt = "You are a mathematical assistant."
           configs = [MaxTokens 50, SystemPrompt sysPrompt]
           msgs = [UserText "Hello"]
@@ -157,7 +157,7 @@ spec getResponse = do
   describe "Anthropic Composable Provider - Tool Calling" $ do
 
     it "completes full tool calling conversation flow" $ do
-      let model = Model ClaudeSonnet45 Provider.Anthropic :: TestModel
+      let model = Model ClaudeSonnet45 Provider.AnthropicOAuth :: TestModel
           toolDef = ToolDefinition
             { toolDefName = "get_weather"
             , toolDefDescription = "Get the current weather in a given location"
@@ -219,7 +219,7 @@ spec getResponse = do
         Left err -> expectationFailure $ "parseResponse failed: " ++ show err
 
     it "handles tool use with mixed text and tool blocks" $ do
-      let model = Model ClaudeSonnet45 Provider.Anthropic :: TestModel
+      let model = Model ClaudeSonnet45 Provider.AnthropicOAuth :: TestModel
           toolDef = ToolDefinition "calculator" "Perform calculations"
                       (object ["type" .= ("object" :: Text)])
           configs = [MaxTokens 200, Tools [toolDef]]
@@ -240,7 +240,7 @@ spec getResponse = do
   describe "Anthropic Composable Provider - Message Grouping" $ do
 
     it "groups consecutive messages by direction (user/assistant)" $ do
-      let model = Model ClaudeSonnet45 Provider.Anthropic :: TestModel
+      let model = Model ClaudeSonnet45 Provider.AnthropicOAuth :: TestModel
           configs = [MaxTokens 50]
 
           -- Multiple consecutive user messages
@@ -263,7 +263,7 @@ spec getResponse = do
         _ -> expectationFailure "Expected user message with multiple blocks"
 
     it "alternates user and assistant messages correctly" $ do
-      let model = Model ClaudeSonnet45 Provider.Anthropic :: TestModel
+      let model = Model ClaudeSonnet45 Provider.AnthropicOAuth :: TestModel
           configs = [MaxTokens 50]
           toolCall = ToolCall "toolu_123" "test_tool" (object [])
 
@@ -293,7 +293,7 @@ spec getResponse = do
   describe "Anthropic Composable Provider - Streaming with Tools" $ do
 
     it "builds correct request for streaming tool calls" $ do
-      let model = Model ClaudeSonnet45 Provider.Anthropic :: TestModel
+      let model = Model ClaudeSonnet45 Provider.AnthropicOAuth :: TestModel
           toolDef = ToolDefinition
             { toolDefName = "calculator"
             , toolDefDescription = "Perform math calculations"
@@ -321,7 +321,7 @@ spec getResponse = do
         _ -> expectationFailure "Expected exactly one tool in request"
 
     it "builds correct request for streaming tool calls with reasoning" $ do
-      let model = Model ClaudeSonnet45WithReasoning Provider.Anthropic :: TestModelWithReasoning
+      let model = Model ClaudeSonnet45WithReasoning Provider.AnthropicOAuth :: TestModelWithReasoning
           toolDef = ToolDefinition
             { toolDefName = "search"
             , toolDefDescription = "Search for information"
@@ -352,7 +352,7 @@ spec getResponse = do
   describe "Compile-Time Safety Demonstrations" $ do
 
     it "allows tool use with tool-capable model" $ do
-      let model = Model ClaudeSonnet45 Provider.Anthropic :: TestModel  -- HasTools
+      let model = Model ClaudeSonnet45 Provider.AnthropicOAuth :: TestModel  -- HasTools
           toolDef = ToolDefinition "test_tool" "Test" (object [])
           configs = [Tools [toolDef], MaxTokens 50]
           msgs = [UserText "test" :: Message TestModel]
@@ -399,7 +399,7 @@ spec getResponse = do
 
   describe "Anthropic Composable Provider - Reasoning/Thinking" $ do
     it "includes thinking config with budget_tokens when reasoning is enabled" $ do
-      let model = Model ClaudeSonnet45WithReasoning Provider.Anthropic :: TestModelWithReasoning
+      let model = Model ClaudeSonnet45WithReasoning Provider.AnthropicOAuth :: TestModelWithReasoning
           configs = [MaxTokens 4000]  -- Use 4000 so we get 2000 budget (within bounds)
           msgs = [UserText "Think about this problem" :: Message TestModelWithReasoning]
           req = buildRequestWithReasoning model configs msgs
@@ -416,7 +416,7 @@ spec getResponse = do
           expectationFailure "thinking config should be set when HasReasoning is enabled"
 
     it "enforces minimum thinking budget of 1024" $ do
-      let model = Model ClaudeSonnet45WithReasoning Provider.Anthropic :: TestModelWithReasoning
+      let model = Model ClaudeSonnet45WithReasoning Provider.AnthropicOAuth :: TestModelWithReasoning
           configs = [MaxTokens 1000]  -- Small max_tokens would give budget < 1024
           msgs = [UserText "Think about this" :: Message TestModelWithReasoning]
           req = buildRequestWithReasoning model configs msgs
@@ -430,7 +430,7 @@ spec getResponse = do
           expectationFailure "thinking config should be set"
 
     it "respects max_tokens when setting thinking budget" $ do
-      let model = Model ClaudeSonnet45WithReasoning Provider.Anthropic :: TestModelWithReasoning
+      let model = Model ClaudeSonnet45WithReasoning Provider.AnthropicOAuth :: TestModelWithReasoning
           configs = [MaxTokens 4000]
           msgs = [UserText "Think about this" :: Message TestModelWithReasoning]
           req = buildRequestWithReasoning model configs msgs
@@ -444,7 +444,7 @@ spec getResponse = do
           expectationFailure "thinking config should be set"
 
     it "caps thinking budget at 5000" $ do
-      let model = Model ClaudeSonnet45WithReasoning Provider.Anthropic :: TestModelWithReasoning
+      let model = Model ClaudeSonnet45WithReasoning Provider.AnthropicOAuth :: TestModelWithReasoning
           configs = [MaxTokens 20000]
           msgs = [UserText "Think about this" :: Message TestModelWithReasoning]
           req = buildRequestWithReasoning model configs msgs
@@ -458,7 +458,7 @@ spec getResponse = do
           expectationFailure "thinking config should be set"
 
     it "does not include thinking config when reasoning is disabled" $ do
-      let model = Model ClaudeSonnet45 Provider.Anthropic :: TestModel
+      let model = Model ClaudeSonnet45 Provider.AnthropicOAuth :: TestModel
           configs = [MaxTokens 200]
           msgs = [UserText "Simple question" :: Message TestModel]
           req = buildRequest model configs msgs
@@ -467,7 +467,7 @@ spec getResponse = do
       Proto.thinking req `shouldBe` Nothing
 
     it "sends reasoning request to API and gets response" $ do
-      let model = Model ClaudeSonnet45WithReasoning Provider.Anthropic :: TestModelWithReasoning
+      let model = Model ClaudeSonnet45WithReasoning Provider.AnthropicOAuth :: TestModelWithReasoning
           -- max_tokens must be greater than budget_tokens
           configs = [MaxTokens 12000]
           msgs = [UserText "What is 2+2?" :: Message TestModelWithReasoning]
@@ -486,7 +486,7 @@ spec getResponse = do
 
   describe "Anthropic Composable Provider - Streaming + Tools Live Test" $ do
     it "receives SSE formatted streaming response with tool call events" $ do
-      let model = Model ClaudeSonnet45 Provider.Anthropic :: TestModel
+      let model = Model ClaudeSonnet45 Provider.AnthropicOAuth :: TestModel
           toolDef = ToolDefinition
             { toolDefName = "get_weather"
             , toolDefDescription = "Get the weather for a location"

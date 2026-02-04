@@ -79,24 +79,24 @@ instance ModelName (Model ClaudeSonnet45 AnthropicOAuth) where
 
 instance HasTools (Model ClaudeSonnet45 AnthropicOAuth) where
   type ToolState (Model ClaudeSonnet45 AnthropicOAuth) = OAuthToolsState
-  withTools = Anthropic.anthropicOAuthTools
+  withTools = Anthropic.anthropicOAuthBlacklistedTools
 
-anthropicSonnet45OAuth :: ComposableProvider (Model ClaudeSonnet45 AnthropicOAuth) (OAuthToolsState, ())
-anthropicSonnet45OAuth = withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45 AnthropicOAuth)
+anthropicSonnet45OAuth :: ComposableProvider (Model ClaudeSonnet45 AnthropicOAuth) (OAuthToolsState, ((), ()))
+anthropicSonnet45OAuth = withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45 AnthropicOAuth)
 
 instance ModelName (Model ClaudeSonnet45WithReasoning AnthropicOAuth) where
   modelName (Model _ _) = "claude-sonnet-4-5-20250929"
 
 instance HasTools (Model ClaudeSonnet45WithReasoning AnthropicOAuth) where
   type ToolState (Model ClaudeSonnet45WithReasoning AnthropicOAuth) = OAuthToolsState
-  withTools = Anthropic.anthropicOAuthTools
+  withTools = Anthropic.anthropicOAuthBlacklistedTools
 
 instance HasReasoning (Model ClaudeSonnet45WithReasoning AnthropicOAuth) where
   type ReasoningState (Model ClaudeSonnet45WithReasoning AnthropicOAuth) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicReasoning
 
-anthropicSonnet45ReasoningOAuth :: ComposableProvider (Model ClaudeSonnet45WithReasoning AnthropicOAuth) (Anthropic.AnthropicReasoningState, (OAuthToolsState, ()))
-anthropicSonnet45ReasoningOAuth = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45WithReasoning AnthropicOAuth)
+anthropicSonnet45ReasoningOAuth :: ComposableProvider (Model ClaudeSonnet45WithReasoning AnthropicOAuth) (Anthropic.AnthropicReasoningState, (OAuthToolsState, ((), ())))
+anthropicSonnet45ReasoningOAuth = withReasoning `chainProviders` withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45WithReasoning AnthropicOAuth)
 
 -- ============================================================================
 -- OpenAI-Compatible Models (GLM4.5 available via multiple backends)

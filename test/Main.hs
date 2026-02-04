@@ -324,25 +324,21 @@ main = do
         _ -> TestCache.playbackMode cachePath
 
   -- Build Anthropic response provider
-  -- Note: withMagicSystemPrompt is applied BEFORE caching so it's part of the cache key
   let anthropicProvider :: TestCache.ResponseProvider AnthropicRequest AnthropicResponse
       anthropicProvider = case mode of
         Just "record" | Just token <- anthropicToken ->
           let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
               baseCall req = TestHTTP.httpCall "https://api.anthropic.com/v1/messages" headers req
-              wrappedCall req = TestCache.recordMode cachePath baseCall (AnthropicProvider.withMagicSystemPrompt req)
-          in wrappedCall
+          in TestCache.recordMode cachePath baseCall
         Just "update" | Just token <- anthropicToken ->
           let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
               baseCall req = TestHTTP.httpCall "https://api.anthropic.com/v1/messages" headers req
-              wrappedCall req = TestCache.updateMode cachePath baseCall (AnthropicProvider.withMagicSystemPrompt req)
-          in wrappedCall
+          in TestCache.updateMode cachePath baseCall
         Just "live" | Just token <- anthropicToken ->
           let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
               baseCall req = TestHTTP.httpCall "https://api.anthropic.com/v1/messages" headers req
-              wrappedCall req = TestCache.liveMode baseCall (AnthropicProvider.withMagicSystemPrompt req)
-          in wrappedCall
-        _ -> \req -> TestCache.playbackMode cachePath (AnthropicProvider.withMagicSystemPrompt req)
+          in TestCache.liveMode baseCall
+        _ -> TestCache.playbackMode cachePath
 
   -- Build Anthropic streaming response provider (for SSE responses)
   let anthropicStreamingProvider :: TestCache.ResponseProvider AnthropicRequest BSL.ByteString
@@ -350,19 +346,16 @@ main = do
         Just "record" | Just token <- anthropicToken ->
           let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
               baseCall req = TestHTTP.httpCallStreaming "https://api.anthropic.com/v1/messages" headers req
-              wrappedCall req = TestCache.recordModeRaw cachePath baseCall (AnthropicProvider.withMagicSystemPrompt req)
-          in wrappedCall
+          in TestCache.recordModeRaw cachePath baseCall
         Just "update" | Just token <- anthropicToken ->
           let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
               baseCall req = TestHTTP.httpCallStreaming "https://api.anthropic.com/v1/messages" headers req
-              wrappedCall req = TestCache.updateModeRaw cachePath baseCall (AnthropicProvider.withMagicSystemPrompt req)
-          in wrappedCall
+          in TestCache.updateModeRaw cachePath baseCall
         Just "live" | Just token <- anthropicToken ->
           let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
               baseCall req = TestHTTP.httpCallStreaming "https://api.anthropic.com/v1/messages" headers req
-              wrappedCall req = TestCache.liveMode baseCall (AnthropicProvider.withMagicSystemPrompt req)
-          in wrappedCall
-        _ -> \req -> TestCache.playbackModeRaw cachePath (AnthropicProvider.withMagicSystemPrompt req)
+          in TestCache.liveMode baseCall
+        _ -> TestCache.playbackModeRaw cachePath
 
   -- Build OpenAI streaming response provider (for SSE responses)
   let openaiStreamingProvider :: TestCache.ResponseProvider OpenAIRequest BSL.ByteString

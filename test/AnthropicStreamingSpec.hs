@@ -21,23 +21,23 @@ import Data.Default (Default(..))
 
 -- Helper to build streaming request - uses ClaudeSonnet45 with basic composition
 -- (Wrapper around generic version that provides specific model and composable provider)
-buildStreamingRequest :: [ModelConfig (Model TestModels.ClaudeSonnet45 Provider.Anthropic)]
-                     -> [Message (Model TestModels.ClaudeSonnet45 Provider.Anthropic)]
+buildStreamingRequest :: [ModelConfig (Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth)]
+                     -> [Message (Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth)]
                      -> AnthropicRequest
-buildStreamingRequest configs msgs = buildStreamingRequestGeneric TestModels.anthropicSonnet45 (Model TestModels.ClaudeSonnet45 Provider.Anthropic) ((), ()) configs msgs
+buildStreamingRequest configs msgs = buildStreamingRequestGeneric TestModels.anthropicSonnet45OAuth (Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth) (Provider.OAuthToolsState mempty, ((), ())) configs msgs
 
 -- Helper to build streaming request - uses ClaudeSonnet45WithReasoning
-buildStreamingRequestWithReasoning :: [ModelConfig (Model TestModels.ClaudeSonnet45WithReasoning Provider.Anthropic)]
-                                 -> [Message (Model TestModels.ClaudeSonnet45WithReasoning Provider.Anthropic)]
+buildStreamingRequestWithReasoning :: [ModelConfig (Model TestModels.ClaudeSonnet45WithReasoning Provider.AnthropicOAuth)]
+                                 -> [Message (Model TestModels.ClaudeSonnet45WithReasoning Provider.AnthropicOAuth)]
                                  -> AnthropicRequest
-buildStreamingRequestWithReasoning configs msgs = buildStreamingRequestGeneric TestModels.anthropicSonnet45Reasoning (Model TestModels.ClaudeSonnet45WithReasoning Provider.Anthropic) (def, ((), ())) configs msgs
+buildStreamingRequestWithReasoning configs msgs = buildStreamingRequestGeneric TestModels.anthropicSonnet45ReasoningOAuth (Model TestModels.ClaudeSonnet45WithReasoning Provider.AnthropicOAuth) (def, (Provider.OAuthToolsState mempty, ((), ()))) configs msgs
 
 -- Generic helper to build streaming request with explicit composable provider
-buildStreamingRequestGeneric :: forall model s. ComposableProvider (Model model Provider.Anthropic) s
-                           -> Model model Provider.Anthropic
+buildStreamingRequestGeneric :: forall model s. ComposableProvider (Model model Provider.AnthropicOAuth) s
+                           -> Model model Provider.AnthropicOAuth
                            -> s
-                           -> [ModelConfig (Model model Provider.Anthropic)]
-                           -> [Message (Model model Provider.Anthropic)]
+                           -> [ModelConfig (Model model Provider.AnthropicOAuth)]
+                           -> [Message (Model model Provider.AnthropicOAuth)]
                            -> AnthropicRequest
 buildStreamingRequestGeneric composableProvider modelValue s configs msgs = snd $ toProviderRequest composableProvider modelValue configs s msgs
 

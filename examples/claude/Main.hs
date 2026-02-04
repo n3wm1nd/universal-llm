@@ -15,8 +15,9 @@ module Main (main) where
 import UniversalLLM
 import UniversalLLM.Tools
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
-import UniversalLLM.Providers.Anthropic (Anthropic(..), withMagicSystemPrompt, oauthHeaders)
+import UniversalLLM.Providers.Anthropic (AnthropicOAuth(..), oauthHeaders)
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
+import qualified Data.Map.Strict as Map
 import Common.HTTP (LLMCall, mkLLMCall)
 import System.Environment (lookupEnv)
 import System.Exit (exitFailure)
@@ -33,18 +34,19 @@ import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
 -- Model Definition
 -- ============================================================================
 
--- Claude Sonnet 4.5 model
+-- Claude Sonnet 4.5 model with OAuth
 data ClaudeSonnet45 = ClaudeSonnet45 deriving (Show, Eq)
 
-instance ModelName (Model ClaudeSonnet45 Anthropic) where
+instance ModelName (Model ClaudeSonnet45 AnthropicOAuth) where
   modelName _ = "claude-sonnet-4-5-20250929"
 
-instance HasTools (Model ClaudeSonnet45 Anthropic) where
-  withTools = AnthropicProvider.anthropicTools
+instance HasTools (Model ClaudeSonnet45 AnthropicOAuth) where
+  type ToolState (Model ClaudeSonnet45 AnthropicOAuth) = AnthropicProvider.OAuthToolsState
+  withTools = AnthropicProvider.anthropicOAuthBlacklistedTools
 
--- Composable provider for ClaudeSonnet45 with tools
-claudeSonnet45ComposableProvider :: ComposableProvider (Model ClaudeSonnet45 Anthropic) ((), ())
-claudeSonnet45ComposableProvider = withTools `chainProviders` AnthropicProvider.baseComposableProvider @(Model ClaudeSonnet45 Anthropic)
+-- Composable provider for ClaudeSonnet45 with OAuth (includes magic system prompt automatically)
+claudeSonnet45ComposableProvider :: ComposableProvider (Model ClaudeSonnet45 AnthropicOAuth) (AnthropicProvider.OAuthToolsState, ((), ()))
+claudeSonnet45ComposableProvider = withTools `chainProviders` AnthropicProvider.anthropicOAuthMagicPrompt `chainProviders` AnthropicProvider.baseComposableProvider @(Model ClaudeSonnet45 AnthropicOAuth)
 
 -- ============================================================================
 -- Tool Definition
@@ -81,11 +83,10 @@ getTimeTool = do
 -- ============================================================================
 
 -- | Build an Anthropic-specific LLM call function with OAuth
--- Automatically applies magic system prompt to all requests
+-- (OAuth provider includes magic system prompt automatically)
 mkAnthropicCall :: Text -> LLMCall AnthropicRequest AnthropicResponse
 mkAnthropicCall oauthToken =
-  let baseLLMCall = mkLLMCall "https://api.anthropic.com/v1/messages" (oauthHeaders oauthToken)
-  in \request -> baseLLMCall (withMagicSystemPrompt request)
+  mkLLMCall "https://api.anthropic.com/v1/messages" (oauthHeaders oauthToken)
 
 -- ============================================================================
 -- Agent Loop (polymorphic business logic - works with ANY provider/model supporting tools)
@@ -174,7 +175,7 @@ main = do
   putStrLn "Using Claude Sonnet 4.5 with OAuth"
   putStrLn "=== Tool Calling Demo ===\n"
 
-  -- Build LLM call function for Anthropic (automatically applies magic system prompt)
+  -- Build LLM call function for Anthropic OAuth
   let callClaude = mkAnthropicCall oauthToken
 
   -- Available tools (for execution)
@@ -182,7 +183,7 @@ main = do
       tools = [LLMTool getTimeTool]
 
   -- Concrete provider and model selection (only place where specific types matter)
-  let model = Model ClaudeSonnet45 Anthropic
+  let model = Model ClaudeSonnet45 AnthropicOAuth
 
   -- Build config
   let toolDefs = map llmToolToDefinition tools
@@ -193,7 +194,9 @@ main = do
   let initialMsg = [UserText "Use the get_time tool to tell me what time it is."]
 
   -- Business logic (agentLoop) is polymorphic - works with any provider/model
-  result <- runExceptT $ agentLoop claudeSonnet45ComposableProvider model ((), ()) tools callClaude configs initialMsg
+  -- State: (OAuthToolsState, ((), ()))
+  let initialState = (AnthropicProvider.OAuthToolsState Map.empty, ((), ()))
+  result <- runExceptT $ agentLoop claudeSonnet45ComposableProvider model initialState tools callClaude configs initialMsg
   case result of
     Left err -> putStrLn $ "❌ Error: " <> show err
     Right () -> return ()

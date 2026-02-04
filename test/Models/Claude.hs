@@ -47,20 +47,21 @@ import Test.Hspec (Spec, describe)
 -- Includes both protocol probes (wire format) and standard tests (high-level API).
 testsSonnet45 :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 testsSonnet45 provider = do
+  let oauthProvider req = provider (Anthropic.withMagicSystemPrompt req)
   describe "Claude Sonnet 4.5 (Anthropic)" $ do
     describe "Protocol" $ do
-      basicText provider
-      toolCalling provider
-      consecutiveUserMessages provider
-      startsWithAssistant provider
-      reasoning provider
-      toolCallingWithReasoning provider
+      basicText oauthProvider
+      toolCalling oauthProvider
+      consecutiveUserMessages oauthProvider
+      startsWithAssistant oauthProvider
+      reasoning oauthProvider
+      toolCallingWithReasoning oauthProvider
 
     describe "OAuth Tool Name Blacklist" $ do
-      Blacklist.blacklistProbes provider
+      Blacklist.blacklistProbes oauthProvider
 
     describe "Standard Tests" $
-      testModel TestModels.anthropicSonnet45Reasoning (Model TestModels.ClaudeSonnet45WithReasoning Anthropic) provider
+      testModel TestModels.anthropicSonnet45ReasoningOAuth (Model TestModels.ClaudeSonnet45WithReasoning Anthropic.AnthropicOAuth) provider
         [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
 
     describe "OAuth Provider Tests" $

@@ -442,6 +442,24 @@ instance Provider (Model aiModel AnthropicOAuth) where
   type ProviderRequest (Model aiModel AnthropicOAuth) = AnthropicRequest
   type ProviderResponse (Model aiModel AnthropicOAuth) = AnthropicResponse
 
+-- | OAuth-specific composable provider: Magic system prompt
+-- Automatically prepends the Claude Code authentication prompt
+-- This is a "patch" that enhances the base provider with OAuth-specific behavior
+anthropicOAuthMagicPrompt :: forall m. (ProviderRequest m ~ AnthropicRequest, ProviderResponse m ~ AnthropicResponse) => ComposableProvider m ()
+anthropicOAuthMagicPrompt _m _configs _s = noopHandler
+  { cpConfigHandler = \req ->
+      let magicBlock = AnthropicSystemBlock "You are Claude Code, Anthropic's official CLI for Claude." "text" Nothing
+          combinedSystem = case system req of
+            Nothing -> [magicBlock]
+            Just userBlocks -> magicBlock : userBlocks
+      in req { system = Just combinedSystem }
+  }
+
+-- | OAuth-enhanced base provider: regular base + magic system prompt
+-- Note: Order matters! Base runs first to create user blocks, then magic prompt prepends
+baseComposableProviderOAuth :: forall m. (ModelName m, ProviderRequest m ~ AnthropicRequest, ProviderResponse m ~ AnthropicResponse) => ComposableProvider m ((), ())
+baseComposableProviderOAuth = anthropicOAuthMagicPrompt `chainProviders` baseComposableProvider
+
 -- Prefix for blacklisted tool names
 toolNamePrefix :: Text
 toolNamePrefix = "runix_"
@@ -491,31 +509,26 @@ prefixRequestMessages req =
   let prefixMessage msg = msg { content = map prefixContentBlock (content msg) }
   in req { messages = map prefixMessage (messages req) }
 
--- OAuth tools provider with prefix/unprefix logic
--- Note: Per-model instances for BaseComposableProvider and HasTools should be defined
--- in test files or application code, similar to regular Anthropic models
-anthropicOAuthTools :: forall m. (HasTools m, ProviderRequest m ~ AnthropicRequest, ProviderResponse m ~ AnthropicResponse) => ComposableProvider m OAuthToolsState
-anthropicOAuthTools _m configs state = noopHandler
+-- OAuth blacklisted tools workaround provider
+-- | OAuth-specific tools provider with blacklist workaround
+-- This handles tool definitions AND applies prefixing for blacklisted tool names
+-- Uses the same logic as anthropicTools but with OAuth-specific name mangling
+anthropicOAuthBlacklistedTools :: forall m. (HasTools m, ProviderRequest m ~ AnthropicRequest, ProviderResponse m ~ AnthropicResponse) => ComposableProvider m OAuthToolsState
+anthropicOAuthBlacklistedTools _m configs state = noopHandler
   { cpConfigHandler = \req ->
-      let -- Extract tool definitions from configs
-          toolDefs = [defs | Tools defs <- configs]
+      let toolDefs = [defs | Tools defs <- configs]
           -- Convert to Anthropic format
           anthropicToolDefs = map toAnthropicToolDef (concat toolDefs)
-          -- Prefix blacklisted tool names and collect mappings
-          (prefixedDefs, _newMappings) = prefixToolDefinitions anthropicToolDefs
-          -- Add cache control
+          -- Prefix blacklisted tool names
+          (prefixedDefs, _mappings) = prefixToolDefinitions anthropicToolDefs
+          -- Add cache control to the last tool definition
           finalDefs = withToolCacheControl prefixedDefs
-          -- Set tool definitions
-          req1 = if null toolDefs then req else req { tools = Just finalDefs }
-          -- Prefix tool names in existing messages
-          req2 = prefixRequestMessages req1
-      in req2
-
+      in if null toolDefs then req else setToolDefinitions finalDefs req
   , cpPreRequest = \req state ->
-      -- Extract mappings from configs (since cpConfigHandler hasn't run yet!)
+      -- Extract mappings for unprefixing
       let toolDefs = [defs | Tools defs <- configs]
           anthropicToolDefs = map toAnthropicToolDef (concat toolDefs)
-          (prefixedDefs, mappings) = prefixToolDefinitions anthropicToolDefs
+          (_prefixedDefs, mappings) = prefixToolDefinitions anthropicToolDefs
       in state { prefixedToOriginal = Map.union mappings (prefixedToOriginal state) }
 
   , cpToRequest = \msg req -> case msg of

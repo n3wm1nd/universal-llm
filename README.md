@@ -86,7 +86,7 @@ main = do
    **Provider Modules** (`UniversalLLM.Providers.OpenAI`, `UniversalLLM.Providers.Anthropic`):
    - NOT specific provider implementations - they're **toolsets** for composing implementations
    - Contain reusable composable providers you mix-and-match based on your model's needs
-   - Examples: `baseComposableProvider`, `toolsComposableProvider`, `ensureUserFirstProvider`, `withMagicSystemPrompt`
+   - Examples: `baseComposableProvider`, `toolsComposableProvider`, `anthropicOAuthMagicPrompt`, `anthropicOAuthBlacklistedTools`
    - Use only what you need: if your OpenAI model doesn't need special handling, don't use those transformations
    - Provider-specific quirks (message ordering, unicode filtering, etc.) are opt-in transformations
 
@@ -136,8 +136,9 @@ instance ProviderImplementation OpenAI GPT4o where
 **Provider modules are toolsets, not implementations:**
 
 The `ProviderImplementation` instance above composes **only the transformations needed** for GPT-4o. For example:
-- Anthropic's `ensureUserFirstProvider` enforces message ordering - but OpenAI doesn't need it, so we don't use it
-- Anthropic's `withMagicSystemPrompt` handles Claude Code integration - irrelevant for standard OpenAI usage
+- Anthropic's message ordering requirements are handled by the base provider
+- Anthropic OAuth's `baseComposableProviderOAuth` includes magic system prompt for Claude Code integration - only used with OAuth models
+- OAuth-specific tool name workarounds (`anthropicOAuthBlacklistedTools`) are composed only when needed
 - If a provider has unicode quirks, you'd add a `unicodeFilterProvider` - but only for models that need it
 
 Different models using the same provider can compose different transformations:

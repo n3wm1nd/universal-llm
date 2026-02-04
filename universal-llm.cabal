@@ -175,7 +175,8 @@ executable claude-example
     autodocodec,
     autodocodec-schema,
     time,
-    transformers
+    transformers,
+    containers
 
 executable llm-proxy
   import: shared-properties

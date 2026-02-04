@@ -15,7 +15,7 @@ import qualified TestModels
 import qualified StandardTests as ST
 import TestHelpers (testModel)
 import UniversalLLM (Model(..), Via(..))
-import UniversalLLM.Providers.Anthropic (Anthropic(..))
+import UniversalLLM.Providers.Anthropic (Anthropic(..), AnthropicOAuth(..))
 import qualified UniversalLLM.Providers.OpenAI as OpenAIProvider
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
 import TestModels (ZAI(..))
@@ -43,11 +43,11 @@ modelTests providers = do
 
   -- Anthropic Models
   describe "Claude Sonnet 4.5" $
-    testModel TestModels.anthropicSonnet45 (Model TestModels.ClaudeSonnet45 Anthropic) (anthropicProvider providers)
+    testModel TestModels.anthropicSonnet45OAuth (Model TestModels.ClaudeSonnet45 AnthropicOAuth) (anthropicProvider providers)
       [ ST.text, ST.tools ]
 
   describe "Claude Sonnet 4.5 with Reasoning" $
-    testModel TestModels.anthropicSonnet45Reasoning (Model TestModels.ClaudeSonnet45WithReasoning Anthropic) (anthropicProvider providers)
+    testModel TestModels.anthropicSonnet45ReasoningOAuth (Model TestModels.ClaudeSonnet45WithReasoning AnthropicOAuth) (anthropicProvider providers)
       [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
   -- LlamaCpp Models
