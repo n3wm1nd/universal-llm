@@ -452,9 +452,11 @@ mergeAnthropicDelta acc chunk =
                     _ -> jd
                 parsedInput = case Aeson.decode (BSL.fromStrict (encodeUtf8 accumulatedJson)) of
                     Just val -> val
-                    -- Empty string or invalid JSON -> treat as empty object
-                    -- This handles tools with no parameters where Anthropic sends ""
-                    Nothing -> Aeson.Object KM.empty
+                    Nothing ->
+                        -- If parsing failed, check if it's empty string (no params) or incomplete JSON
+                        if accumulatedJson == ""
+                        then Aeson.Object KM.empty  -- Empty string = no parameters
+                        else Aeson.String accumulatedJson  -- Incomplete JSON, keep accumulating
             in AnthropicToolUseBlock toolId toolName parsedInput cc
         appendToTool _ block = block
 
