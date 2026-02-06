@@ -22,7 +22,7 @@ import UniversalLLM.Providers.OpenAI
 
 -- Type aliases for easier provider/model switching
 type TestProvider = OpenRouter
-type TestAIModel = GLM45
+type TestAIModel = GLM45Air
 type TestModel = Model TestAIModel TestProvider
 
 -- Helper to build request for the test model with full composition
@@ -30,7 +30,7 @@ buildRequest :: TestModel
              -> [ModelConfig TestModel]
              -> [Message TestModel]
              -> OpenAIRequest
-buildRequest model = buildRequestGeneric TestModels.openRouterGLM45 model (def, ((), ((), ())))
+buildRequest model = buildRequestGeneric TestModels.openRouterGLM45Air model (def, ((), ((), ())))
 
 -- Generic helper to build request with explicit composable provider
 buildRequestGeneric :: forall m s. (ProviderRequest m ~ OpenAIRequest)
@@ -54,7 +54,7 @@ parseOpenAIResponse model configs _history (OpenAIError (OpenAIErrorResponse err
         Nothing -> ""
   in Left $ ProviderError (code errDetail) $ errorMessage errDetail <> typeInfo
 parseOpenAIResponse model configs _history resp =
-  let msgs = parseOpenAIResponseGeneric TestModels.openRouterGLM45 model configs (def, ((), ((), ()))) resp
+  let msgs = parseOpenAIResponseGeneric TestModels.openRouterGLM45Air model configs (def, ((), ((), ()))) resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs
@@ -75,7 +75,7 @@ spec getResponse = do
   describe "OpenAI Composable Provider - Basic Text" $ do
 
     it "sends message, receives response, and maintains conversation history" $ do
-      let model = Model GLM45 OpenRouter :: TestModel
+      let model = Model GLM45Air OpenRouter :: TestModel
           configs = [MaxTokens 500]  -- Increased for reasoning models
 
           -- First exchange
@@ -84,7 +84,7 @@ spec getResponse = do
 
       resp1 <- getResponse req1
 
-      case parseOpenAIResponse (Model GLM45 OpenRouter) configs msgs1 resp1 of
+      case parseOpenAIResponse (Model GLM45Air OpenRouter) configs msgs1 resp1 of
         Right parsedMsgs1 -> do
           -- Extract AssistantText, may also have AssistantReasoning
           let textMsgs1 = [txt | AssistantText txt <- parsedMsgs1]
@@ -94,11 +94,11 @@ spec getResponse = do
 
           -- Second exchange - append to history
           let msgs2 = msgs1 <> parsedMsgs1 <> [UserText "What about 3+3?"]
-              req2 = buildRequest (Model GLM45 OpenRouter) configs msgs2
+              req2 = buildRequest (Model GLM45Air OpenRouter) configs msgs2
 
           resp2 <- getResponse req2
 
-          case parseOpenAIResponse (Model GLM45 OpenRouter) configs msgs2 resp2 of
+          case parseOpenAIResponse (Model GLM45Air OpenRouter) configs msgs2 resp2 of
             Right msgs -> do
               -- Should have at least AssistantText, may also have AssistantReasoning
               let textMsgs = [txt | AssistantText txt <- msgs]
@@ -112,7 +112,7 @@ spec getResponse = do
             Left err -> expectationFailure $ "parseResponse failed: " ++ show err
 
     it "merges consecutive user messages" $ do
-      let model = Model GLM45 OpenRouter
+      let model = Model GLM45Air OpenRouter
           configs = [MaxTokens 50]
           msgs = [ UserText "First part" :: Message TestModel
                  , UserText "Second part"
@@ -128,7 +128,7 @@ spec getResponse = do
   describe "OpenAI Composable Provider - Tool Calling" $ do
 
     it "completes full tool calling conversation flow" $ do
-      let model = Model GLM45 OpenRouter
+      let model = Model GLM45Air OpenRouter
           toolDef = ToolDefinition
             { toolDefName = "get_weather"
             , toolDefDescription = "Get the current weather in a given location"
@@ -158,7 +158,7 @@ spec getResponse = do
 
       resp1 <- getResponse req1
 
-      case parseOpenAIResponse (Model GLM45 OpenRouter) configs msgs1 resp1 of
+      case parseOpenAIResponse (Model GLM45Air OpenRouter) configs msgs1 resp1 of
         Right parsedMsgs -> do
           -- Extract tool calls from the response (may be mixed with text)
           let toolCalls = [tc | AssistantTool tc <- parsedMsgs]
@@ -170,11 +170,11 @@ spec getResponse = do
           let toolResult = ToolResult toolCall
                              (Right $ object ["temperature" .= ("22°C" :: Text)])
               msgs2 = msgs1 <> parsedMsgs <> [ToolResultMsg toolResult]
-              req2 = buildRequest (Model GLM45 OpenRouter) configs msgs2
+              req2 = buildRequest (Model GLM45Air OpenRouter) configs msgs2
 
           resp2 <- getResponse req2
 
-          case parseOpenAIResponse (Model GLM45 OpenRouter) configs msgs2 resp2 of
+          case parseOpenAIResponse (Model GLM45Air OpenRouter) configs msgs2 resp2 of
             Right msgs2Result -> do
               -- Extract text from the response
               let textMsgs = [txt | AssistantText txt <- msgs2Result]
@@ -189,7 +189,7 @@ spec getResponse = do
   describe "OpenAI Composable Provider - JSON Mode" $ do
 
     it "requests and receives JSON response" $ do
-      let model = Model GLM45 OpenRouter
+      let model = Model GLM45Air OpenRouter
           schema = object
             [ "type" .= ("object" :: Text)
             , "properties" .= object
@@ -225,7 +225,7 @@ spec getResponse = do
 
       resp <- getResponse req
 
-      case parseOpenAIResponse (Model GLM45 OpenRouter) configs msgs resp of
+      case parseOpenAIResponse (Model GLM45Air OpenRouter) configs msgs resp of
         Right parsedMsgs -> do
           -- Extract AssistantJSON, may also have AssistantReasoning
           let jsonMsgs = [jsonVal | AssistantJSON jsonVal <- parsedMsgs]
@@ -239,7 +239,7 @@ spec getResponse = do
         Left err -> expectationFailure $ "parseResponse failed: " ++ show err
 
     it "latest UserRequestJSON sets the schema for the request" $ do
-      let model = Model GLM45 OpenRouter
+      let model = Model GLM45Air OpenRouter
           schema1 = object ["type" .= ("string" :: Text)]
           schema2 = object ["type" .= ("number" :: Text)]
           configs = [MaxTokens 50]
@@ -281,7 +281,7 @@ spec getResponse = do
   describe "Compile-Time Safety Demonstrations" $ do
 
     it "allows tool use with tool-capable model" $ do
-      let model = Model GLM45 OpenRouter  -- HasTools
+      let model = Model GLM45Air OpenRouter  -- HasTools
           toolDef = ToolDefinition "test_tool" "Test" (object [])
           configs = [Tools [toolDef], MaxTokens 50]
           msgs = [UserText "test" :: Message TestModel]

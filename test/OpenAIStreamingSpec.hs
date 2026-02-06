@@ -21,14 +21,14 @@ import qualified UniversalLLM.Protocols.OpenAI as Proto
 import qualified UniversalLLM.Providers.OpenAI as Provider
 
 -- Type aliases for easier provider/model switching
-type TestModel = Model GLM45 Provider.OpenRouter
+type TestModel = Model GLM45Air Provider.OpenRouter
 
 -- Helper to build streaming request - uses the test model with full composition
 -- (Wrapper around the generic version that provides the specific model and composable provider)
 buildStreamingRequest :: [ModelConfig TestModel]
                      -> [Message TestModel]
                      -> OpenAIRequest
-buildStreamingRequest configs msgs = buildStreamingRequestGeneric TestModels.openRouterGLM45 (Model GLM45 Provider.OpenRouter) (def, ((), ((), ()))) configs msgs
+buildStreamingRequest configs msgs = buildStreamingRequestGeneric TestModels.openRouterGLM45Air (Model GLM45Air Provider.OpenRouter) (def, ((), ((), ()))) configs msgs
 
 -- Generic helper to build streaming request with explicit composable provider
 buildStreamingRequestGeneric :: forall m s. (ProviderRequest m ~ OpenAIRequest, Monoid (ProviderRequest m))

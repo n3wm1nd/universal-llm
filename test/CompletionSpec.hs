@@ -47,7 +47,7 @@ spec getResponse = do
   describe "OpenAI Completion Interface" $ do
 
     it "completes a simple prompt" $ do
-      let model = Model GLM45 OpenAI  -- Using a test model with provider
+      let model = Model TestPlaceholderModel OpenAI  -- Using a test model with provider
           configs = [MaxTokens 50, Temperature 0.7]
           prompt = "The capital of France is"
 
@@ -65,7 +65,7 @@ spec getResponse = do
         Left err -> expectationFailure $ "parseCompletion failed: " ++ show err
 
     it "respects MaxTokens configuration" $ do
-      let model = Model GLM45 OpenAI
+      let model = Model TestPlaceholderModel OpenAI
           configs = [MaxTokens 10]  -- Very short
           prompt = "Once upon a time"
 
@@ -75,7 +75,7 @@ spec getResponse = do
       completionMaxTokens req `shouldBe` Just 10
 
     it "respects Temperature configuration" $ do
-      let model = Model GLM45 OpenAI
+      let model = Model TestPlaceholderModel OpenAI
           configs = [Temperature 0.5]
           prompt = "Test"
 
@@ -85,7 +85,7 @@ spec getResponse = do
       completionTemperature req `shouldBe` Just 0.5
 
     it "respects Stop sequences configuration" $ do
-      let model = Model GLM45 OpenAI
+      let model = Model TestPlaceholderModel OpenAI
           configs = [Stop ["\n\n", "###"]]
           prompt = "Test"
 
@@ -95,7 +95,7 @@ spec getResponse = do
       stop req `shouldBe` Just ["\n\n", "###"]
 
     it "completes prompts with stop sequences" $ do
-      let model = Model GLM45 OpenAI
+      let model = Model TestPlaceholderModel OpenAI
           configs = [MaxTokens 100, Stop ["\n"]]  -- Stop at first newline
           prompt = "List three colors: 1."
 
@@ -112,17 +112,17 @@ spec getResponse = do
         Left err -> expectationFailure $ "parseCompletion failed: " ++ show err
 
     it "sets the model name in the request" $ do
-      let model = Model GLM45 OpenAI
+      let model = Model TestPlaceholderModel OpenAI
           configs = []
           prompt = "Test"
 
           req = buildCompletionRequest model configs prompt
 
       -- Verify model name is set correctly
-      completionModel req `shouldBe` modelName (Model GLM45 OpenAI)
+      completionModel req `shouldBe` modelName (Model TestPlaceholderModel OpenAI)
 
     it "sets the prompt in the request" $ do
-      let model = Model GLM45 OpenAI
+      let model = Model TestPlaceholderModel OpenAI
           configs = []
           testPrompt = "This is a test prompt"
 

@@ -99,8 +99,8 @@ genMessageAnthropicTools = oneof
       , Right <$> genSimpleValue
       ]
 
--- Generate Messages for GLM45 (OpenAI with tools, reasoning, JSON)
-genMessageOpenAIFull :: Gen (Message (Model GLM45 OpenAIProvider.OpenAI))
+-- Generate Messages for test placeholder (OpenAI with tools, reasoning, JSON)
+genMessageOpenAIFull :: Gen (Message (Model TestPlaceholderModel OpenAIProvider.OpenAI))
 genMessageOpenAIFull = oneof
   [ UserText <$> genNonEmptyText
   , AssistantText <$> genNonEmptyText
@@ -127,7 +127,7 @@ genConfigAnthropic = oneof
   ]
 
 -- Generate ModelConfig for OpenAI
-genConfigOpenAI :: Gen (ModelConfig (Model GLM45 OpenAIProvider.OpenAI))
+genConfigOpenAI :: Gen (ModelConfig (Model GLM45Air OpenAIProvider.OpenRouter))
 genConfigOpenAI = oneof
   [ Temperature <$> choose (0.0, 2.0)
   , MaxTokens <$> choose (1, 4096)
@@ -141,11 +141,11 @@ genConfigOpenAI = oneof
 toProviderRequestSonnet45 msg = fmap snd $ toProviderRequest anthropicSonnet45 (Model ClaudeSonnet45 Anthropic) msg ((), ())
 toProviderRequestSonnet45WithReasoning msg = fmap snd $ toProviderRequest anthropicSonnet45Reasoning (Model ClaudeSonnet45WithReasoning Anthropic) msg (def, ((), ()))
 
-toProviderRequestGLM45 msg = fmap snd $ toProviderRequest openAIGLM45 (Model GLM45 OpenAIProvider.OpenAI) msg ((), ((), ((), ())))
-toProviderRequestGLM45WithReasoning msg = fmap snd $ toProviderRequest openAIGLM45 (Model GLM45 OpenAIProvider.OpenAI) msg ((), ((), ((), ())))
+toProviderRequestGLM45 msg = fmap snd $ toProviderRequest openAITestPlaceholder (Model TestPlaceholderModel OpenAIProvider.OpenAI) msg ((), ((), ((), ())))
+toProviderRequestGLM45WithReasoning msg = fmap snd $ toProviderRequest openAITestPlaceholder (Model TestPlaceholderModel OpenAIProvider.OpenAI) msg ((), ((), ((), ())))
 
 -- fromProviderResponse signature: composableProvider -> model -> configs -> state -> response -> (state, messages)
-fromProviderResponseGLM45 configs resp = either (error . show) snd $ fromProviderResponse openAIGLM45 (Model GLM45 OpenAIProvider.OpenAI) configs ((), ((), ((), ()))) resp
+fromProviderResponseGLM45 configs resp = either (error . show) snd $ fromProviderResponse openAITestPlaceholder (Model TestPlaceholderModel OpenAIProvider.OpenAI) configs ((), ((), ((), ()))) resp
 fromProviderResponseSonnet45WithReasoning configs resp = either (error . show) snd $ fromProviderResponse anthropicSonnet45Reasoning (Model ClaudeSonnet45WithReasoning Anthropic) configs (def, ((), ())) resp
 
 -- ============================================================================

@@ -33,8 +33,13 @@ library
     UniversalLLM.Serialization
     UniversalLLM.ProviderM
     UniversalLLM.Settings
+    UniversalLLM.Models
     UniversalLLM.Models.SimpleModel
     UniversalLLM.Models.FullFeaturedModel
+    UniversalLLM.Models.Anthropic
+    UniversalLLM.Models.GLM
+    UniversalLLM.Models.Qwen
+    UniversalLLM.Models.OpenRouter
     UniversalLLM.Protocols.OpenAI
     UniversalLLM.Protocols.Anthropic
     UniversalLLM.Providers.OpenAI

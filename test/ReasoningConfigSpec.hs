@@ -6,10 +6,11 @@ module ReasoningConfigSpec (spec) where
 
 import Test.Hspec
 import UniversalLLM
-import UniversalLLM.Providers.OpenAI (OpenRouter(..), OpenAI(..))
+import UniversalLLM.Providers.OpenAI (OpenRouter(..), OpenAI(..), OpenRouterReasoningState(..))
 import UniversalLLM.Protocols.OpenAI
 import TestModels
 import Data.Default (def)
+import Data.Map (empty)
 
 spec :: Spec
 spec = do
@@ -46,10 +47,10 @@ spec = do
 
     describe "OpenAI GLM45" $ do
       it "sets reasoning field when Reasoning True in configs" $ do
-        let configs :: [ModelConfig (Model GLM45 OpenAI)]
+        let configs :: [ModelConfig (Model GLM45Air OpenRouter)]
             configs = [Reasoning True, MaxTokens 1000]
             msgs = [UserText "Hello"]
-            (_, req) = toProviderRequest openAIGLM45 (Model GLM45 OpenAI) configs ((), ((), ((), ()))) msgs
+            (_, req) = toProviderRequest openRouterGLM45Air (Model GLM45Air OpenRouter) configs (OpenRouterReasoningState mempty mempty, ((), ((), ()))) msgs
 
         -- Check that reasoning field is set
         case reasoning req of

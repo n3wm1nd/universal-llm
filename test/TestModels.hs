@@ -5,8 +5,66 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE PatternSynonyms #-}
 
-module TestModels where
+{- |
+Module: TestModels
+Description: Test model definitions (re-exports production models + test-only models)
+
+This module re-exports production models from UniversalLLM.Models and adds
+test-specific model definitions that aren't suitable for production use.
+-}
+
+module TestModels
+  ( -- * Re-exported Production Models
+    ClaudeSonnet45(..)
+  , ClaudeSonnet45WithReasoning(..)
+  , GLM45(..)
+  , GLM45Air(..)
+  , GLM46(..)
+  , GLM47(..)
+  , ZAI(..)
+  , Qwen3Coder(..)
+  , Gemini3FlashPreview(..)
+  , Gemini3ProPreview(..)
+  , Nova2Lite(..)
+    -- * Production Providers
+  , claudeSonnet45
+  , claudeSonnet45Reasoning
+  , claudeSonnet45OAuth
+  , claudeSonnet45ReasoningOAuth
+  , glm45
+  , glm45AirLlamaCpp
+  , glm45AirOpenRouter
+  , glm45AirZAI
+  , glm46
+  , glm47
+  , qwen3Coder
+  , gemini3FlashPreview
+  , gemini3ProPreview
+  , nova2Lite
+    -- * Backward Compatibility Provider Aliases
+  , anthropicSonnet45
+  , anthropicSonnet45Reasoning
+  , anthropicSonnet45OAuth
+  , anthropicSonnet45ReasoningOAuth
+  , llamaCppGLM45
+  , openRouterGLM45
+  , openRouterGLM45Air
+  , zaiGLM45
+  , llamaCppQwen3Coder
+  , openRouterNova2Lite
+  , openRouterGemini3ProPreview
+  , openRouterGemini3FlashPreview
+    -- * Test-Only Models
+  , TestPlaceholderModel(..)
+  , openAITestPlaceholder
+  , BasicTextModel(..)
+  , ToolsOnlyModel(..)
+  , JSONModel(..)
+  , openAIToolsonly
+  , openaiJSON
+  ) where
 
 import UniversalLLM
 import qualified UniversalLLM.Providers.Anthropic as Anthropic
@@ -15,233 +73,112 @@ import UniversalLLM.Providers.Anthropic (Anthropic(..), AnthropicOAuth(..), OAut
 import UniversalLLM.Providers.OpenAI (OpenAI(..), LlamaCpp(..), OpenRouter(..), OpenAICompatible(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse, OpenAICompletionRequest, OpenAICompletionResponse)
 
--- New provider for ZAI coding endpoint
-data ZAI = ZAI deriving (Show, Eq)
-
--- Provider instances for ZAI (uses OpenAI protocol)
-instance ModelName (Model GLM45 ZAI) where
-  modelName (Model _ _) = "GLM-4.5-Air"
-
-instance Provider (Model aiModel ZAI) where
-  type ProviderRequest (Model aiModel ZAI) = OpenAIRequest
-  type ProviderResponse (Model aiModel ZAI) = OpenAIResponse
-
-instance Provider (Model aiModel ZAI) => CompletionProvider (Model aiModel ZAI) where
-  type CompletionRequest (Model aiModel ZAI) = OpenAICompletionRequest
-  type CompletionResponse (Model aiModel ZAI) = OpenAICompletionResponse
-
-instance {-# OVERLAPPABLE #-} ModelName (Model aiModel ZAI) => CompletionProviderImplementation (Model aiModel ZAI) where
-  getComposableCompletionProvider = OpenAI.baseCompletionProvider
-
--- Supporting capability instances for ZAI
-instance SupportsTemperature ZAI
-instance SupportsMaxTokens ZAI
-instance SupportsSeed ZAI
-instance SupportsSystemPrompt ZAI
-instance SupportsStop ZAI
-instance SupportsStreaming ZAI
+-- Re-export production models
+import UniversalLLM.Models.Anthropic
+  ( ClaudeSonnet45(..)
+  , ClaudeSonnet45WithReasoning(..)
+  , claudeSonnet45
+  , claudeSonnet45Reasoning
+  , claudeSonnet45OAuth
+  , claudeSonnet45ReasoningOAuth
+  )
+import UniversalLLM.Models.GLM
+  ( GLM45(..)
+  , GLM45Air(..)
+  , GLM46(..)
+  , GLM47(..)
+  , ZAI(..)
+  , glm45
+  , glm45AirLlamaCpp
+  , glm45AirOpenRouter
+  , glm45AirZAI
+  , glm46
+  , glm47
+  )
+import UniversalLLM.Models.Qwen
+  ( Qwen3Coder(..)
+  , qwen3Coder
+  )
+import UniversalLLM.Models.OpenRouter
+  ( Gemini3FlashPreview(..)
+  , Gemini3ProPreview(..)
+  , Nova2Lite(..)
+  , gemini3FlashPreview
+  , gemini3ProPreview
+  , nova2Lite
+  )
 
 -- ============================================================================
--- Anthropic Models
+-- Backward Compatibility Aliases
 -- ============================================================================
 
--- Test model for Claude Sonnet 4.5 (tools only)
-data ClaudeSonnet45 = ClaudeSonnet45 deriving (Show, Eq)
-
-instance ModelName (Model ClaudeSonnet45 Anthropic) where
-  modelName (Model _ _) = "claude-sonnet-4-5-20250929"
-
-instance HasTools (Model ClaudeSonnet45 Anthropic) where
-  withTools = Anthropic.anthropicTools
-
+-- Provider aliases for backward compatibility with tests
 anthropicSonnet45 :: ComposableProvider (Model ClaudeSonnet45 Anthropic) ((), ())
-anthropicSonnet45 = withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45 Anthropic)
-
--- Test model for Claude Sonnet 4.5 with reasoning enabled (for testing extended thinking)
-data ClaudeSonnet45WithReasoning = ClaudeSonnet45WithReasoning deriving (Show, Eq)
-
-instance ModelName (Model ClaudeSonnet45WithReasoning Anthropic) where
-  modelName (Model _ _) = "claude-sonnet-4-5-20250929"
-
-instance HasTools (Model ClaudeSonnet45WithReasoning Anthropic) where
-  withTools = Anthropic.anthropicTools
-
-instance HasReasoning (Model ClaudeSonnet45WithReasoning Anthropic) where
-  type ReasoningState (Model ClaudeSonnet45WithReasoning Anthropic) = Anthropic.AnthropicReasoningState
-  withReasoning = Anthropic.anthropicReasoning
+anthropicSonnet45 = claudeSonnet45
 
 anthropicSonnet45Reasoning :: ComposableProvider (Model ClaudeSonnet45WithReasoning Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
-anthropicSonnet45Reasoning = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45WithReasoning Anthropic)
-
--- OAuth versions with tool name workarounds
-instance ModelName (Model ClaudeSonnet45 AnthropicOAuth) where
-  modelName (Model _ _) = "claude-sonnet-4-5-20250929"
-
-instance HasTools (Model ClaudeSonnet45 AnthropicOAuth) where
-  type ToolState (Model ClaudeSonnet45 AnthropicOAuth) = OAuthToolsState
-  withTools = Anthropic.anthropicOAuthBlacklistedTools
+anthropicSonnet45Reasoning = claudeSonnet45Reasoning
 
 anthropicSonnet45OAuth :: ComposableProvider (Model ClaudeSonnet45 AnthropicOAuth) (OAuthToolsState, ((), ()))
-anthropicSonnet45OAuth = withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45 AnthropicOAuth)
-
-instance ModelName (Model ClaudeSonnet45WithReasoning AnthropicOAuth) where
-  modelName (Model _ _) = "claude-sonnet-4-5-20250929"
-
-instance HasTools (Model ClaudeSonnet45WithReasoning AnthropicOAuth) where
-  type ToolState (Model ClaudeSonnet45WithReasoning AnthropicOAuth) = OAuthToolsState
-  withTools = Anthropic.anthropicOAuthBlacklistedTools
-
-instance HasReasoning (Model ClaudeSonnet45WithReasoning AnthropicOAuth) where
-  type ReasoningState (Model ClaudeSonnet45WithReasoning AnthropicOAuth) = Anthropic.AnthropicReasoningState
-  withReasoning = Anthropic.anthropicReasoning
+anthropicSonnet45OAuth = claudeSonnet45OAuth
 
 anthropicSonnet45ReasoningOAuth :: ComposableProvider (Model ClaudeSonnet45WithReasoning AnthropicOAuth) (Anthropic.AnthropicReasoningState, (OAuthToolsState, ((), ())))
-anthropicSonnet45ReasoningOAuth = withReasoning `chainProviders` withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45WithReasoning AnthropicOAuth)
+anthropicSonnet45ReasoningOAuth = claudeSonnet45ReasoningOAuth
 
--- ============================================================================
--- OpenAI-Compatible Models (GLM4.5 available via multiple backends)
--- ============================================================================
+-- Backward compat aliases for GLM45Air providers
+llamaCppGLM45 :: ComposableProvider (Model GLM45Air LlamaCpp) ((), ((), ((), ())))
+llamaCppGLM45 = glm45AirLlamaCpp
 
--- GLM4.5 - supports tools, reasoning, and JSON
--- Available via llama.cpp, OpenRouter, and other OpenAI-compatible providers
-data GLM45 = GLM45 deriving (Show, Eq)
+openRouterGLM45Air :: ComposableProvider (Model GLM45Air OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+openRouterGLM45Air = glm45AirOpenRouter
 
--- Model name varies by provider
-instance ModelName (Model GLM45 OpenAI) where
-  modelName (Model _ _) = "glm-4-plus"  -- Generic fallback
+zaiGLM45 :: ComposableProvider (Model GLM45Air ZAI) ((), ((), ((), ())))
+zaiGLM45 = glm45AirZAI
 
-instance ModelName (Model GLM45 LlamaCpp) where
-  modelName (Model _ _) = "GLM-4.5-Air"  -- Canonicalized from GGUF filename
-
-instance ModelName (Model GLM45 OpenRouter) where
-  modelName (Model _ _) = "z-ai/glm-4.5-air:free"
-
--- Capability instances (same across all providers)
-instance HasTools (Model GLM45 OpenAI) where
-  withTools = OpenAI.openAITools
-
-instance HasReasoning (Model GLM45 OpenAI) where
-  withReasoning = OpenAI.openAIReasoning
-
-instance HasJSON (Model GLM45 OpenAI) where
-  withJSON = OpenAI.openAIJSON
-
-instance HasTools (Model GLM45 LlamaCpp) where
-  withTools = OpenAI.openAITools
-
-instance HasReasoning (Model GLM45 LlamaCpp) where
-  withReasoning = OpenAI.openAIReasoning
-
-instance HasJSON (Model GLM45 LlamaCpp) where
-  withJSON = OpenAI.openAIJSON
-
-instance HasTools (Model GLM45 OpenRouter) where
-  withTools = OpenAI.openAITools
-
-instance HasReasoning (Model GLM45 OpenRouter) where
-  type ReasoningState (Model GLM45 OpenRouter) = OpenAI.OpenRouterReasoningState
-  withReasoning = OpenAI.openRouterReasoning
-
-instance HasJSON (Model GLM45 OpenRouter) where
-  withJSON = OpenAI.openAIJSON
-
--- ZAI provider capabilities (same as OpenAI-compatible)
-instance HasTools (Model GLM45 ZAI) where
-  withTools = OpenAI.openAITools
-
-instance HasReasoning (Model GLM45 ZAI) where
-  withReasoning = OpenAI.openAIReasoning
-
-instance HasJSON (Model GLM45 ZAI) where
-  withJSON = OpenAI.openAIJSON
-
--- Composable providers for each backend
-openAIGLM45 :: ComposableProvider (Model GLM45 OpenAI) ((), ((), ((), ())))
-openAIGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45 OpenAI)
-
-llamaCppGLM45 :: ComposableProvider (Model GLM45 LlamaCpp) ((), ((), ((), ())))
-llamaCppGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45 LlamaCpp)
-
-openRouterGLM45 :: ComposableProvider (Model GLM45 OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ())))
-openRouterGLM45 = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45 OpenRouter)
-
-zaiGLM45 :: ComposableProvider (Model GLM45 ZAI) ((), ((), ((), ())))
-zaiGLM45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45 ZAI)
-
--- ============================================================================
--- Qwen Models
--- ============================================================================
-
--- Qwen 3 Coder - Code-specialized model supporting tools
--- Available via llama.cpp
-data Qwen3Coder = Qwen3Coder deriving (Show, Eq)
-
--- Model name varies based on GGUF filename
-instance ModelName (Model Qwen3Coder LlamaCpp) where
-  modelName (Model _ _) = "Qwen3-Coder-30B-Instruct"  -- Common canonicalized name
-
--- Capability instances
-instance HasTools (Model Qwen3Coder LlamaCpp) where
-  withTools = OpenAI.openAITools
-
-instance HasJSON (Model Qwen3Coder LlamaCpp) where
-  withJSON = OpenAI.openAIJSON
-
--- Composable provider
 llamaCppQwen3Coder :: ComposableProvider (Model Qwen3Coder LlamaCpp) ((), ((), ()))
-llamaCppQwen3Coder = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen3Coder LlamaCpp)
-
--- ============================================================================
--- OpenRouter-specific Models
--- ============================================================================
-
--- Amazon Nova 2 Lite - supports tools and reasoning with reasoning_details
-data Nova2Lite = Nova2Lite deriving (Show, Eq)
-
-instance ModelName (Model Nova2Lite OpenRouter) where
-  modelName (Model _ _) = "amazon/nova-2-lite-v1"
-
-instance HasTools (Model Nova2Lite OpenRouter) where
-  withTools = OpenAI.openAITools
-
-instance HasReasoning (Model Nova2Lite OpenRouter) where
-  type ReasoningState (Model Nova2Lite OpenRouter) = OpenAI.OpenRouterReasoningState
-  withReasoning = OpenAI.openRouterReasoning
+llamaCppQwen3Coder = qwen3Coder
 
 openRouterNova2Lite :: ComposableProvider (Model Nova2Lite OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ())))
-openRouterNova2Lite = withReasoning `chainProviders` withTools `chainProviders` OpenAI.normalizeEmptyContent `chainProviders` OpenAI.baseComposableProvider @(Model Nova2Lite OpenRouter)
-
--- Google Gemini 3 Pro Preview via OpenRouter
-data Gemini3ProPreview = Gemini3ProPreview deriving (Show, Eq)
-
-instance ModelName (Model Gemini3ProPreview OpenRouter) where
-  modelName (Model _ _) = "google/gemini-3-pro-preview"
-
-instance HasTools (Model Gemini3ProPreview OpenRouter) where
-  withTools = OpenAI.openAITools
-
-instance HasReasoning (Model Gemini3ProPreview OpenRouter) where
-  type ReasoningState (Model Gemini3ProPreview OpenRouter) = OpenAI.OpenRouterReasoningState
-  withReasoning = OpenAI.openRouterReasoning
+openRouterNova2Lite = nova2Lite
 
 openRouterGemini3ProPreview :: ComposableProvider (Model Gemini3ProPreview OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ()))
-openRouterGemini3ProPreview = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Gemini3ProPreview OpenRouter)
-
--- Google Gemini 3 Flash Preview via OpenRouter
-data Gemini3FlashPreview = Gemini3FlashPreview deriving (Show, Eq)
-
-instance ModelName (Model Gemini3FlashPreview OpenRouter) where
-  modelName (Model _ _) = "google/gemini-3-flash-preview"
-
-instance HasTools (Model Gemini3FlashPreview OpenRouter) where
-  withTools = OpenAI.openAITools
-
-instance HasReasoning (Model Gemini3FlashPreview OpenRouter) where
-  type ReasoningState (Model Gemini3FlashPreview OpenRouter) = OpenAI.OpenRouterReasoningState
-  withReasoning = OpenAI.openRouterReasoning
+openRouterGemini3ProPreview = gemini3ProPreview
 
 openRouterGemini3FlashPreview :: ComposableProvider (Model Gemini3FlashPreview OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ()))
-openRouterGemini3FlashPreview = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Gemini3FlashPreview OpenRouter)
+openRouterGemini3FlashPreview = gemini3FlashPreview
+
+-- Test-specific instances for GLM45
+-- Note: GLM45 via LlamaCpp should use GLM45Air (better for self-hosting)
+
+-- Backward compat alias for tests that used GLM45 with OpenRouter
+-- Now redirects to GLM45Air which is the correct model
+openRouterGLM45 :: ComposableProvider (Model GLM45Air OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+openRouterGLM45 = glm45AirOpenRouter
+
+-- ============================================================================
+-- Test-Only Models (not suitable for production)
+-- ============================================================================
+
+-- These models are used only for compile-time safety tests and shouldn't be
+-- used in production code.
+
+-- Generic test model placeholder (used for completion interface tests)
+data TestPlaceholderModel = TestPlaceholderModel deriving (Show, Eq)
+
+instance ModelName (Model TestPlaceholderModel OpenAI) where
+  modelName (Model _ _) = "glm-4-plus"
+
+instance HasTools (Model TestPlaceholderModel OpenAI) where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning (Model TestPlaceholderModel OpenAI) where
+  withReasoning = OpenAI.openAIReasoning
+
+instance HasJSON (Model TestPlaceholderModel OpenAI) where
+  withJSON = OpenAI.openAIJSON
+
+openAITestPlaceholder :: ComposableProvider (Model TestPlaceholderModel OpenAI) ((), ((), ((), ())))
+openAITestPlaceholder = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model TestPlaceholderModel OpenAI)
 
 -- Basic text-only model (for compile-time safety tests)
 data BasicTextModel = BasicTextModel deriving (Show, Eq)

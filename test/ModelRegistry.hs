@@ -53,13 +53,13 @@ modelTests providers = do
   -- LlamaCpp Models
   -- GLM 4.5 via llama.cpp - Test against llama.cpp server when the model is loaded
   describe "GLM 4.5 (llama.cpp)" $
-    testModel TestModels.llamaCppGLM45 (Model TestModels.GLM45 LlamaCpp) (llamacppProvider providers)
+    testModel TestModels.llamaCppGLM45 (Model TestModels.GLM45Air LlamaCpp) (llamacppProvider providers)
       [ ST.text, ST.tools, ST.reasoning ]
 
   -- OpenRouter Models
-  -- GLM 4.5 via OpenRouter
+  -- GLM 4.5 Air via OpenRouter
   describe "GLM 4.5 (OpenRouter)" $
-    testModel TestModels.openRouterGLM45 (Model TestModels.GLM45 OpenRouter) (openrouterProvider providers)
+    testModel TestModels.openRouterGLM45Air (Model TestModels.GLM45Air OpenRouter) (openrouterProvider providers)
       [ ST.text, ST.tools, ST.reasoning ]
 
   -- Amazon Nova 2 Lite via OpenRouter
@@ -82,5 +82,5 @@ modelTests providers = do
   -- ZAI Models
   -- GLM 4.5 via ZAI coding endpoint
   describe "GLM 4.5 (ZAI)" $
-    testModel TestModels.zaiGLM45 (Model TestModels.GLM45 ZAI) (zaiProvider providers)
+    testModel TestModels.zaiGLM45 (Model TestModels.GLM45Air ZAI) (zaiProvider providers)
       [ ST.text, ST.tools, ST.reasoning ]

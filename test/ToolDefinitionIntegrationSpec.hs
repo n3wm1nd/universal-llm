@@ -78,10 +78,10 @@ spec = do
     describe "toToolDefinition -> OpenAI Protocol" $ do
       it "generates valid OpenAI tool structure from Tool instance" $ do
         let toolDef = toToolDefinition calculatorToolWrapped
-            model = Model GLM45 OpenAI.OpenAI
+            model = Model GLM45Air OpenAI.OpenRouter
             configs = [Tools [toolDef]]
-            msgs = [UserText "Calculate 5 + 3" :: Message (Model GLM45 OpenAI.OpenAI)]
-            req = snd $ toProviderRequest openAIGLM45 model configs ((), ((), ((), ()))) msgs
+            msgs = [UserText "Calculate 5 + 3" :: Message (Model GLM45Air OpenAI.OpenRouter)]
+            req = snd $ toProviderRequest openRouterGLM45Air model configs (OpenAI.OpenRouterReasoningState mempty mempty, ((), ((), ()))) msgs
 
         -- Verify tool is correctly translated to OpenAI format
         case OpenAIProt.tools req of
@@ -152,10 +152,10 @@ spec = do
         let calcDef = toToolDefinition calculatorToolWrapped
             -- We only have one tool type defined, so just use it twice with different configs
             -- In a real scenario, you'd have multiple different Tool types
-            model = Model GLM45 OpenAI.OpenAI
+            model = Model GLM45Air OpenAI.OpenRouter
             configs = [Tools [calcDef]]
-            msgs = [UserText "Do some math" :: Message (Model GLM45 OpenAI.OpenAI)]
-            req = snd $ toProviderRequest openAIGLM45 model configs ((), ((), ((), ()))) msgs
+            msgs = [UserText "Do some math" :: Message (Model GLM45Air OpenAI.OpenRouter)]
+            req = snd $ toProviderRequest openRouterGLM45Air model configs (OpenAI.OpenRouterReasoningState mempty mempty, ((), ((), ()))) msgs
 
         -- Should have tools in the request
         case OpenAIProt.tools req of

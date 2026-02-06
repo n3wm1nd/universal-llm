@@ -74,7 +74,7 @@ testsOpenRouter provider = do
       providerErrorResponse provider
 
     describe "Standard Tests" $
-      testModel TestModels.openRouterGLM45 (Model TestModels.GLM45 OpenRouter) provider
+      testModel TestModels.openRouterGLM45Air (Model TestModels.GLM45Air OpenRouter) provider
         [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 4.5 Air via llama.cpp
@@ -99,5 +99,5 @@ testsLlamaCpp provider modelName = do
       reasoning provider modelName  -- llama.cpp uses standard reasoning_content
 
     describe "Standard Tests" $
-      testModel TestModels.llamaCppGLM45 (Model TestModels.GLM45 LlamaCpp) provider
+      testModel TestModels.llamaCppGLM45 (Model TestModels.GLM45Air LlamaCpp) provider
         [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
