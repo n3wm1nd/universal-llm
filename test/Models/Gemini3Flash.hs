@@ -41,7 +41,7 @@ import Test.Hspec (Spec, describe)
 -- Includes both protocol probes (wire format) and standard tests (high-level API).
 testsOpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsOpenRouter provider = do
-  describe "Gemini 3 Flash (OpenRouter)" $ do
+  describe "Gemini 3 Flash via OpenRouter" $ do
     describe "Protocol" $ do
       basicText provider "google/gemini-3-flash-preview"
       toolCalling provider "google/gemini-3-flash-preview"

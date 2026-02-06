@@ -52,6 +52,7 @@ import TestCache (ResponseProvider)
 import TestHelpers (testModel)
 import qualified TestModels
 import Test.Hspec (Spec, describe)
+import qualified Data.Text as T
 import Data.Text (Text)
 
 -- | Test GLM 4.5 Air via OpenRouter
@@ -59,7 +60,7 @@ import Data.Text (Text)
 -- Includes both protocol probes (wire format) and standard tests (high-level API).
 testsOpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsOpenRouter provider = do
-  describe "GLM 4.5 Air (OpenRouter)" $ do
+  describe "GLM 4.5 Air via OpenRouter" $ do
     describe "Protocol" $ do
       basicText provider "z-ai/glm-4.5-air:free"
       toolCalling provider "z-ai/glm-4.5-air:free"
@@ -85,7 +86,7 @@ testsOpenRouter provider = do
 -- Includes both protocol probes (wire format) and standard tests (high-level API).
 testsLlamaCpp :: ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 testsLlamaCpp provider modelName = do
-  describe ("GLM 4.5 Air (llama.cpp with " <> show modelName <> ")") $ do
+  describe ("GLM 4.5 Air via llama.cpp with " <> T.unpack modelName) $ do
     describe "Protocol" $ do
       basicText provider modelName
       toolCallingViaXML provider modelName  -- GLM-4.5 returns XML tool calls in content

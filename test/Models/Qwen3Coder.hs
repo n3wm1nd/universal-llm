@@ -32,6 +32,7 @@ import TestCache (ResponseProvider)
 import TestHelpers (testModel)
 import qualified TestModels
 import Test.Hspec (Spec, describe)
+import qualified Data.Text as T
 import Data.Text (Text)
 
 -- | Test Qwen 3 Coder via llama.cpp
@@ -42,7 +43,7 @@ import Data.Text (Text)
 -- Includes both protocol probes (wire format) and standard tests (high-level API).
 testsLlamaCpp :: ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 testsLlamaCpp provider modelName = do
-  describe ("Qwen 3 Coder (llama.cpp with " <> show modelName <> ")") $ do
+  describe ("Qwen 3 Coder via llama.cpp with " <> T.unpack modelName) $ do
     describe "Protocol" $ do
       basicText provider modelName
       toolCalling provider modelName  -- Uses proper tool_calls (not XML)

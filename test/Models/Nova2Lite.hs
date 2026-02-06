@@ -44,7 +44,7 @@ import Test.Hspec (Spec, describe, HasCallStack)
 -- Includes both protocol probes (wire format) and standard tests (high-level API).
 testsOpenRouter :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsOpenRouter provider = do
-  describe "Amazon Nova 2 Lite (OpenRouter)" $ do
+  describe "Amazon Nova 2 Lite via OpenRouter" $ do
     describe "Protocol" $ do
       basicText provider "amazon/nova-2-lite-v1"
       toolCalling provider "amazon/nova-2-lite-v1"

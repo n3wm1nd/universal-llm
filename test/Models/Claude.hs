@@ -48,7 +48,7 @@ import Test.Hspec (Spec, describe)
 testsSonnet45 :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 testsSonnet45 provider = do
   let oauthProvider req = provider (Anthropic.withMagicSystemPrompt req)
-  describe "Claude Sonnet 4.5 (Anthropic)" $ do
+  describe "Claude Sonnet 4.5 via Anthropic" $ do
     describe "Protocol" $ do
       basicText oauthProvider
       toolCalling oauthProvider
