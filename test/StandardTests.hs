@@ -431,8 +431,10 @@ reasoningWithTools = StandardTest $ \cp model initialState getResponse -> do
 -- | Test that composable providers gracefully handle modified reasoning data
 --
 -- When reasoning content is modified (e.g., user edits the reasoning text),
--- the provider should fall back to non-reasoning mode rather than fail.
--- This ensures robustness when reasoning metadata becomes invalid.
+-- the provider should handle it gracefully without failing.
+-- Implementation varies by model:
+--   - Models with signed reasoning (e.g., Claude) fall back to non-reasoning mode
+--   - Models without signed reasoning (e.g., GLM-4.5-Air) accept modifications as-is
 reasoningWithToolsModifiedReasoning :: ( Monoid (ProviderRequest m)
                                        , SupportsMaxTokens (ProviderOf m)
                                        , HasReasoning m
@@ -441,7 +443,7 @@ reasoningWithToolsModifiedReasoning :: ( Monoid (ProviderRequest m)
                                     => StandardTest m state
 reasoningWithToolsModifiedReasoning = StandardTest $ \cp model initialState getResponse -> do
   describe "Reasoning + Tools (Modified Reasoning)" $ do
-    it "falls back to non-reasoning when reasoning data is modified" $ do
+    it "handles modified reasoning data" $ do
       -- First request: Get a response with reasoning and tools
       let toolDef = ToolDefinition "get_info" "Get information about a topic"
                       (object ["type" .= ("object" :: Text)])
@@ -462,11 +464,11 @@ reasoningWithToolsModifiedReasoning = StandardTest $ \cp model initialState getR
           (state3, req2) = toProviderRequest cp model configs state2 msgs2
 
       -- This request should succeed even though reasoning was modified
-      -- The provider should fall back to sending without reasoning metadata
+      -- The provider handles it appropriately (fallback for signed reasoning, pass-through for unsigned)
       resp2 <- getResponse req2
       let (_, parsedMsgs2) = either (error . show) id $ fromProviderResponse cp model configs state3 resp2
 
-      -- Should get response (provider successfully fell back)
+      -- Should get response (provider successfully handled modified reasoning)
       length parsedMsgs2 `shouldSatisfy` (> 0)
 
   where
