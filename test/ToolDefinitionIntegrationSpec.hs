@@ -118,10 +118,10 @@ spec = do
     describe "toToolDefinition -> Anthropic Protocol" $ do
       it "generates valid Anthropic tool structure from Tool instance" $ do
         let toolDef = toToolDefinition calculatorToolWrapped
-            model = Model ClaudeSonnet45 Anthropic.Anthropic
+            model = Model ClaudeSonnet45NoReason Anthropic.Anthropic
             configs = [Tools [toolDef]]
-            msgs = [UserText "Calculate 10 * 7" :: Message (Model ClaudeSonnet45 Anthropic.Anthropic)]
-            req = snd $ toProviderRequest TestModels.anthropicSonnet45 model configs ((), ()) msgs
+            msgs = [UserText "Calculate 10 * 7" :: Message (Model ClaudeSonnet45NoReason Anthropic.Anthropic)]
+            req = snd $ toProviderRequest TestModels.anthropicSonnet45NoReason model configs ((), ()) msgs
 
         -- Verify tool is correctly translated to Anthropic format
         case AnthropicProt.tools req of

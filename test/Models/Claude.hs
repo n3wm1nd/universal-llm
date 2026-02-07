@@ -61,11 +61,11 @@ testsSonnet45 provider = do
       Blacklist.blacklistProbes oauthProvider
 
     describe "Standard Tests" $
-      testModel TestModels.anthropicSonnet45ReasoningOAuth (Model TestModels.ClaudeSonnet45WithReasoning Anthropic.AnthropicOAuth) provider
+      testModel TestModels.anthropicSonnet45OAuth (Model TestModels.ClaudeSonnet45 Anthropic.AnthropicOAuth) provider
         [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
 
     describe "OAuth Provider Tests" $
-      testModel TestModels.anthropicSonnet45ReasoningOAuth (Model TestModels.ClaudeSonnet45WithReasoning Anthropic.AnthropicOAuth) provider
+      testModel TestModels.anthropicSonnet45OAuth (Model TestModels.ClaudeSonnet45 Anthropic.AnthropicOAuth) provider
         [ ST.text
         , ST.tools
         , ST.toolWithName "grep"      -- Blacklisted, should work via prefix/unprefix

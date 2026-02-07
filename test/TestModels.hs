@@ -18,7 +18,7 @@ test-specific model definitions that aren't suitable for production use.
 module TestModels
   ( -- * Re-exported Production Models
     ClaudeSonnet45(..)
-  , ClaudeSonnet45WithReasoning(..)
+  , ClaudeSonnet45NoReason(..)
   , GLM45(..)
   , GLM45Air(..)
   , GLM46(..)
@@ -30,9 +30,9 @@ module TestModels
   , Nova2Lite(..)
     -- * Production Providers
   , claudeSonnet45
-  , claudeSonnet45Reasoning
+  , claudeSonnet45NoReason
   , claudeSonnet45OAuth
-  , claudeSonnet45ReasoningOAuth
+  , claudeSonnet45NoReasonOAuth
   , glm45
   , glm45AirLlamaCpp
   , glm45AirOpenRouter
@@ -45,9 +45,9 @@ module TestModels
   , nova2Lite
     -- * Backward Compatibility Provider Aliases
   , anthropicSonnet45
-  , anthropicSonnet45Reasoning
+  , anthropicSonnet45NoReason
   , anthropicSonnet45OAuth
-  , anthropicSonnet45ReasoningOAuth
+  , anthropicSonnet45NoReasonOAuth
   , llamaCppGLM45
   , openRouterGLM45
   , openRouterGLM45Air
@@ -76,11 +76,11 @@ import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse, OpenAICompl
 -- Re-export production models
 import UniversalLLM.Models.Anthropic
   ( ClaudeSonnet45(..)
-  , ClaudeSonnet45WithReasoning(..)
+  , ClaudeSonnet45NoReason(..)
   , claudeSonnet45
-  , claudeSonnet45Reasoning
+  , claudeSonnet45NoReason
   , claudeSonnet45OAuth
-  , claudeSonnet45ReasoningOAuth
+  , claudeSonnet45NoReasonOAuth
   )
 import UniversalLLM.Models.GLM
   ( GLM45(..)
@@ -113,17 +113,17 @@ import UniversalLLM.Models.OpenRouter
 -- ============================================================================
 
 -- Provider aliases for backward compatibility with tests
-anthropicSonnet45 :: ComposableProvider (Model ClaudeSonnet45 Anthropic) ((), ())
+anthropicSonnet45 :: ComposableProvider (Model ClaudeSonnet45 Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
 anthropicSonnet45 = claudeSonnet45
 
-anthropicSonnet45Reasoning :: ComposableProvider (Model ClaudeSonnet45WithReasoning Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
-anthropicSonnet45Reasoning = claudeSonnet45Reasoning
+anthropicSonnet45NoReason :: ComposableProvider (Model ClaudeSonnet45NoReason Anthropic) ((), ())
+anthropicSonnet45NoReason = claudeSonnet45NoReason
 
-anthropicSonnet45OAuth :: ComposableProvider (Model ClaudeSonnet45 AnthropicOAuth) (OAuthToolsState, ((), ()))
+anthropicSonnet45OAuth :: ComposableProvider (Model ClaudeSonnet45 AnthropicOAuth) (Anthropic.AnthropicReasoningState, (OAuthToolsState, ((), ())))
 anthropicSonnet45OAuth = claudeSonnet45OAuth
 
-anthropicSonnet45ReasoningOAuth :: ComposableProvider (Model ClaudeSonnet45WithReasoning AnthropicOAuth) (Anthropic.AnthropicReasoningState, (OAuthToolsState, ((), ())))
-anthropicSonnet45ReasoningOAuth = claudeSonnet45ReasoningOAuth
+anthropicSonnet45NoReasonOAuth :: ComposableProvider (Model ClaudeSonnet45NoReason AnthropicOAuth) (OAuthToolsState, ((), ()))
+anthropicSonnet45NoReasonOAuth = claudeSonnet45NoReasonOAuth
 
 -- Backward compat aliases for GLM45Air providers
 llamaCppGLM45 :: ComposableProvider (Model GLM45Air LlamaCpp) ((), ((), ((), ())))

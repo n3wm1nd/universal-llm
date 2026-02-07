@@ -78,8 +78,8 @@ spec = describe "Anthropic Streaming Thinking Signatures" $ do
             toolInput `shouldBe` object []  -- Empty object for getcwd
 
             -- Now test that we can build a second request with this thinking block
-            let model = Model ClaudeSonnet45WithReasoning Provider.Anthropic
-                cp = anthropicSonnet45Reasoning
+            let model = Model ClaudeSonnet45 Provider.Anthropic
+                cp = anthropicSonnet45
                 initialState = (def, ((), ()))
 
             -- Parse the response to get Message types

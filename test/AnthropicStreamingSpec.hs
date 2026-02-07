@@ -19,18 +19,18 @@ import qualified UniversalLLM.Protocols.Anthropic as Proto
 import qualified UniversalLLM.Providers.Anthropic as Provider
 import Data.Default (Default(..))
 
--- Helper to build streaming request - uses ClaudeSonnet45 with basic composition
+-- Helper to build streaming request - uses ClaudeSonnet45NoReason with basic composition
 -- (Wrapper around generic version that provides specific model and composable provider)
-buildStreamingRequest :: [ModelConfig (Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth)]
-                     -> [Message (Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth)]
+buildStreamingRequest :: [ModelConfig (Model TestModels.ClaudeSonnet45NoReason Provider.AnthropicOAuth)]
+                     -> [Message (Model TestModels.ClaudeSonnet45NoReason Provider.AnthropicOAuth)]
                      -> AnthropicRequest
-buildStreamingRequest configs msgs = buildStreamingRequestGeneric TestModels.anthropicSonnet45OAuth (Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth) (Provider.OAuthToolsState mempty, ((), ())) configs msgs
+buildStreamingRequest configs msgs = buildStreamingRequestGeneric TestModels.anthropicSonnet45NoReasonOAuth (Model TestModels.ClaudeSonnet45NoReason Provider.AnthropicOAuth) (Provider.OAuthToolsState mempty, ((), ())) configs msgs
 
--- Helper to build streaming request - uses ClaudeSonnet45WithReasoning
-buildStreamingRequestWithReasoning :: [ModelConfig (Model TestModels.ClaudeSonnet45WithReasoning Provider.AnthropicOAuth)]
-                                 -> [Message (Model TestModels.ClaudeSonnet45WithReasoning Provider.AnthropicOAuth)]
+-- Helper to build streaming request - uses ClaudeSonnet45 (with reasoning)
+buildStreamingRequestWithReasoning :: [ModelConfig (Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth)]
+                                 -> [Message (Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth)]
                                  -> AnthropicRequest
-buildStreamingRequestWithReasoning configs msgs = buildStreamingRequestGeneric TestModels.anthropicSonnet45ReasoningOAuth (Model TestModels.ClaudeSonnet45WithReasoning Provider.AnthropicOAuth) (def, (Provider.OAuthToolsState mempty, ((), ()))) configs msgs
+buildStreamingRequestWithReasoning configs msgs = buildStreamingRequestGeneric TestModels.anthropicSonnet45OAuth (Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth) (def, (Provider.OAuthToolsState mempty, ((), ()))) configs msgs
 
 -- Generic helper to build streaming request with explicit composable provider
 buildStreamingRequestGeneric :: forall model s. ComposableProvider (Model model Provider.AnthropicOAuth) s
@@ -110,8 +110,8 @@ spec getResponse = do
       T.isInfixOf "message_stop" (T.pack bodyStr) `shouldBe` True
 
     it "sends streaming request with extended thinking and receives SSE response with thinking_delta events" $ do
-      -- Use ClaudeSonnet45WithReasoning for this test since reasoning requires HasReasoning instance
-      let model = Model ClaudeSonnet45WithReasoning Provider.Anthropic
+      -- Use ClaudeSonnet45 for this test since reasoning requires HasReasoning instance
+      let model = Model ClaudeSonnet45 Provider.Anthropic
           configs = [MaxTokens 16000, Streaming True, Reasoning True]
           msgs = [UserText "Solve this puzzle: What has cities but no houses, forests but no trees, and water but no fish?"]
           req = Provider.withMagicSystemPrompt $
@@ -139,7 +139,7 @@ spec getResponse = do
       T.isInfixOf "message_stop" (T.pack bodyStr) `shouldBe` True
 
     it "sends streaming request with thinking and tools, receives SSE response with thinking and tool_use events" $ do
-      let model = Model ClaudeSonnet45WithReasoning Provider.Anthropic
+      let model = Model ClaudeSonnet45 Provider.Anthropic
           toolDef = ToolDefinition
             { toolDefName = "get_weather"
             , toolDefDescription = "Get the weather for a location"
@@ -187,7 +187,7 @@ spec getResponse = do
       T.isInfixOf "message_stop" (T.pack bodyStr) `shouldBe` True
 
     it "handles multiple content blocks in order (thinking and tool_use)" $ do
-      let model = Model ClaudeSonnet45WithReasoning Provider.Anthropic
+      let model = Model ClaudeSonnet45 Provider.Anthropic
           toolDef = ToolDefinition
             { toolDefName = "get_weather"
             , toolDefDescription = "Get weather"

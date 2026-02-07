@@ -42,12 +42,12 @@ modelTests :: Providers -> Spec
 modelTests providers = do
 
   -- Anthropic Models
-  describe "Claude Sonnet 4.5" $
-    testModel TestModels.anthropicSonnet45OAuth (Model TestModels.ClaudeSonnet45 AnthropicOAuth) (anthropicProvider providers)
+  describe "Claude Sonnet 4.5 (no reasoning)" $
+    testModel TestModels.anthropicSonnet45NoReasonOAuth (Model TestModels.ClaudeSonnet45NoReason AnthropicOAuth) (anthropicProvider providers)
       [ ST.text, ST.tools ]
 
-  describe "Claude Sonnet 4.5 with Reasoning" $
-    testModel TestModels.anthropicSonnet45ReasoningOAuth (Model TestModels.ClaudeSonnet45WithReasoning AnthropicOAuth) (anthropicProvider providers)
+  describe "Claude Sonnet 4.5" $
+    testModel TestModels.anthropicSonnet45OAuth (Model TestModels.ClaudeSonnet45 AnthropicOAuth) (anthropicProvider providers)
       [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
   -- LlamaCpp Models
