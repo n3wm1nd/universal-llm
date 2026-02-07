@@ -28,7 +28,7 @@ __Anthropic API:__
 
 -}
 
-module Models.Claude (testsSonnet45, testsOpus46) where
+module Models.Claude (testsSonnet45, testsHaiku45, testsOpus46) where
 
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse, model)
@@ -66,6 +66,37 @@ testsSonnet45 provider = do
 
     describe "OAuth Provider Tests" $
       testModel TestModels.anthropicSonnet45OAuth (Model TestModels.ClaudeSonnet45 Anthropic.AnthropicOAuth) provider
+        [ ST.text
+        , ST.tools
+        , ST.toolWithName "grep"      -- Blacklisted, should work via prefix/unprefix
+        , ST.toolWithName "read_file" -- Blacklisted, should work via prefix/unprefix
+        , ST.toolWithName "echo"      -- Not blacklisted, should work normally
+        ]
+
+-- | Test Claude Haiku 4.5 via Anthropic API
+--
+-- Includes both protocol probes (wire format) and standard tests (high-level API).
+testsHaiku45 :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
+testsHaiku45 provider = do
+  let oauthProvider req = provider (Anthropic.withMagicSystemPrompt req { model = "claude-haiku-4-5-20251001" })
+  describe "Claude Haiku 4.5 via Anthropic" $ do
+    describe "Protocol" $ do
+      basicText oauthProvider
+      toolCalling oauthProvider
+      consecutiveUserMessages oauthProvider
+      startsWithAssistant oauthProvider
+      reasoning oauthProvider
+      toolCallingWithReasoning oauthProvider
+
+    describe "OAuth Tool Name Blacklist" $ do
+      Blacklist.blacklistProbes oauthProvider
+
+    describe "Standard Tests" $
+      testModel TestModels.anthropicHaiku45OAuth (Model TestModels.ClaudeHaiku45 Anthropic.AnthropicOAuth) provider
+        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+
+    describe "OAuth Provider Tests" $
+      testModel TestModels.anthropicHaiku45OAuth (Model TestModels.ClaudeHaiku45 Anthropic.AnthropicOAuth) provider
         [ ST.text
         , ST.tools
         , ST.toolWithName "grep"      -- Blacklisted, should work via prefix/unprefix

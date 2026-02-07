@@ -400,6 +400,7 @@ main = do
       Models.Gemini3Flash.testsOpenRouter openrouterProvider
       Models.Nova2Lite.testsOpenRouter openrouterProvider
       Models.Claude.testsSonnet45 anthropicProvider
+      Models.Claude.testsHaiku45 anthropicProvider
       Models.Claude.testsOpus46 anthropicProvider
 
     describe "Composable Handlers" ComposableHandlersSpec.spec

@@ -46,12 +46,15 @@ module UniversalLLM.Models.Anthropic
   ( -- * Model Types
     ClaudeSonnet45(..)
   , ClaudeSonnet45NoReason(..)
+  , ClaudeHaiku45(..)
   , ClaudeOpus46(..)
     -- * Composable Providers
   , claudeSonnet45
   , claudeSonnet45NoReason
   , claudeSonnet45OAuth
   , claudeSonnet45NoReasonOAuth
+  , claudeHaiku45
+  , claudeHaiku45OAuth
   , claudeOpus46
   , claudeOpus46OAuth
   ) where
@@ -110,6 +113,35 @@ instance HasTools (Model ClaudeSonnet45NoReason Anthropic) where
 -- Provides tools only, without explicit reasoning state tracking.
 claudeSonnet45NoReason :: ComposableProvider (Model ClaudeSonnet45NoReason Anthropic) ((), ())
 claudeSonnet45NoReason = withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45NoReason Anthropic)
+
+--------------------------------------------------------------------------------
+-- Claude Haiku 4.5
+--------------------------------------------------------------------------------
+
+-- | Claude Haiku 4.5 - Fast and efficient model
+--
+-- Capabilities:
+-- - Extended thinking via reasoning blocks
+-- - Native tool support
+-- - Fast responses
+-- - Cost-effective
+data ClaudeHaiku45 = ClaudeHaiku45 deriving (Show, Eq)
+
+instance ModelName (Model ClaudeHaiku45 Anthropic) where
+  modelName (Model _ _) = "claude-haiku-4-5-20251001"
+
+instance HasTools (Model ClaudeHaiku45 Anthropic) where
+  withTools = Anthropic.anthropicTools
+
+instance HasReasoning (Model ClaudeHaiku45 Anthropic) where
+  type ReasoningState (Model ClaudeHaiku45 Anthropic) = Anthropic.AnthropicReasoningState
+  withReasoning = Anthropic.anthropicReasoning
+
+-- | Composable provider for Claude Haiku 4.5 with reasoning and tools
+--
+-- This is the default provider with full reasoning state tracking.
+claudeHaiku45 :: ComposableProvider (Model ClaudeHaiku45 Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
+claudeHaiku45 = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeHaiku45 Anthropic)
 
 --------------------------------------------------------------------------------
 -- Claude Opus 4.6
@@ -176,6 +208,24 @@ instance HasTools (Model ClaudeSonnet45NoReason AnthropicOAuth) where
 -- Includes OAuth tool workarounds and the magic system prompt, but no reasoning state.
 claudeSonnet45NoReasonOAuth :: ComposableProvider (Model ClaudeSonnet45NoReason AnthropicOAuth) (OAuthToolsState, ((), ()))
 claudeSonnet45NoReasonOAuth = withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45NoReason AnthropicOAuth)
+
+-- OAuth version for ClaudeHaiku45 (with reasoning and tool name workarounds)
+instance ModelName (Model ClaudeHaiku45 AnthropicOAuth) where
+  modelName (Model _ _) = "claude-haiku-4-5-20251001"
+
+instance HasTools (Model ClaudeHaiku45 AnthropicOAuth) where
+  type ToolState (Model ClaudeHaiku45 AnthropicOAuth) = OAuthToolsState
+  withTools = Anthropic.anthropicOAuthBlacklistedTools
+
+instance HasReasoning (Model ClaudeHaiku45 AnthropicOAuth) where
+  type ReasoningState (Model ClaudeHaiku45 AnthropicOAuth) = Anthropic.AnthropicReasoningState
+  withReasoning = Anthropic.anthropicReasoning
+
+-- | Composable provider for Claude Haiku 4.5 via OAuth with reasoning
+--
+-- Combines reasoning state, OAuth tool workarounds, and the magic system prompt.
+claudeHaiku45OAuth :: ComposableProvider (Model ClaudeHaiku45 AnthropicOAuth) (Anthropic.AnthropicReasoningState, (OAuthToolsState, ((), ())))
+claudeHaiku45OAuth = withReasoning `chainProviders` withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeHaiku45 AnthropicOAuth)
 
 -- OAuth version for ClaudeOpus46 (with reasoning and tool name workarounds)
 instance ModelName (Model ClaudeOpus46 AnthropicOAuth) where

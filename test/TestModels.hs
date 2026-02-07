@@ -19,6 +19,7 @@ module TestModels
   ( -- * Re-exported Production Models
     ClaudeSonnet45(..)
   , ClaudeSonnet45NoReason(..)
+  , ClaudeHaiku45(..)
   , ClaudeOpus46(..)
   , GLM45(..)
   , GLM45Air(..)
@@ -34,6 +35,8 @@ module TestModels
   , claudeSonnet45NoReason
   , claudeSonnet45OAuth
   , claudeSonnet45NoReasonOAuth
+  , claudeHaiku45
+  , claudeHaiku45OAuth
   , claudeOpus46
   , claudeOpus46OAuth
   , glm45
@@ -51,6 +54,8 @@ module TestModels
   , anthropicSonnet45NoReason
   , anthropicSonnet45OAuth
   , anthropicSonnet45NoReasonOAuth
+  , anthropicHaiku45
+  , anthropicHaiku45OAuth
   , anthropicOpus46
   , anthropicOpus46OAuth
   , llamaCppGLM45
@@ -82,11 +87,14 @@ import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse, OpenAICompl
 import UniversalLLM.Models.Anthropic
   ( ClaudeSonnet45(..)
   , ClaudeSonnet45NoReason(..)
+  , ClaudeHaiku45(..)
   , ClaudeOpus46(..)
   , claudeSonnet45
   , claudeSonnet45NoReason
   , claudeSonnet45OAuth
   , claudeSonnet45NoReasonOAuth
+  , claudeHaiku45
+  , claudeHaiku45OAuth
   , claudeOpus46
   , claudeOpus46OAuth
   )
@@ -132,6 +140,12 @@ anthropicSonnet45OAuth = claudeSonnet45OAuth
 
 anthropicSonnet45NoReasonOAuth :: ComposableProvider (Model ClaudeSonnet45NoReason AnthropicOAuth) (OAuthToolsState, ((), ()))
 anthropicSonnet45NoReasonOAuth = claudeSonnet45NoReasonOAuth
+
+anthropicHaiku45 :: ComposableProvider (Model ClaudeHaiku45 Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
+anthropicHaiku45 = claudeHaiku45
+
+anthropicHaiku45OAuth :: ComposableProvider (Model ClaudeHaiku45 AnthropicOAuth) (Anthropic.AnthropicReasoningState, (OAuthToolsState, ((), ())))
+anthropicHaiku45OAuth = claudeHaiku45OAuth
 
 anthropicOpus46 :: ComposableProvider (Model ClaudeOpus46 Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
 anthropicOpus46 = claudeOpus46
