@@ -126,6 +126,21 @@ enableReasoning req = req
       }
   }
 
+-- | Enable adaptive reasoning on a request (Opus 4.6+)
+--
+-- Uses adaptive thinking with effort parameter instead of budget_tokens.
+-- Defaults to "high" effort for testing.
+enableAdaptiveReasoning :: AnthropicRequest -> AnthropicRequest
+enableAdaptiveReasoning req = req
+  { thinking = Just AnthropicThinkingConfig
+      { thinkingType = "adaptive"
+      , thinkingBudgetTokens = Nothing
+      }
+  , output_config = Just AnthropicOutputConfig
+      { outputEffort = "high"  -- Reasonable default for testing
+      }
+  }
+
 -- ============================================================================
 -- Response Helpers
 --

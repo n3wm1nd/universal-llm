@@ -93,6 +93,7 @@ data ModelConfig m where
   Stop :: SupportsStop (ProviderOf m) => [Text] -> ModelConfig m
   Tools :: HasTools m => [ToolDefinition] -> ModelConfig m
   Reasoning :: HasReasoning m => Bool -> ModelConfig m
+  ReasoningEffort :: HasReasoning m => Text -> ModelConfig m  -- Effort level: "low", "medium", "high", "max" (Opus 4.6+)
   Streaming :: SupportsStreaming (ProviderOf m) => Bool -> ModelConfig m
 
 -- Provider-specific model names

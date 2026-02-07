@@ -19,6 +19,7 @@ module TestModels
   ( -- * Re-exported Production Models
     ClaudeSonnet45(..)
   , ClaudeSonnet45NoReason(..)
+  , ClaudeOpus46(..)
   , GLM45(..)
   , GLM45Air(..)
   , GLM46(..)
@@ -33,6 +34,8 @@ module TestModels
   , claudeSonnet45NoReason
   , claudeSonnet45OAuth
   , claudeSonnet45NoReasonOAuth
+  , claudeOpus46
+  , claudeOpus46OAuth
   , glm45
   , glm45AirLlamaCpp
   , glm45AirOpenRouter
@@ -48,6 +51,8 @@ module TestModels
   , anthropicSonnet45NoReason
   , anthropicSonnet45OAuth
   , anthropicSonnet45NoReasonOAuth
+  , anthropicOpus46
+  , anthropicOpus46OAuth
   , llamaCppGLM45
   , openRouterGLM45
   , openRouterGLM45Air
@@ -77,10 +82,13 @@ import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse, OpenAICompl
 import UniversalLLM.Models.Anthropic
   ( ClaudeSonnet45(..)
   , ClaudeSonnet45NoReason(..)
+  , ClaudeOpus46(..)
   , claudeSonnet45
   , claudeSonnet45NoReason
   , claudeSonnet45OAuth
   , claudeSonnet45NoReasonOAuth
+  , claudeOpus46
+  , claudeOpus46OAuth
   )
 import UniversalLLM.Models.GLM
   ( GLM45(..)
@@ -124,6 +132,12 @@ anthropicSonnet45OAuth = claudeSonnet45OAuth
 
 anthropicSonnet45NoReasonOAuth :: ComposableProvider (Model ClaudeSonnet45NoReason AnthropicOAuth) (OAuthToolsState, ((), ()))
 anthropicSonnet45NoReasonOAuth = claudeSonnet45NoReasonOAuth
+
+anthropicOpus46 :: ComposableProvider (Model ClaudeOpus46 Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
+anthropicOpus46 = claudeOpus46
+
+anthropicOpus46OAuth :: ComposableProvider (Model ClaudeOpus46 AnthropicOAuth) (Anthropic.AnthropicReasoningState, (OAuthToolsState, ((), ())))
+anthropicOpus46OAuth = claudeOpus46OAuth
 
 -- Backward compat aliases for GLM45Air providers
 llamaCppGLM45 :: ComposableProvider (Model GLM45Air LlamaCpp) ((), ((), ((), ())))

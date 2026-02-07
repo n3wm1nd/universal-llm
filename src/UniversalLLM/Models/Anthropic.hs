@@ -46,11 +46,14 @@ module UniversalLLM.Models.Anthropic
   ( -- * Model Types
     ClaudeSonnet45(..)
   , ClaudeSonnet45NoReason(..)
+  , ClaudeOpus46(..)
     -- * Composable Providers
   , claudeSonnet45
   , claudeSonnet45NoReason
   , claudeSonnet45OAuth
   , claudeSonnet45NoReasonOAuth
+  , claudeOpus46
+  , claudeOpus46OAuth
   ) where
 
 import UniversalLLM
@@ -109,6 +112,36 @@ claudeSonnet45NoReason :: ComposableProvider (Model ClaudeSonnet45NoReason Anthr
 claudeSonnet45NoReason = withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45NoReason Anthropic)
 
 --------------------------------------------------------------------------------
+-- Claude Opus 4.6
+--------------------------------------------------------------------------------
+
+-- | Claude Opus 4.6 - Anthropic's most capable model
+--
+-- Capabilities:
+-- - Extended thinking via reasoning blocks
+-- - Native tool support
+-- - High-quality text generation
+-- - Streaming responses
+-- - Superior reasoning and analysis
+data ClaudeOpus46 = ClaudeOpus46 deriving (Show, Eq)
+
+instance ModelName (Model ClaudeOpus46 Anthropic) where
+  modelName (Model _ _) = "claude-opus-4-6"
+
+instance HasTools (Model ClaudeOpus46 Anthropic) where
+  withTools = Anthropic.anthropicTools
+
+instance HasReasoning (Model ClaudeOpus46 Anthropic) where
+  type ReasoningState (Model ClaudeOpus46 Anthropic) = Anthropic.AnthropicReasoningState
+  withReasoning = Anthropic.anthropicAdaptiveReasoning
+
+-- | Composable provider for Claude Opus 4.6 with adaptive reasoning and tools
+--
+-- Uses Opus 4.6's adaptive thinking with effort parameter instead of budget_tokens.
+claudeOpus46 :: ComposableProvider (Model ClaudeOpus46 Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
+claudeOpus46 = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus46 Anthropic)
+
+--------------------------------------------------------------------------------
 -- OAuth Versions
 --------------------------------------------------------------------------------
 
@@ -143,3 +176,21 @@ instance HasTools (Model ClaudeSonnet45NoReason AnthropicOAuth) where
 -- Includes OAuth tool workarounds and the magic system prompt, but no reasoning state.
 claudeSonnet45NoReasonOAuth :: ComposableProvider (Model ClaudeSonnet45NoReason AnthropicOAuth) (OAuthToolsState, ((), ()))
 claudeSonnet45NoReasonOAuth = withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45NoReason AnthropicOAuth)
+
+-- OAuth version for ClaudeOpus46 (with reasoning and tool name workarounds)
+instance ModelName (Model ClaudeOpus46 AnthropicOAuth) where
+  modelName (Model _ _) = "claude-opus-4-6"
+
+instance HasTools (Model ClaudeOpus46 AnthropicOAuth) where
+  type ToolState (Model ClaudeOpus46 AnthropicOAuth) = OAuthToolsState
+  withTools = Anthropic.anthropicOAuthBlacklistedTools
+
+instance HasReasoning (Model ClaudeOpus46 AnthropicOAuth) where
+  type ReasoningState (Model ClaudeOpus46 AnthropicOAuth) = Anthropic.AnthropicReasoningState
+  withReasoning = Anthropic.anthropicAdaptiveReasoning
+
+-- | Composable provider for Claude Opus 4.6 via OAuth with adaptive reasoning
+--
+-- Combines adaptive reasoning, OAuth tool workarounds, and the magic system prompt.
+claudeOpus46OAuth :: ComposableProvider (Model ClaudeOpus46 AnthropicOAuth) (Anthropic.AnthropicReasoningState, (OAuthToolsState, ((), ())))
+claudeOpus46OAuth = withReasoning `chainProviders` withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus46 AnthropicOAuth)

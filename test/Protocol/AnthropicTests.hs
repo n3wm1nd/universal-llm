@@ -145,6 +145,20 @@ toolCallingWithReasoning makeRequest = do
     assertHasReasoning resp
     assertHasToolCalls resp
 
+-- | Probe: Adaptive reasoning (Opus 4.6+)
+--
+-- __Tests:__ Does the model support adaptive thinking with effort parameter?
+--
+-- __Checks:__ Response contains thinking content blocks when using adaptive mode
+--
+-- __Expected to pass:__ Opus 4.6 and newer models with adaptive thinking
+adaptiveReasoning :: HasCallStack => (AnthropicRequest -> IO AnthropicResponse) -> Spec
+adaptiveReasoning makeRequest = do
+  it "returns thinking content when using adaptive mode" $ do
+    let req = enableAdaptiveReasoning (simpleUserRequest "Think step by step: What is 17 * 29?")
+    resp <- makeRequest req
+    assertHasReasoning resp
+
 -- | Probe: Consecutive user messages
 --
 -- __Tests:__ Does the API accept multiple user messages in a row?

@@ -358,6 +358,88 @@ anthropicReasoning _m configs state = noopHandler
             appendContentBlock "assistant" (AnthropicTextBlock thinking Nothing) req
       _ -> req
 
+-- | Adaptive reasoning provider for Opus 4.6+
+-- Uses adaptive thinking with effort parameter instead of budget_tokens
+anthropicAdaptiveReasoning :: forall m. (HasReasoning m, ProviderRequest m ~ AnthropicRequest, ProviderResponse m ~ AnthropicResponse) => ComposableProvider m AnthropicReasoningState
+anthropicAdaptiveReasoning _m configs state = noopHandler
+  { cpToRequest = handleReasoningMessageWithState state
+  , cpConfigHandler = \req ->
+      let reasoningEnabled = not $ any isReasoningFalse configs
+          -- Extract effort level from configs (default to "high")
+          effortLevel = case [e | ReasoningEffort e <- configs] of
+            (e:_) -> e
+            [] -> "high"
+          -- Check if we're in a tool call sequence that requires signature chain
+          needsSignatureChain = isInToolCallSequence req
+          hasCompleteChain = hasCompleteSignatureChain req state
+          -- Only enable reasoning if either:
+          -- 1. We're not in a tool call sequence, OR
+          -- 2. We're in a tool call sequence AND have complete signature chain
+          canEnableReasoning = reasoningEnabled && (not needsSignatureChain || hasCompleteChain)
+      in if canEnableReasoning
+         then req { thinking = Just $ AnthropicThinkingConfig "adaptive" Nothing
+                  , output_config = Just $ AnthropicOutputConfig effortLevel }
+         else req
+  , cpPostResponse = storeSignatureFromResponse
+  , cpFromResponse = parseReasoningResponse
+  , cpSerializeMessage = UniversalLLM.Serialization.serializeReasoningMessages
+  , cpDeserializeMessage = UniversalLLM.Serialization.deserializeReasoningMessages
+  }
+  where
+    isReasoningFalse (Reasoning False) = True
+    isReasoningFalse _ = False
+
+    -- Same helper functions as anthropicReasoning
+    isInToolCallSequence :: AnthropicRequest -> Bool
+    isInToolCallSequence req =
+      case reverse (messages req) of
+        (userMsg : assistantMsg : _) | role userMsg == "user" && role assistantMsg == "assistant" ->
+          let hasToolResults = any isToolResult (content userMsg)
+              hasToolCalls = any isToolUse (content assistantMsg)
+          in hasToolResults && hasToolCalls
+        _ -> False
+      where
+        isToolResult (AnthropicToolResultBlock _ _ _) = True
+        isToolResult _ = False
+        isToolUse (AnthropicToolUseBlock _ _ _ _) = True
+        isToolUse _ = False
+
+    hasCompleteSignatureChain :: AnthropicRequest -> AnthropicReasoningState -> Bool
+    hasCompleteSignatureChain req st =
+      case reverse (messages req) of
+        (_ : assistantMsg : _) | role assistantMsg == "assistant" ->
+          let thinkingBlocks = [txt | AnthropicThinkingBlock txt _ _ <- content assistantMsg]
+              allHaveSignatures = all (\txt -> Map.member txt (signatureMap st)) thinkingBlocks
+          in null thinkingBlocks || allHaveSignatures
+        _ -> True
+
+    storeSignatureFromResponse :: ProviderResponse m -> AnthropicReasoningState -> AnthropicReasoningState
+    storeSignatureFromResponse (AnthropicError _) st = st
+    storeSignatureFromResponse (AnthropicSuccess resp) st =
+      case responseContent resp of
+        (AnthropicThinkingBlock{..} : _) ->
+          AnthropicReasoningState $ Map.insert thinkingText thinkingSignature (signatureMap st)
+        _ -> st
+
+    parseReasoningResponse :: ProviderResponse m -> Either LLMError (Maybe (Message m, ProviderResponse m))
+    parseReasoningResponse (AnthropicError err) = Left $ ParseError $ Text.pack $ "API error: " ++ show err
+    parseReasoningResponse (AnthropicSuccess resp) =
+      case responseContent resp of
+        (AnthropicThinkingBlock thinkingText _ _ : rest) ->
+          Right (Just (AssistantReasoning thinkingText, AnthropicSuccess resp { responseContent = rest }))
+        _ -> Right Nothing
+
+    handleReasoningMessageWithState :: AnthropicReasoningState -> MessageEncoder m
+    handleReasoningMessageWithState st msg req = case msg of
+      AssistantReasoning thinking ->
+        case Map.lookup thinking (signatureMap st) of
+          Just signature ->
+            appendContentBlock "assistant"
+              (AnthropicThinkingBlock thinking signature Nothing) req
+          Nothing ->
+            appendContentBlock "assistant" (AnthropicTextBlock thinking Nothing) req
+      _ -> req
+
 -- These are removed - use the typeclass methods withTools and withReasoning instead
 -- They're defined in the HasTools/HasReasoning instances
 

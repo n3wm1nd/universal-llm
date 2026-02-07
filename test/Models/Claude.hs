@@ -28,10 +28,10 @@ __Anthropic API:__
 
 -}
 
-module Models.Claude (testsSonnet45) where
+module Models.Claude (testsSonnet45, testsOpus46) where
 
 import UniversalLLM (Model(..))
-import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
+import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse, model)
 import qualified UniversalLLM.Providers.Anthropic as Anthropic
 import UniversalLLM.Providers.Anthropic (Anthropic(..))
 import Protocol.AnthropicTests
@@ -47,7 +47,7 @@ import Test.Hspec (Spec, describe)
 -- Includes both protocol probes (wire format) and standard tests (high-level API).
 testsSonnet45 :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 testsSonnet45 provider = do
-  let oauthProvider req = provider (Anthropic.withMagicSystemPrompt req)
+  let oauthProvider req = provider (Anthropic.withMagicSystemPrompt req { model = "claude-sonnet-4-5-20250929" })
   describe "Claude Sonnet 4.5 via Anthropic" $ do
     describe "Protocol" $ do
       basicText oauthProvider
@@ -66,6 +66,39 @@ testsSonnet45 provider = do
 
     describe "OAuth Provider Tests" $
       testModel TestModels.anthropicSonnet45OAuth (Model TestModels.ClaudeSonnet45 Anthropic.AnthropicOAuth) provider
+        [ ST.text
+        , ST.tools
+        , ST.toolWithName "grep"      -- Blacklisted, should work via prefix/unprefix
+        , ST.toolWithName "read_file" -- Blacklisted, should work via prefix/unprefix
+        , ST.toolWithName "echo"      -- Not blacklisted, should work normally
+        ]
+
+-- | Test Claude Opus 4.6 via Anthropic API
+--
+-- Opus 4.6 uses adaptive thinking with effort parameter instead of budget_tokens.
+-- Includes both protocol probes (wire format) and standard tests (high-level API).
+testsOpus46 :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
+testsOpus46 provider = do
+  let oauthProvider req = provider (Anthropic.withMagicSystemPrompt req { model = "claude-opus-4-6" })
+  describe "Claude Opus 4.6 via Anthropic" $ do
+    describe "Protocol" $ do
+      basicText oauthProvider
+      toolCalling oauthProvider
+      consecutiveUserMessages oauthProvider
+      startsWithAssistant oauthProvider
+      reasoning oauthProvider
+      adaptiveReasoning oauthProvider
+      toolCallingWithReasoning oauthProvider
+
+    describe "OAuth Tool Name Blacklist" $ do
+      Blacklist.blacklistProbes oauthProvider
+
+    describe "Standard Tests" $
+      testModel TestModels.anthropicOpus46OAuth (Model TestModels.ClaudeOpus46 Anthropic.AnthropicOAuth) provider
+        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+
+    describe "OAuth Provider Tests" $
+      testModel TestModels.anthropicOpus46OAuth (Model TestModels.ClaudeOpus46 Anthropic.AnthropicOAuth) provider
         [ ST.text
         , ST.tools
         , ST.toolWithName "grep"      -- Blacklisted, should work via prefix/unprefix

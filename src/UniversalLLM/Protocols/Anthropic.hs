@@ -25,8 +25,13 @@ import UniversalLLM
 -- Request structure
 -- Extended thinking configuration
 data AnthropicThinkingConfig = AnthropicThinkingConfig
-  { thinkingType :: Text  -- "enabled" to enable extended thinking
-  , thinkingBudgetTokens :: Maybe Int  -- Optional token budget for thinking
+  { thinkingType :: Text  -- "enabled" for budget-based (Sonnet/Opus 4.5), "adaptive" for effort-based (Opus 4.6+)
+  , thinkingBudgetTokens :: Maybe Int  -- Token budget for thinking (used with type="enabled")
+  } deriving (Generic, Show, Eq)
+
+-- Output configuration (Opus 4.6+)
+data AnthropicOutputConfig = AnthropicOutputConfig
+  { outputEffort :: Text  -- "low", "medium", "high", or "max" (max only on Opus 4.6)
   } deriving (Generic, Show, Eq)
 
 data AnthropicRequest = AnthropicRequest
@@ -38,6 +43,7 @@ data AnthropicRequest = AnthropicRequest
   , tools :: Maybe [AnthropicToolDefinition]
   , stream :: Maybe Bool
   , thinking :: Maybe AnthropicThinkingConfig
+  , output_config :: Maybe AnthropicOutputConfig
   } deriving (Generic, Show, Eq)
 
 instance Semigroup AnthropicRequest where
@@ -50,6 +56,7 @@ instance Semigroup AnthropicRequest where
     , tools = tools r2 <|> tools r1
     , stream = stream r2 <|> stream r1
     , thinking = thinking r2 <|> thinking r1
+    , output_config = output_config r2 <|> output_config r1
     }
 
 instance Monoid AnthropicRequest where
@@ -62,6 +69,7 @@ instance Monoid AnthropicRequest where
     , tools = Nothing
     , stream = Nothing
     , thinking = Nothing
+    , output_config = Nothing
     }
 
 data AnthropicMessage = AnthropicMessage
@@ -155,8 +163,13 @@ instance HasCodec AnthropicSystemBlock where
 instance HasCodec AnthropicThinkingConfig where
   codec = object "AnthropicThinkingConfig" $
     AnthropicThinkingConfig
-      <$> requiredField "type" "Thinking type (enabled/disabled)" .= thinkingType
+      <$> requiredField "type" "Thinking type (enabled/adaptive)" .= thinkingType
       <*> optionalField "budget_tokens" "Token budget for thinking" .= thinkingBudgetTokens
+
+instance HasCodec AnthropicOutputConfig where
+  codec = object "AnthropicOutputConfig" $
+    AnthropicOutputConfig
+      <$> requiredField "effort" "Effort level (low/medium/high/max)" .= outputEffort
 
 instance HasCodec AnthropicRequest where
   codec = object "AnthropicRequest" $
@@ -169,6 +182,7 @@ instance HasCodec AnthropicRequest where
       <*> optionalField "tools" "Tool definitions" .= tools
       <*> optionalField "stream" "Enable streaming" .= stream
       <*> optionalField "thinking" "Extended thinking configuration" .= thinking
+      <*> optionalField "output_config" "Output configuration (effort level)" .= output_config
 
 instance HasCodec AnthropicContentBlock where
   codec = object "AnthropicContentBlock" $
