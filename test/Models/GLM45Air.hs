@@ -46,11 +46,15 @@ import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
+import UniversalLLM.Models.GLM
+  ( GLM45Air(..)
+  , glm45AirLlamaCpp
+  , glm45AirOpenRouter
+  )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
 import TestCache (ResponseProvider)
 import TestHelpers (testModel)
-import qualified TestModels
 import Test.Hspec (Spec, describe)
 import qualified Data.Text as T
 import Data.Text (Text)
@@ -75,7 +79,7 @@ testsOpenRouter provider = do
       providerErrorResponse provider
 
     describe "Standard Tests" $
-      testModel TestModels.openRouterGLM45Air (Model TestModels.GLM45Air OpenRouter) provider
+      testModel glm45AirOpenRouter (Model GLM45Air OpenRouter) provider
         [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 4.5 Air via llama.cpp
@@ -100,5 +104,5 @@ testsLlamaCpp provider modelName = do
       reasoning provider modelName  -- llama.cpp uses standard reasoning_content
 
     describe "Standard Tests" $
-      testModel TestModels.llamaCppGLM45 (Model TestModels.GLM45Air LlamaCpp) provider
+      testModel glm45AirLlamaCpp (Model GLM45Air LlamaCpp) provider
         [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]

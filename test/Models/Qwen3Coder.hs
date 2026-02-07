@@ -26,11 +26,14 @@ module Models.Qwen3Coder (testsLlamaCpp) where
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..))
+import UniversalLLM.Models.Qwen
+  ( Qwen3Coder(..)
+  , qwen3Coder
+  )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
 import TestCache (ResponseProvider)
 import TestHelpers (testModel)
-import qualified TestModels
 import Test.Hspec (Spec, describe)
 import qualified Data.Text as T
 import Data.Text (Text)
@@ -56,5 +59,5 @@ testsLlamaCpp provider modelName = do
       startsWithAssistant provider modelName
 
     describe "Standard Tests" $
-      testModel TestModels.llamaCppQwen3Coder (Model TestModels.Qwen3Coder LlamaCpp) provider
+      testModel qwen3Coder (Model Qwen3Coder LlamaCpp) provider
         [ ST.text, ST.tools ]

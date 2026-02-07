@@ -32,11 +32,14 @@ module Models.Nova2Lite (testsOpenRouter) where
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (OpenRouter(..))
+import UniversalLLM.Models.OpenRouter
+  ( Nova2Lite(..)
+  , nova2Lite
+  )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
 import TestCache (ResponseProvider)
 import TestHelpers (testModel)
-import qualified TestModels
 import Test.Hspec (Spec, describe, HasCallStack)
 
 -- | Test Amazon Nova 2 Lite via OpenRouter
@@ -82,5 +85,5 @@ testsOpenRouter provider = do
       -- toolCallingWithReasoning provider "amazon/nova-2-lite-v1"
 
     describe "Standard Tests" $
-      testModel TestModels.openRouterNova2Lite (Model TestModels.Nova2Lite OpenRouter) provider
+      testModel nova2Lite (Model Nova2Lite OpenRouter) provider
         [ ST.text, ST.tools ]

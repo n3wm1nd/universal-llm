@@ -11,14 +11,33 @@
 module ModelRegistry (modelTests, Providers(..)) where
 
 import Test.Hspec
-import qualified TestModels
 import qualified StandardTests as ST
 import TestHelpers (testModel)
 import UniversalLLM (Model(..), Via(..))
 import UniversalLLM.Providers.Anthropic (Anthropic(..), AnthropicOAuth(..))
 import qualified UniversalLLM.Providers.OpenAI as OpenAIProvider
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
-import TestModels (ZAI(..))
+import UniversalLLM.Models.Anthropic
+  ( ClaudeSonnet45(..)
+  , ClaudeSonnet45NoReason(..)
+  , claudeSonnet45OAuth
+  , claudeSonnet45NoReasonOAuth
+  )
+import UniversalLLM.Models.GLM
+  ( GLM45Air(..)
+  , ZAI(..)
+  , glm45AirLlamaCpp
+  , glm45AirOpenRouter
+  , glm45AirZAI
+  )
+import UniversalLLM.Models.OpenRouter
+  ( Gemini3FlashPreview(..)
+  , Gemini3ProPreview(..)
+  , Nova2Lite(..)
+  , gemini3FlashPreview
+  , gemini3ProPreview
+  , nova2Lite
+  )
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import TestCache (ResponseProvider)
@@ -43,44 +62,44 @@ modelTests providers = do
 
   -- Anthropic Models
   describe "Claude Sonnet 4.5 (no reasoning)" $
-    testModel TestModels.anthropicSonnet45NoReasonOAuth (Model TestModels.ClaudeSonnet45NoReason AnthropicOAuth) (anthropicProvider providers)
+    testModel claudeSonnet45NoReasonOAuth (Model ClaudeSonnet45NoReason AnthropicOAuth) (anthropicProvider providers)
       [ ST.text, ST.tools ]
 
   describe "Claude Sonnet 4.5" $
-    testModel TestModels.anthropicSonnet45OAuth (Model TestModels.ClaudeSonnet45 AnthropicOAuth) (anthropicProvider providers)
+    testModel claudeSonnet45OAuth (Model ClaudeSonnet45 AnthropicOAuth) (anthropicProvider providers)
       [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
   -- LlamaCpp Models
   -- GLM 4.5 via llama.cpp - Test against llama.cpp server when the model is loaded
   describe "GLM 4.5 (llama.cpp)" $
-    testModel TestModels.llamaCppGLM45 (Model TestModels.GLM45Air LlamaCpp) (llamacppProvider providers)
+    testModel glm45AirLlamaCpp (Model GLM45Air LlamaCpp) (llamacppProvider providers)
       [ ST.text, ST.tools, ST.reasoning ]
 
   -- OpenRouter Models
   -- GLM 4.5 Air via OpenRouter
   describe "GLM 4.5 (OpenRouter)" $
-    testModel TestModels.openRouterGLM45Air (Model TestModels.GLM45Air OpenRouter) (openrouterProvider providers)
+    testModel glm45AirOpenRouter (Model GLM45Air OpenRouter) (openrouterProvider providers)
       [ ST.text, ST.tools, ST.reasoning ]
 
   -- Amazon Nova 2 Lite via OpenRouter
   -- Note: Uses normalizeEmptyContent to work with Bedrock, so can't do verbatim preservation
   -- Nova doesn't return AssistantReasoning via OpenRouter
   describe "Amazon Nova 2 Lite (OpenRouter)" $
-    testModel TestModels.openRouterNova2Lite (Model TestModels.Nova2Lite OpenRouter) (openrouterProvider providers)
+    testModel nova2Lite (Model Nova2Lite OpenRouter) (openrouterProvider providers)
       [ ST.text, ST.tools ]
 
   -- Google Gemini 3 Pro Preview via OpenRouter - Test reasoning_details preservation with tool calls
   describe "Gemini 3 Pro Preview (OpenRouter)" $
-    testModel TestModels.openRouterGemini3ProPreview (Model TestModels.Gemini3ProPreview OpenRouter) (openrouterProvider providers)
+    testModel gemini3ProPreview (Model Gemini3ProPreview OpenRouter) (openrouterProvider providers)
       [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
 
   -- Google Gemini 3 Flash Preview via OpenRouter - High speed reasoning model with tool use
   describe "Gemini 3 Flash Preview (OpenRouter)" $
-    testModel TestModels.openRouterGemini3FlashPreview (Model TestModels.Gemini3FlashPreview OpenRouter) (openrouterProvider providers)
+    testModel gemini3FlashPreview (Model Gemini3FlashPreview OpenRouter) (openrouterProvider providers)
       [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
 
   -- ZAI Models
   -- GLM 4.5 via ZAI coding endpoint
   describe "GLM 4.5 (ZAI)" $
-    testModel TestModels.zaiGLM45 (Model TestModels.GLM45Air ZAI) (zaiProvider providers)
+    testModel glm45AirZAI (Model GLM45Air ZAI) (zaiProvider providers)
       [ ST.text, ST.tools, ST.reasoning ]

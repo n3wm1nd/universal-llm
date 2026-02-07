@@ -33,13 +33,20 @@ module Models.Claude (testsSonnet45, testsHaiku45, testsOpus46) where
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse, model)
 import qualified UniversalLLM.Providers.Anthropic as Anthropic
-import UniversalLLM.Providers.Anthropic (Anthropic(..))
+import UniversalLLM.Providers.Anthropic (Anthropic(..), AnthropicOAuth(..))
+import UniversalLLM.Models.Anthropic
+  ( ClaudeSonnet45(..)
+  , ClaudeHaiku45(..)
+  , ClaudeOpus46(..)
+  , claudeSonnet45OAuth
+  , claudeHaiku45OAuth
+  , claudeOpus46OAuth
+  )
 import Protocol.AnthropicTests
 import qualified Protocol.AnthropicOAuthBlacklist as Blacklist
 import qualified StandardTests as ST
 import TestCache (ResponseProvider)
 import TestHelpers (testModel)
-import qualified TestModels
 import Test.Hspec (Spec, describe)
 
 -- | Test Claude Sonnet 4.5 via Anthropic API
@@ -61,11 +68,11 @@ testsSonnet45 provider = do
       Blacklist.blacklistProbes oauthProvider
 
     describe "Standard Tests" $
-      testModel TestModels.anthropicSonnet45OAuth (Model TestModels.ClaudeSonnet45 Anthropic.AnthropicOAuth) provider
+      testModel claudeSonnet45OAuth (Model ClaudeSonnet45 Anthropic.AnthropicOAuth) provider
         [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
 
     describe "OAuth Provider Tests" $
-      testModel TestModels.anthropicSonnet45OAuth (Model TestModels.ClaudeSonnet45 Anthropic.AnthropicOAuth) provider
+      testModel claudeSonnet45OAuth (Model ClaudeSonnet45 Anthropic.AnthropicOAuth) provider
         [ ST.text
         , ST.tools
         , ST.toolWithName "grep"      -- Blacklisted, should work via prefix/unprefix
@@ -92,11 +99,11 @@ testsHaiku45 provider = do
       Blacklist.blacklistProbes oauthProvider
 
     describe "Standard Tests" $
-      testModel TestModels.anthropicHaiku45OAuth (Model TestModels.ClaudeHaiku45 Anthropic.AnthropicOAuth) provider
+      testModel claudeHaiku45OAuth (Model ClaudeHaiku45 Anthropic.AnthropicOAuth) provider
         [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
 
     describe "OAuth Provider Tests" $
-      testModel TestModels.anthropicHaiku45OAuth (Model TestModels.ClaudeHaiku45 Anthropic.AnthropicOAuth) provider
+      testModel claudeHaiku45OAuth (Model ClaudeHaiku45 Anthropic.AnthropicOAuth) provider
         [ ST.text
         , ST.tools
         , ST.toolWithName "grep"      -- Blacklisted, should work via prefix/unprefix
@@ -125,11 +132,11 @@ testsOpus46 provider = do
       Blacklist.blacklistProbes oauthProvider
 
     describe "Standard Tests" $
-      testModel TestModels.anthropicOpus46OAuth (Model TestModels.ClaudeOpus46 Anthropic.AnthropicOAuth) provider
+      testModel claudeOpus46OAuth (Model ClaudeOpus46 Anthropic.AnthropicOAuth) provider
         [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
 
     describe "OAuth Provider Tests" $
-      testModel TestModels.anthropicOpus46OAuth (Model TestModels.ClaudeOpus46 Anthropic.AnthropicOAuth) provider
+      testModel claudeOpus46OAuth (Model ClaudeOpus46 Anthropic.AnthropicOAuth) provider
         [ ST.text
         , ST.tools
         , ST.toolWithName "grep"      -- Blacklisted, should work via prefix/unprefix

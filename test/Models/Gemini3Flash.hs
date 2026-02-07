@@ -29,11 +29,14 @@ module Models.Gemini3Flash (testsOpenRouter) where
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (OpenRouter(..))
+import UniversalLLM.Models.OpenRouter
+  ( Gemini3FlashPreview(..)
+  , gemini3FlashPreview
+  )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
 import TestCache (ResponseProvider)
 import TestHelpers (testModel)
-import qualified TestModels
 import Test.Hspec (Spec, describe)
 
 -- | Test Gemini 3 Flash via OpenRouter
@@ -67,5 +70,5 @@ testsOpenRouter provider = do
       toolCallingWithReasoning provider "google/gemini-3-flash-preview"
 
     describe "Standard Tests" $
-      testModel TestModels.openRouterGemini3FlashPreview (Model TestModels.Gemini3FlashPreview OpenRouter) provider
+      testModel gemini3FlashPreview (Model Gemini3FlashPreview OpenRouter) provider
         [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.openAIReasoningDetailsPreservation ]
