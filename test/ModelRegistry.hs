@@ -25,10 +25,12 @@ import UniversalLLM.Models.Anthropic
   )
 import UniversalLLM.Models.GLM
   ( GLM45Air(..)
+  , GLM5(..)
   , ZAI(..)
   , glm45AirLlamaCpp
   , glm45AirOpenRouter
   , glm45AirZAI
+  , glm5
   )
 import UniversalLLM.Models.OpenRouter
   ( Gemini3FlashPreview(..)
@@ -102,4 +104,9 @@ modelTests providers = do
   -- GLM 4.5 via ZAI coding endpoint
   describe "GLM 4.5 (ZAI)" $
     testModel glm45AirZAI (Model GLM45Air ZAI) (zaiProvider providers)
+      [ ST.text, ST.tools, ST.reasoning ]
+
+  -- GLM 5 via ZAI coding endpoint (requires higher-tier subscription)
+  xdescribe "GLM 5 (ZAI)" $
+    testModel glm5 (Model GLM5 ZAI) (zaiProvider providers)
       [ ST.text, ST.tools, ST.reasoning ]

@@ -16,7 +16,8 @@ These models can be accessed through multiple providers (llama.cpp, OpenRouter, 
 
 * 'GLM45Air' - GLM-4.5-Air, a fast and capable model with tool support
 * 'GLM46' - GLM-4.6, improved version via ZAI API
-* 'GLM47' - GLM-4.7, latest version via ZAI API
+* 'GLM47' - GLM-4.7, previous version via ZAI API
+* 'GLM5' - GLM-5, latest version via ZAI API
 
 = Provider Support
 
@@ -68,6 +69,7 @@ module UniversalLLM.Models.GLM
   , GLM45Air(..)
   , GLM46(..)
   , GLM47(..)
+  , GLM5(..)
   , ZAI(..)
     -- * Composable Providers
     -- ** GLM-4.5
@@ -80,6 +82,8 @@ module UniversalLLM.Models.GLM
   , glm46
     -- ** GLM-4.7
   , glm47
+    -- ** GLM-5
+  , glm5
     -- * Workaround Combinators
   , glmEnsureMinTokens
   , glmFixNullContent
@@ -329,3 +333,30 @@ instance HasJSON (Model GLM47 ZAI) where
 -- | Composable provider for GLM-4.7
 glm47 :: ComposableProvider (Model GLM47 ZAI) ((), ((), ((), ())))
 glm47 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47 ZAI)
+
+--------------------------------------------------------------------------------
+-- GLM-5
+--------------------------------------------------------------------------------
+
+-- | GLM-5 - Latest GLM model (ZAI only)
+data GLM5 = GLM5 deriving (Show, Eq)
+
+instance Provider (Model GLM5 ZAI) where
+  type ProviderRequest (Model GLM5 ZAI) = OpenAIRequest
+  type ProviderResponse (Model GLM5 ZAI) = OpenAIResponse
+
+instance ModelName (Model GLM5 ZAI) where
+  modelName (Model _ _) = "glm-5"
+
+instance HasTools (Model GLM5 ZAI) where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning (Model GLM5 ZAI) where
+  withReasoning = OpenAI.openAIReasoning
+
+instance HasJSON (Model GLM5 ZAI) where
+  withJSON = OpenAI.openAIJSON
+
+-- | Composable provider for GLM-5
+glm5 :: ComposableProvider (Model GLM5 ZAI) ((), ((), ((), ())))
+glm5 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM5 ZAI)

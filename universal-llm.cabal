@@ -112,7 +112,7 @@ test-suite universal-llm-tests
     Protocol.Anthropic
     Protocol.AnthropicTests
     Protocol.AnthropicOAuthBlacklist
-    Models.GLM45Air
+    Models.GLM
     Models.Qwen3Coder
     Models.Gemini3Flash
     Models.Nova2Lite

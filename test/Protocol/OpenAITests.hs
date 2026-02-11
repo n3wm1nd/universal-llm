@@ -24,7 +24,7 @@ Run ALL probes against an unknown model/provider:
 - Some will fail → features not supported or quirks to work around
 
 Results inform:
-1. Which probes to __enshrine__ for that model (see Models.GLM45Air for example)
+1. Which probes to __enshrine__ for that model (see Models.GLM for example)
 2. How to build the ComposableProvider (what handlers to include)
 3. What StandardTests can be run (what abstractions are supported)
 

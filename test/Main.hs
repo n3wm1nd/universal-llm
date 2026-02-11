@@ -24,7 +24,7 @@ import qualified TestHTTP
 import qualified ModelRegistry
 import qualified ReasoningConfigSpec
 import qualified Protocol.OpenAITests
-import qualified Models.GLM45Air
+import qualified Models.GLM
 import qualified Models.Qwen3Coder
 import qualified Models.Gemini3Flash
 import qualified Models.Nova2Lite
@@ -394,8 +394,9 @@ main = do
   hspec $ do
     -- Model-specific tests (protocol probes + standard tests)
     describe "Models" $ do
-      Models.GLM45Air.testsOpenRouter openrouterProvider
-      Models.GLM45Air.testsLlamaCpp llamacppProvider "GLM-4.5-Air"
+      Models.GLM.testsGLM45AirOpenRouter openrouterProvider
+      Models.GLM.testsGLM45AirLlamaCpp llamacppProvider "GLM-4.5-Air"
+      Models.GLM.testsGLM5ZAI zaiProvider
       Models.Qwen3Coder.testsLlamaCpp llamacppProvider "Qwen-3-Coder"
       Models.Gemini3Flash.testsOpenRouter openrouterProvider
       Models.Nova2Lite.testsOpenRouter openrouterProvider
