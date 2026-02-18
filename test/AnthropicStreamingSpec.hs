@@ -24,13 +24,13 @@ import Data.Default (Default(..))
 buildStreamingRequest :: [ModelConfig (Model TestModels.ClaudeSonnet45NoReason Provider.AnthropicOAuth)]
                      -> [Message (Model TestModels.ClaudeSonnet45NoReason Provider.AnthropicOAuth)]
                      -> AnthropicRequest
-buildStreamingRequest configs msgs = buildStreamingRequestGeneric TestModels.anthropicSonnet45NoReasonOAuth (Model TestModels.ClaudeSonnet45NoReason Provider.AnthropicOAuth) (Provider.OAuthToolsState mempty, ((), ())) configs msgs
+buildStreamingRequest configs msgs = buildStreamingRequestGeneric TestModels.anthropicSonnet45NoReasonOAuth (Model TestModels.ClaudeSonnet45NoReason Provider.AnthropicOAuth) ((), ((), ())) configs msgs
 
 -- Helper to build streaming request - uses ClaudeSonnet45 (with reasoning)
 buildStreamingRequestWithReasoning :: [ModelConfig (Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth)]
                                  -> [Message (Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth)]
                                  -> AnthropicRequest
-buildStreamingRequestWithReasoning configs msgs = buildStreamingRequestGeneric TestModels.anthropicSonnet45OAuth (Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth) (def, (Provider.OAuthToolsState mempty, ((), ()))) configs msgs
+buildStreamingRequestWithReasoning configs msgs = buildStreamingRequestGeneric TestModels.anthropicSonnet45OAuth (Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth) (def, ((), ((), ()))) configs msgs
 
 -- Generic helper to build streaming request with explicit composable provider
 buildStreamingRequestGeneric :: forall model s. ComposableProvider (Model model Provider.AnthropicOAuth) s

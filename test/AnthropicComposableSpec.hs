@@ -28,7 +28,7 @@ buildRequest :: TestModel
              -> [ModelConfig TestModel]
              -> [Message TestModel]
              -> AnthropicRequest
-buildRequest model = buildRequestGeneric TestModels.anthropicSonnet45NoReasonOAuth model (Provider.OAuthToolsState mempty, ((), ()))
+buildRequest model = buildRequestGeneric TestModels.anthropicSonnet45NoReasonOAuth model ((), ((), ()))
 
 -- Type alias for the reasoning test model
 type TestModelWithReasoning = Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth
@@ -38,7 +38,7 @@ buildRequestWithReasoning :: TestModelWithReasoning
                           -> [ModelConfig TestModelWithReasoning]
                           -> [Message TestModelWithReasoning]
                           -> AnthropicRequest
-buildRequestWithReasoning model = buildRequestGeneric TestModels.anthropicSonnet45OAuth model (def, (Provider.OAuthToolsState mempty, ((), ())))
+buildRequestWithReasoning model = buildRequestGeneric TestModels.anthropicSonnet45OAuth model (def, ((), ((), ())))
 
 -- Generic helper to build request with explicit composable provider
 buildRequestGeneric :: forall m s. (ProviderRequest m ~ AnthropicRequest)
@@ -57,7 +57,7 @@ parseResponse :: TestModel
               -> AnthropicResponse
               -> Either LLMError [Message TestModel]
 parseResponse model configs _history resp =
-  let msgs = parseResponseGeneric TestModels.anthropicSonnet45NoReasonOAuth model configs (Provider.OAuthToolsState mempty, ((), ())) resp
+  let msgs = parseResponseGeneric TestModels.anthropicSonnet45NoReasonOAuth model configs ((), ((), ())) resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs
@@ -69,7 +69,7 @@ parseResponseWithReasoning :: TestModelWithReasoning
                            -> AnthropicResponse
                            -> Either LLMError [Message TestModelWithReasoning]
 parseResponseWithReasoning model configs _history resp =
-  let msgs = parseResponseGeneric TestModels.anthropicSonnet45OAuth model configs (def, (Provider.OAuthToolsState mempty, ((), ()))) resp
+  let msgs = parseResponseGeneric TestModels.anthropicSonnet45OAuth model configs (def, ((), ((), ()))) resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs

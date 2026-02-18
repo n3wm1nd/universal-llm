@@ -28,7 +28,7 @@ __Anthropic API:__
 
 -}
 
-module Models.Claude (testsSonnet45, testsHaiku45, testsOpus46) where
+module Models.Claude (testsSonnet45, testsSonnet46, testsHaiku45, testsOpus46) where
 
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse, model)
@@ -36,9 +36,11 @@ import qualified UniversalLLM.Providers.Anthropic as Anthropic
 import UniversalLLM.Providers.Anthropic (Anthropic(..), AnthropicOAuth(..))
 import UniversalLLM.Models.Anthropic
   ( ClaudeSonnet45(..)
+  , ClaudeSonnet46(..)
   , ClaudeHaiku45(..)
   , ClaudeOpus46(..)
   , claudeSonnet45OAuth
+  , claudeSonnet46OAuth
   , claudeHaiku45OAuth
   , claudeOpus46OAuth
   )
@@ -64,8 +66,10 @@ testsSonnet45 provider = do
       reasoning oauthProvider
       toolCallingWithReasoning oauthProvider
 
+    -- NOTE: Blacklist removed as of 2025 - keeping test structure for potential future use
     describe "OAuth Tool Name Blacklist" $ do
-      Blacklist.blacklistProbes oauthProvider
+      -- Blacklist.blacklistProbes oauthProvider
+      return ()
 
     describe "Standard Tests" $
       testModel claudeSonnet45OAuth (Model ClaudeSonnet45 Anthropic.AnthropicOAuth) provider
@@ -73,6 +77,39 @@ testsSonnet45 provider = do
 
     describe "OAuth Provider Tests" $
       testModel claudeSonnet45OAuth (Model ClaudeSonnet45 Anthropic.AnthropicOAuth) provider
+        [ ST.text
+        , ST.tools
+        , ST.toolWithName "grep"      -- Previously blacklisted, now works directly
+        , ST.toolWithName "read_file" -- Previously blacklisted, now works directly
+        , ST.toolWithName "echo"      -- Always worked normally
+        ]
+
+-- | Test Claude Sonnet 4.6 via Anthropic API
+--
+-- Includes both protocol probes (wire format) and standard tests (high-level API).
+testsSonnet46 :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
+testsSonnet46 provider = do
+  let oauthProvider req = provider (Anthropic.withMagicSystemPrompt req { model = "claude-sonnet-4-6" })
+  describe "Claude Sonnet 4.6 via Anthropic" $ do
+    describe "Protocol" $ do
+      basicText oauthProvider
+      toolCalling oauthProvider
+      consecutiveUserMessages oauthProvider
+      startsWithAssistant oauthProvider
+      reasoning oauthProvider
+      toolCallingWithReasoning oauthProvider
+
+    -- NOTE: Blacklist removed as of 2025 - keeping test structure for potential future use
+    describe "OAuth Tool Name Blacklist" $ do
+      -- Blacklist.blacklistProbes oauthProvider
+      return ()
+
+    describe "Standard Tests" $
+      testModel claudeSonnet46OAuth (Model ClaudeSonnet46 Anthropic.AnthropicOAuth) provider
+        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+
+    describe "OAuth Provider Tests" $
+      testModel claudeSonnet46OAuth (Model ClaudeSonnet46 Anthropic.AnthropicOAuth) provider
         [ ST.text
         , ST.tools
         , ST.toolWithName "grep"      -- Blacklisted, should work via prefix/unprefix
@@ -95,8 +132,10 @@ testsHaiku45 provider = do
       reasoning oauthProvider
       toolCallingWithReasoning oauthProvider
 
+    -- NOTE: Blacklist removed as of 2025 - keeping test structure for potential future use
     describe "OAuth Tool Name Blacklist" $ do
-      Blacklist.blacklistProbes oauthProvider
+      -- Blacklist.blacklistProbes oauthProvider
+      return ()
 
     describe "Standard Tests" $
       testModel claudeHaiku45OAuth (Model ClaudeHaiku45 Anthropic.AnthropicOAuth) provider
@@ -128,8 +167,10 @@ testsOpus46 provider = do
       adaptiveReasoning oauthProvider
       toolCallingWithReasoning oauthProvider
 
+    -- NOTE: Blacklist removed as of 2025 - keeping test structure for potential future use
     describe "OAuth Tool Name Blacklist" $ do
-      Blacklist.blacklistProbes oauthProvider
+      -- Blacklist.blacklistProbes oauthProvider
+      return ()
 
     describe "Standard Tests" $
       testModel claudeOpus46OAuth (Model ClaudeOpus46 Anthropic.AnthropicOAuth) provider

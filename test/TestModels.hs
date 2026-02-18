@@ -135,22 +135,23 @@ anthropicSonnet45 = claudeSonnet45
 anthropicSonnet45NoReason :: ComposableProvider (Model ClaudeSonnet45NoReason Anthropic) ((), ())
 anthropicSonnet45NoReason = claudeSonnet45NoReason
 
-anthropicSonnet45OAuth :: ComposableProvider (Model ClaudeSonnet45 AnthropicOAuth) (Anthropic.AnthropicReasoningState, (OAuthToolsState, ((), ())))
+-- NOTE: OAuthToolsState removed as of 2025 - blacklist workaround no longer needed
+anthropicSonnet45OAuth :: ComposableProvider (Model ClaudeSonnet45 AnthropicOAuth) (Anthropic.AnthropicReasoningState, ((), ((), ())))
 anthropicSonnet45OAuth = claudeSonnet45OAuth
 
-anthropicSonnet45NoReasonOAuth :: ComposableProvider (Model ClaudeSonnet45NoReason AnthropicOAuth) (OAuthToolsState, ((), ()))
+anthropicSonnet45NoReasonOAuth :: ComposableProvider (Model ClaudeSonnet45NoReason AnthropicOAuth) ((), ((), ()))
 anthropicSonnet45NoReasonOAuth = claudeSonnet45NoReasonOAuth
 
 anthropicHaiku45 :: ComposableProvider (Model ClaudeHaiku45 Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
 anthropicHaiku45 = claudeHaiku45
 
-anthropicHaiku45OAuth :: ComposableProvider (Model ClaudeHaiku45 AnthropicOAuth) (Anthropic.AnthropicReasoningState, (OAuthToolsState, ((), ())))
+anthropicHaiku45OAuth :: ComposableProvider (Model ClaudeHaiku45 AnthropicOAuth) (Anthropic.AnthropicReasoningState, ((), ((), ())))
 anthropicHaiku45OAuth = claudeHaiku45OAuth
 
 anthropicOpus46 :: ComposableProvider (Model ClaudeOpus46 Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
 anthropicOpus46 = claudeOpus46
 
-anthropicOpus46OAuth :: ComposableProvider (Model ClaudeOpus46 AnthropicOAuth) (Anthropic.AnthropicReasoningState, (OAuthToolsState, ((), ())))
+anthropicOpus46OAuth :: ComposableProvider (Model ClaudeOpus46 AnthropicOAuth) (Anthropic.AnthropicReasoningState, ((), ((), ())))
 anthropicOpus46OAuth = claudeOpus46OAuth
 
 -- Backward compat aliases for GLM45Air providers
