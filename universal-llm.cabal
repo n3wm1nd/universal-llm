@@ -41,6 +41,7 @@ library
     UniversalLLM.Models.Qwen
     UniversalLLM.Models.OpenRouter
     UniversalLLM.Models.KimiK25
+    UniversalLLM.Models.MinimaxM25
     UniversalLLM.Protocols.OpenAI
     UniversalLLM.Protocols.Anthropic
     UniversalLLM.Providers.OpenAI
@@ -119,6 +120,7 @@ test-suite universal-llm-tests
     Models.Nova2Lite
     Models.Claude
     Models.KimiK25
+    Models.MinimaxM25
   hs-source-dirs: test
 
   build-depends:

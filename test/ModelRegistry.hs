@@ -44,6 +44,10 @@ import UniversalLLM.Models.KimiK25
   ( KimiK25(..)
   , kimiK25
   )
+import UniversalLLM.Models.MinimaxM25
+  ( MinimaxM25(..)
+  , minimaxM25
+  )
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import TestCache (ResponseProvider)
@@ -107,6 +111,11 @@ modelTests providers = do
   -- Moonshot AI Models
   describe "Kimi K2.5 (OpenRouter)" $
     testModel kimiK25 (Model KimiK25 OpenRouter) (openrouterProvider providers)
+      [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+
+  -- MiniMax Models
+  describe "MiniMax M2.5 (OpenRouter)" $
+    testModel minimaxM25 (Model MinimaxM25 OpenRouter) (openrouterProvider providers)
       [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
 
   -- ZAI Models
