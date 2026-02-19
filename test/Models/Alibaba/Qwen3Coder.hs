@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module: Models.Qwen3Coder
+Module: Models.Alibaba.Qwen3Coder
 
 Model test suite for Qwen 3 Coder
 
@@ -21,12 +21,12 @@ __llama.cpp:__
 
 -}
 
-module Models.Qwen3Coder (testsLlamaCpp) where
+module Models.Alibaba.Qwen3Coder (testsLlamaCpp) where
 
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..))
-import UniversalLLM.Models.Qwen
+import UniversalLLM.Models.Alibaba.Qwen
   ( Qwen3Coder(..)
   , qwen3Coder
   )

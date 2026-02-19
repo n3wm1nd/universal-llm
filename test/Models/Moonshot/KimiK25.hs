@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module: Models.KimiK25
+Module: Models.Moonshot.KimiK25
 
 Model test suite for Moonshot AI Kimi K2.5
 
@@ -22,12 +22,12 @@ __OpenRouter:__
 
 -}
 
-module Models.KimiK25 (testsOpenRouter) where
+module Models.Moonshot.KimiK25 (testsOpenRouter) where
 
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (OpenRouter(..))
-import UniversalLLM.Models.KimiK25
+import UniversalLLM.Models.Moonshot.Kimi
   ( KimiK25(..)
   , kimiK25
   )

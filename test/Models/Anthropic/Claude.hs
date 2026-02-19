@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module: Models.Claude
+Module: Models.Anthropic.Claude
 
 Model test suite for Claude models (Sonnet, Haiku, Opus)
 
@@ -28,13 +28,13 @@ __Anthropic API:__
 
 -}
 
-module Models.Claude (testsSonnet45, testsSonnet46, testsHaiku45, testsOpus46) where
+module Models.Anthropic.Claude (testsSonnet45, testsSonnet46, testsHaiku45, testsOpus46) where
 
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse, model)
 import qualified UniversalLLM.Providers.Anthropic as Anthropic
 import UniversalLLM.Providers.Anthropic (Anthropic(..), AnthropicOAuth(..))
-import UniversalLLM.Models.Anthropic
+import UniversalLLM.Models.Anthropic.Claude
   ( ClaudeSonnet45(..)
   , ClaudeSonnet46(..)
   , ClaudeHaiku45(..)

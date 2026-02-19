@@ -6,7 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 
 {- |
-Module: UniversalLLM.Models.GLM
+Module: UniversalLLM.Models.ZhipuAI.GLM
 Description: Production-ready GLM model definitions
 
 This module provides tested, production-ready definitions for Zhipu AI's GLM models.
@@ -41,7 +41,7 @@ These quirks are handled automatically by the composable providers.
 
 @
 import UniversalLLM
-import UniversalLLM.Models.GLM
+import UniversalLLM.Models.ZhipuAI.GLM
 
 -- Use via llama.cpp
 let model = Model GLM45Air LlamaCpp
@@ -63,7 +63,7 @@ let provider = glm45AirZAI
 - ZAI: Set @ZAI_API_KEY@
 -}
 
-module UniversalLLM.Models.GLM
+module UniversalLLM.Models.ZhipuAI.GLM
   ( -- * Model Types
     GLM45(..)
   , GLM45Air(..)

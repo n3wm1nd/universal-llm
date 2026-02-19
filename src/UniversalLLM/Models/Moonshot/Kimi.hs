@@ -5,8 +5,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module: UniversalLLM.Models.KimiK25
-Description: Production-ready Kimi K2.5 model definition
+Module: UniversalLLM.Models.Moonshot.Kimi
+Description: Production-ready Kimi model definitions
 
 This module provides a tested, production-ready definition for Moonshot AI's
 Kimi K2.5 model, accessed through OpenRouter.
@@ -19,7 +19,7 @@ Kimi K2.5 model, accessed through OpenRouter.
 
 @
 import UniversalLLM
-import UniversalLLM.Models.KimiK25
+import UniversalLLM.Models.Moonshot.Kimi
 
 let model = Model KimiK25 OpenRouter
 let provider = kimiK25
@@ -30,7 +30,7 @@ let provider = kimiK25
 Set @OPENROUTER_API_KEY@ environment variable.
 -}
 
-module UniversalLLM.Models.KimiK25
+module UniversalLLM.Models.Moonshot.Kimi
   ( -- * Model Types
     KimiK25(..)
     -- * Composable Providers

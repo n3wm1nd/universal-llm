@@ -27,20 +27,24 @@ let provider = qwen3Coder
 
 = Model Organization
 
-Models are organized by provider/vendor:
+Models are organized by vendor/family:
 
-- "UniversalLLM.Models.Anthropic" - Claude models
-- "UniversalLLM.Models.GLM" - Zhipu AI's GLM models
-- "UniversalLLM.Models.Qwen" - Alibaba's Qwen models
-- "UniversalLLM.Models.OpenRouter" - Models via OpenRouter
+- "UniversalLLM.Models.Anthropic.Claude" - Anthropic's Claude models
+- "UniversalLLM.Models.Google.Gemini"    - Google Gemini models
+- "UniversalLLM.Models.Amazon.Nova"      - Amazon Nova models
+- "UniversalLLM.Models.ZhipuAI.GLM"     - Zhipu AI's GLM models
+- "UniversalLLM.Models.Alibaba.Qwen"    - Alibaba's Qwen models
+- "UniversalLLM.Models.Moonshot.Kimi"   - Moonshot AI's Kimi models
+- "UniversalLLM.Models.Minimax.M"       - MiniMax models
+- "UniversalLLM.Models.OpenRouter"      - Parametric catch-alls for OpenRouter
 
 = Adding New Models
 
 To add a new production model:
 
-1. Create a module under @UniversalLLM.Models.@ for the vendor
+1. Create a module under @UniversalLLM.Models.Vendor.Family@ (e.g. @Google.Gemini@)
 2. Define the model type and instances
-3. Add tests in @test/Models/@ directory
+3. Add tests in @test/Models/Vendor/@ directory
 4. Re-export from this module
 
 For application-specific models or experiments, define them locally in your app
@@ -50,19 +54,35 @@ rather than adding them here.
 module UniversalLLM.Models
   ( -- * Anthropic Models
     -- | Claude models from Anthropic
-    module UniversalLLM.Models.Anthropic
-    -- * GLM Models
+    module UniversalLLM.Models.Anthropic.Claude
+    -- * Google Models
+    -- | Google Gemini models
+  , module UniversalLLM.Models.Google.Gemini
+    -- * Amazon Models
+    -- | Amazon Nova models
+  , module UniversalLLM.Models.Amazon.Nova
+    -- * ZhipuAI Models
     -- | GLM models from Zhipu AI
-  , module UniversalLLM.Models.GLM
-    -- * Qwen Models
+  , module UniversalLLM.Models.ZhipuAI.GLM
+    -- * Alibaba Models
     -- | Qwen models from Alibaba
-  , module UniversalLLM.Models.Qwen
-    -- * OpenRouter Models
-    -- | Various models via OpenRouter
+  , module UniversalLLM.Models.Alibaba.Qwen
+    -- * Moonshot Models
+    -- | Kimi models from Moonshot AI
+  , module UniversalLLM.Models.Moonshot.Kimi
+    -- * MiniMax Models
+    -- | MiniMax models
+  , module UniversalLLM.Models.Minimax.M
+    -- * OpenRouter Parametric Models
+    -- | Catch-all parametric models for OpenRouter
   , module UniversalLLM.Models.OpenRouter
   ) where
 
-import UniversalLLM.Models.Anthropic
-import UniversalLLM.Models.GLM
-import UniversalLLM.Models.Qwen
+import UniversalLLM.Models.Anthropic.Claude
+import UniversalLLM.Models.Google.Gemini
+import UniversalLLM.Models.Amazon.Nova
+import UniversalLLM.Models.ZhipuAI.GLM
+import UniversalLLM.Models.Alibaba.Qwen
+import UniversalLLM.Models.Moonshot.Kimi
+import UniversalLLM.Models.Minimax.M
 import UniversalLLM.Models.OpenRouter

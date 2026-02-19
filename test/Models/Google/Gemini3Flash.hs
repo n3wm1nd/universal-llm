@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module: Models.Gemini3Flash
+Module: Models.Google.Gemini3Flash
 
 Model test suite for Google Gemini 3 Flash Preview
 
@@ -24,12 +24,12 @@ __OpenRouter:__
 
 -}
 
-module Models.Gemini3Flash (testsOpenRouter) where
+module Models.Google.Gemini3Flash (testsOpenRouter) where
 
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (OpenRouter(..))
-import UniversalLLM.Models.OpenRouter
+import UniversalLLM.Models.Google.Gemini
   ( Gemini3FlashPreview(..)
   , gemini3FlashPreview
   )

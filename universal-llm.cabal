@@ -36,12 +36,14 @@ library
     UniversalLLM.Models
     UniversalLLM.Models.SimpleModel
     UniversalLLM.Models.FullFeaturedModel
-    UniversalLLM.Models.Anthropic
-    UniversalLLM.Models.GLM
-    UniversalLLM.Models.Qwen
+    UniversalLLM.Models.Anthropic.Claude
+    UniversalLLM.Models.Google.Gemini
+    UniversalLLM.Models.Amazon.Nova
+    UniversalLLM.Models.ZhipuAI.GLM
+    UniversalLLM.Models.Alibaba.Qwen
+    UniversalLLM.Models.Moonshot.Kimi
+    UniversalLLM.Models.Minimax.M
     UniversalLLM.Models.OpenRouter
-    UniversalLLM.Models.KimiK25
-    UniversalLLM.Models.MinimaxM25
     UniversalLLM.Protocols.OpenAI
     UniversalLLM.Protocols.Anthropic
     UniversalLLM.Providers.OpenAI
@@ -114,13 +116,13 @@ test-suite universal-llm-tests
     Protocol.Anthropic
     Protocol.AnthropicTests
     Protocol.AnthropicOAuthBlacklist
-    Models.GLM
-    Models.Qwen3Coder
-    Models.Gemini3Flash
-    Models.Nova2Lite
-    Models.Claude
-    Models.KimiK25
-    Models.MinimaxM25
+    Models.Anthropic.Claude
+    Models.Google.Gemini3Flash
+    Models.Amazon.Nova2Lite
+    Models.ZhipuAI.GLM
+    Models.Alibaba.Qwen3Coder
+    Models.Moonshot.KimiK25
+    Models.Minimax.MinimaxM25
   hs-source-dirs: test
 
   build-depends:

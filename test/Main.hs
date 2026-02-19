@@ -24,13 +24,13 @@ import qualified TestHTTP
 import qualified ModelRegistry
 import qualified ReasoningConfigSpec
 import qualified Protocol.OpenAITests
-import qualified Models.GLM
-import qualified Models.Qwen3Coder
-import qualified Models.Gemini3Flash
-import qualified Models.Nova2Lite
-import qualified Models.Claude
-import qualified Models.KimiK25
-import qualified Models.MinimaxM25
+import qualified Models.ZhipuAI.GLM
+import qualified Models.Alibaba.Qwen3Coder
+import qualified Models.Google.Gemini3Flash
+import qualified Models.Amazon.Nova2Lite
+import qualified Models.Anthropic.Claude
+import qualified Models.Moonshot.KimiK25
+import qualified Models.Minimax.MinimaxM25
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse(..), OpenAIErrorResponse(..), OpenAIErrorDetail(..), OpenAICompletionRequest, OpenAICompletionResponse)
 import qualified UniversalLLM.Protocols.OpenAI as OpenAI
@@ -396,18 +396,18 @@ main = do
   hspec $ do
     -- Model-specific tests (protocol probes + standard tests)
     describe "Models" $ do
-      Models.GLM.testsGLM45AirOpenRouter openrouterProvider
-      Models.GLM.testsGLM45AirLlamaCpp llamacppProvider "GLM-4.5-Air"
-      Models.GLM.testsGLM5ZAI zaiProvider
-      Models.Qwen3Coder.testsLlamaCpp llamacppProvider "Qwen-3-Coder"
-      Models.Gemini3Flash.testsOpenRouter openrouterProvider
-      Models.Nova2Lite.testsOpenRouter openrouterProvider
-      Models.Claude.testsSonnet45 anthropicProvider
-      Models.Claude.testsSonnet46 anthropicProvider
-      Models.Claude.testsHaiku45 anthropicProvider
-      Models.Claude.testsOpus46 anthropicProvider
-      Models.KimiK25.testsOpenRouter openrouterProvider
-      Models.MinimaxM25.testsOpenRouter openrouterProvider
+      Models.ZhipuAI.GLM.testsGLM45AirOpenRouter openrouterProvider
+      Models.ZhipuAI.GLM.testsGLM45AirLlamaCpp llamacppProvider "GLM-4.5-Air"
+      Models.ZhipuAI.GLM.testsGLM5ZAI zaiProvider
+      Models.Alibaba.Qwen3Coder.testsLlamaCpp llamacppProvider "Qwen-3-Coder"
+      Models.Google.Gemini3Flash.testsOpenRouter openrouterProvider
+      Models.Amazon.Nova2Lite.testsOpenRouter openrouterProvider
+      Models.Anthropic.Claude.testsSonnet45 anthropicProvider
+      Models.Anthropic.Claude.testsSonnet46 anthropicProvider
+      Models.Anthropic.Claude.testsHaiku45 anthropicProvider
+      Models.Anthropic.Claude.testsOpus46 anthropicProvider
+      Models.Moonshot.KimiK25.testsOpenRouter openrouterProvider
+      Models.Minimax.MinimaxM25.testsOpenRouter openrouterProvider
 
     describe "Composable Handlers" ComposableHandlersSpec.spec
 

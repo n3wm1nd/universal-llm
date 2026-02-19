@@ -5,7 +5,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 {- |
-Module: UniversalLLM.Models.Qwen
+Module: UniversalLLM.Models.Alibaba.Qwen
 Description: Production-ready Qwen model definitions
 
 This module provides tested, production-ready definitions for Alibaba's Qwen models.
@@ -27,7 +27,7 @@ so no special XML parsing is needed.
 
 @
 import UniversalLLM
-import UniversalLLM.Models.Qwen
+import UniversalLLM.Models.Alibaba.Qwen
 
 let model = Model Qwen3Coder LlamaCpp
 let provider = qwen3Coder
@@ -38,7 +38,7 @@ let provider = qwen3Coder
 - llama.cpp: No auth needed (local)
 -}
 
-module UniversalLLM.Models.Qwen
+module UniversalLLM.Models.Alibaba.Qwen
   ( -- * Model Types
     Qwen3Coder(..)
     -- * Composable Providers

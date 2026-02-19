@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module: Models.MinimaxM25
+Module: Models.Minimax.MinimaxM25
 
 Model test suite for MiniMax M2.5
 
@@ -22,12 +22,12 @@ __OpenRouter:__
 
 -}
 
-module Models.MinimaxM25 (testsOpenRouter) where
+module Models.Minimax.MinimaxM25 (testsOpenRouter) where
 
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (OpenRouter(..))
-import UniversalLLM.Models.MinimaxM25
+import UniversalLLM.Models.Minimax.M
   ( MinimaxM25(..)
   , minimaxM25
   )

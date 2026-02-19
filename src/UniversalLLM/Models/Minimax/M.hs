@@ -5,8 +5,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module: UniversalLLM.Models.MinimaxM25
-Description: Production-ready MiniMax M2.5 model definition
+Module: UniversalLLM.Models.Minimax.M
+Description: Production-ready MiniMax model definitions
 
 This module provides a tested, production-ready definition for MiniMax's
 M2.5 model, accessed through OpenRouter.
@@ -19,7 +19,7 @@ M2.5 model, accessed through OpenRouter.
 
 @
 import UniversalLLM
-import UniversalLLM.Models.MinimaxM25
+import UniversalLLM.Models.Minimax.M
 
 let model = Model MinimaxM25 OpenRouter
 let provider = minimaxM25
@@ -30,7 +30,7 @@ let provider = minimaxM25
 Set @OPENROUTER_API_KEY@ environment variable.
 -}
 
-module UniversalLLM.Models.MinimaxM25
+module UniversalLLM.Models.Minimax.M
   ( -- * Model Types
     MinimaxM25(..)
     -- * Composable Providers

@@ -5,8 +5,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 {- |
-Module: UniversalLLM.Models.Anthropic
-Description: Production-ready Anthropic model definitions
+Module: UniversalLLM.Models.Anthropic.Claude
+Description: Production-ready Anthropic Claude model definitions
 
 This module provides tested, production-ready definitions for Anthropic's Claude models.
 These models can be used directly in applications without redefinition.
@@ -20,7 +20,7 @@ These models can be used directly in applications without redefinition.
 
 @
 import UniversalLLM
-import UniversalLLM.Models.Anthropic
+import UniversalLLM.Models.Anthropic.Claude
 
 -- Use with regular Anthropic API (with reasoning)
 let model = Model ClaudeSonnet45 Anthropic
@@ -42,7 +42,7 @@ Set environment variable:
 - OAuth: @ANTHROPIC_OAUTH_TOKEN@
 -}
 
-module UniversalLLM.Models.Anthropic
+module UniversalLLM.Models.Anthropic.Claude
   ( -- * Model Types
     ClaudeSonnet45(..)
   , ClaudeSonnet45NoReason(..)

@@ -84,7 +84,7 @@ import UniversalLLM.Providers.OpenAI (OpenAI(..), LlamaCpp(..), OpenRouter(..), 
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse, OpenAICompletionRequest, OpenAICompletionResponse)
 
 -- Re-export production models
-import UniversalLLM.Models.Anthropic
+import UniversalLLM.Models.Anthropic.Claude
   ( ClaudeSonnet45(..)
   , ClaudeSonnet45NoReason(..)
   , ClaudeHaiku45(..)
@@ -98,7 +98,7 @@ import UniversalLLM.Models.Anthropic
   , claudeOpus46
   , claudeOpus46OAuth
   )
-import UniversalLLM.Models.GLM
+import UniversalLLM.Models.ZhipuAI.GLM
   ( GLM45(..)
   , GLM45Air(..)
   , GLM46(..)
@@ -111,16 +111,18 @@ import UniversalLLM.Models.GLM
   , glm46
   , glm47
   )
-import UniversalLLM.Models.Qwen
+import UniversalLLM.Models.Alibaba.Qwen
   ( Qwen3Coder(..)
   , qwen3Coder
   )
-import UniversalLLM.Models.OpenRouter
+import UniversalLLM.Models.Google.Gemini
   ( Gemini3FlashPreview(..)
   , Gemini3ProPreview(..)
-  , Nova2Lite(..)
   , gemini3FlashPreview
   , gemini3ProPreview
+  )
+import UniversalLLM.Models.Amazon.Nova
+  ( Nova2Lite(..)
   , nova2Lite
   )
 

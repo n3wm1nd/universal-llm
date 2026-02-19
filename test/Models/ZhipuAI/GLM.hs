@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module: Models.GLM
+Module: Models.ZhipuAI.GLM
 
 Test suites for Zhipu AI's GLM model family.
 
@@ -24,7 +24,7 @@ __llama.cpp:__
 
 -}
 
-module Models.GLM
+module Models.ZhipuAI.GLM
   ( testsGLM45AirOpenRouter
   , testsGLM45AirLlamaCpp
   , testsGLM5ZAI
@@ -33,7 +33,7 @@ module Models.GLM
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
-import UniversalLLM.Models.GLM
+import UniversalLLM.Models.ZhipuAI.GLM
   ( GLM45Air(..)
   , GLM5(..)
   , ZAI(..)

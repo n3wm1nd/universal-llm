@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module: Models.Nova2Lite
+Module: Models.Amazon.Nova2Lite
 
 Model test suite for Amazon Nova 2 Lite
 
@@ -27,12 +27,12 @@ __OpenRouter/Amazon Bedrock:__
 
 -}
 
-module Models.Nova2Lite (testsOpenRouter) where
+module Models.Amazon.Nova2Lite (testsOpenRouter) where
 
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (OpenRouter(..))
-import UniversalLLM.Models.OpenRouter
+import UniversalLLM.Models.Amazon.Nova
   ( Nova2Lite(..)
   , nova2Lite
   )
