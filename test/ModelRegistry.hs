@@ -40,6 +40,10 @@ import UniversalLLM.Models.OpenRouter
   , gemini3ProPreview
   , nova2Lite
   )
+import UniversalLLM.Models.KimiK25
+  ( KimiK25(..)
+  , kimiK25
+  )
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import TestCache (ResponseProvider)
@@ -98,6 +102,11 @@ modelTests providers = do
   -- Google Gemini 3 Flash Preview via OpenRouter - High speed reasoning model with tool use
   describe "Gemini 3 Flash Preview (OpenRouter)" $
     testModel gemini3FlashPreview (Model Gemini3FlashPreview OpenRouter) (openrouterProvider providers)
+      [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+
+  -- Moonshot AI Models
+  describe "Kimi K2.5 (OpenRouter)" $
+    testModel kimiK25 (Model KimiK25 OpenRouter) (openrouterProvider providers)
       [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
 
   -- ZAI Models

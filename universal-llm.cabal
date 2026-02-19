@@ -40,6 +40,7 @@ library
     UniversalLLM.Models.GLM
     UniversalLLM.Models.Qwen
     UniversalLLM.Models.OpenRouter
+    UniversalLLM.Models.KimiK25
     UniversalLLM.Protocols.OpenAI
     UniversalLLM.Protocols.Anthropic
     UniversalLLM.Providers.OpenAI
@@ -117,6 +118,7 @@ test-suite universal-llm-tests
     Models.Gemini3Flash
     Models.Nova2Lite
     Models.Claude
+    Models.KimiK25
   hs-source-dirs: test
 
   build-depends:

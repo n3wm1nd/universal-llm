@@ -29,6 +29,7 @@ import qualified Models.Qwen3Coder
 import qualified Models.Gemini3Flash
 import qualified Models.Nova2Lite
 import qualified Models.Claude
+import qualified Models.KimiK25
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse(..), OpenAIErrorResponse(..), OpenAIErrorDetail(..), OpenAICompletionRequest, OpenAICompletionResponse)
 import qualified UniversalLLM.Protocols.OpenAI as OpenAI
@@ -404,6 +405,7 @@ main = do
       Models.Claude.testsSonnet46 anthropicProvider
       Models.Claude.testsHaiku45 anthropicProvider
       Models.Claude.testsOpus46 anthropicProvider
+      Models.KimiK25.testsOpenRouter openrouterProvider
 
     describe "Composable Handlers" ComposableHandlersSpec.spec
 
