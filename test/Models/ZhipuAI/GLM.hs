@@ -7,7 +7,7 @@ Test suites for Zhipu AI's GLM model family.
 
 = Models Covered
 
-* GLM 4.5 Air (OpenRouter, llama.cpp)
+* GLM 4.5 Air (OpenRouter, llama.cpp, ZAI)
 * GLM 5 (ZAI)
 
 = GLM 4.5 Air Provider-Specific Quirks
@@ -27,6 +27,7 @@ __llama.cpp:__
 module Models.ZhipuAI.GLM
   ( testsGLM45AirOpenRouter
   , testsGLM45AirLlamaCpp
+  , testsGLM45AirZAI
   , testsGLM5ZAI
   ) where
 
@@ -39,6 +40,7 @@ import UniversalLLM.Models.ZhipuAI.GLM
   , ZAI(..)
   , glm45AirLlamaCpp
   , glm45AirOpenRouter
+  , glm45AirZAI
   , glm5
   )
 import Protocol.OpenAITests
@@ -96,6 +98,16 @@ testsGLM45AirLlamaCpp provider modelName = do
     describe "Standard Tests" $
       testModel glm45AirLlamaCpp (Model GLM45Air LlamaCpp) provider
         [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+
+-- | Test GLM 4.5 Air via ZAI
+--
+-- Standard tests only - protocol behaviour identical to OpenRouter.
+testsGLM45AirZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsGLM45AirZAI provider = do
+  describe "GLM 4.5 Air via ZAI" $ do
+    describe "Standard Tests" $
+      testModel glm45AirZAI (Model GLM45Air ZAI) provider
+        [ ST.text, ST.tools, ST.reasoning ]
 
 -- | Test GLM 5 via ZAI
 --

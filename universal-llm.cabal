@@ -108,7 +108,6 @@ test-suite universal-llm-tests
     TestHTTP
     TestHelpers
     CachedIntegrationSpec
-    ModelRegistry
     StandardTests
     ReasoningConfigSpec
     Protocol.OpenAI
@@ -117,7 +116,7 @@ test-suite universal-llm-tests
     Protocol.AnthropicTests
     Protocol.AnthropicOAuthBlacklist
     Models.Anthropic.Claude
-    Models.Google.Gemini3Flash
+    Models.Google.Gemini
     Models.Amazon.Nova2Lite
     Models.ZhipuAI.GLM
     Models.Alibaba.Qwen3Coder

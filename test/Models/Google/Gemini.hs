@@ -1,11 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
-Module: Models.Google.Gemini3Flash
+Module: Models.Google.Gemini
 
-Model test suite for Google Gemini 3 Flash Preview
+Model test suite for Google Gemini models
 
-This module tests Gemini 3 Flash when accessed through OpenRouter.
+This module tests Gemini models when accessed through OpenRouter.
 Gemini requires special handling of reasoning_details preservation.
 
 = Discovered Capabilities
@@ -21,17 +21,20 @@ __OpenRouter:__
   Uses reasoning_details field instead of standard reasoning_content
   Requires reasoning_details to be preserved in conversation history
   Tool call chains break if reasoning_details is stripped
+  Requires thought_signature in function calls (cannot use fabricated tool history)
 
 -}
 
-module Models.Google.Gemini3Flash (testsOpenRouter) where
+module Models.Google.Gemini (testsGemini3FlashOpenRouter, testsGemini3ProOpenRouter) where
 
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (OpenRouter(..))
 import UniversalLLM.Models.Google.Gemini
   ( Gemini3FlashPreview(..)
+  , Gemini3ProPreview(..)
   , gemini3FlashPreview
+  , gemini3ProPreview
   )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
@@ -42,8 +45,8 @@ import Test.Hspec (Spec, describe)
 -- | Test Gemini 3 Flash via OpenRouter
 --
 -- Includes both protocol probes (wire format) and standard tests (high-level API).
-testsOpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
-testsOpenRouter provider = do
+testsGemini3FlashOpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsGemini3FlashOpenRouter provider = do
   describe "Gemini 3 Flash via OpenRouter" $ do
     describe "Protocol" $ do
       basicText provider "google/gemini-3-flash-preview"
@@ -72,3 +75,14 @@ testsOpenRouter provider = do
     describe "Standard Tests" $
       testModel gemini3FlashPreview (Model Gemini3FlashPreview OpenRouter) provider
         [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.openAIReasoningDetailsPreservation ]
+
+-- | Test Gemini 3 Pro via OpenRouter
+--
+-- Same protocol quirks as Flash (thought_signature, reasoning_details).
+-- More capable but slower; standard tests only (protocol behaviour identical to Flash).
+testsGemini3ProOpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsGemini3ProOpenRouter provider = do
+  describe "Gemini 3 Pro via OpenRouter" $ do
+    describe "Standard Tests" $
+      testModel gemini3ProPreview (Model Gemini3ProPreview OpenRouter) provider
+        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]

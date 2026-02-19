@@ -21,12 +21,11 @@ import qualified CompletionSpec
 import qualified ToolsSpec
 import qualified TestCache
 import qualified TestHTTP
-import qualified ModelRegistry
 import qualified ReasoningConfigSpec
 import qualified Protocol.OpenAITests
 import qualified Models.ZhipuAI.GLM
 import qualified Models.Alibaba.Qwen3Coder
-import qualified Models.Google.Gemini3Flash
+import qualified Models.Google.Gemini
 import qualified Models.Amazon.Nova2Lite
 import qualified Models.Anthropic.Claude
 import qualified Models.Moonshot.KimiK25
@@ -398,9 +397,11 @@ main = do
     describe "Models" $ do
       Models.ZhipuAI.GLM.testsGLM45AirOpenRouter openrouterProvider
       Models.ZhipuAI.GLM.testsGLM45AirLlamaCpp llamacppProvider "GLM-4.5-Air"
+      Models.ZhipuAI.GLM.testsGLM45AirZAI zaiProvider
       Models.ZhipuAI.GLM.testsGLM5ZAI zaiProvider
       Models.Alibaba.Qwen3Coder.testsLlamaCpp llamacppProvider "Qwen-3-Coder"
-      Models.Google.Gemini3Flash.testsOpenRouter openrouterProvider
+      Models.Google.Gemini.testsGemini3FlashOpenRouter openrouterProvider
+      Models.Google.Gemini.testsGemini3ProOpenRouter openrouterProvider
       Models.Amazon.Nova2Lite.testsOpenRouter openrouterProvider
       Models.Anthropic.Claude.testsSonnet45 anthropicProvider
       Models.Anthropic.Claude.testsSonnet46 anthropicProvider
@@ -436,17 +437,6 @@ main = do
 
     -- Completion interface tests
     describe "OpenAI Completion Interface (cached)" $ CompletionSpec.spec completionProvider
-
-    -- Model Registry Tests (standardized tests for all models)
-    let providers = ModelRegistry.Providers
-          { ModelRegistry.anthropicProvider = anthropicProvider
-          , ModelRegistry.openaiProvider = openaiProvider
-          , ModelRegistry.openrouterProvider = openrouterProvider
-          , ModelRegistry.llamacppProvider = llamacppProvider
-          , ModelRegistry.openaiCompatProvider = openaiCompatProvider
-          , ModelRegistry.zaiProvider = zaiProvider
-          }
-    describe "Model Registry" $ ModelRegistry.modelTests providers
 
     -- Reasoning config tests (unit tests)
     describe "Reasoning Config" ReasoningConfigSpec.spec
