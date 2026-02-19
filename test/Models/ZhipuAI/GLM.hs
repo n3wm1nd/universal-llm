@@ -8,6 +8,9 @@ Test suites for Zhipu AI's GLM model family.
 = Models Covered
 
 * GLM 4.5 Air (OpenRouter, llama.cpp, ZAI)
+* GLM 4.5 (ZAI)
+* GLM 4.6 (ZAI)
+* GLM 4.7 (ZAI)
 * GLM 5 (ZAI)
 
 = GLM 4.5 Air Provider-Specific Quirks
@@ -28,6 +31,9 @@ module Models.ZhipuAI.GLM
   ( testsGLM45AirOpenRouter
   , testsGLM45AirLlamaCpp
   , testsGLM45AirZAI
+  , testsGLM45ZAI
+  , testsGLM46ZAI
+  , testsGLM47ZAI
   , testsGLM5ZAI
   ) where
 
@@ -35,12 +41,18 @@ import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
 import UniversalLLM.Models.ZhipuAI.GLM
-  ( GLM45Air(..)
+  ( GLM45(..)
+  , GLM45Air(..)
+  , GLM46(..)
+  , GLM47(..)
   , GLM5(..)
   , ZAI(..)
+  , glm45
   , glm45AirLlamaCpp
   , glm45AirOpenRouter
   , glm45AirZAI
+  , glm46
+  , glm47
   , glm5
   )
 import Protocol.OpenAITests
@@ -108,6 +120,30 @@ testsGLM45AirZAI provider = do
     describe "Standard Tests" $
       testModel glm45AirZAI (Model GLM45Air ZAI) provider
         [ ST.text, ST.tools, ST.reasoning ]
+
+-- | Test GLM 4.5 (full) via ZAI
+testsGLM45ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsGLM45ZAI provider = do
+  describe "GLM 4.5 via ZAI" $ do
+    describe "Standard Tests" $
+      testModel glm45 (Model GLM45 ZAI) provider
+        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+
+-- | Test GLM 4.6 via ZAI
+testsGLM46ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsGLM46ZAI provider = do
+  describe "GLM 4.6 via ZAI" $ do
+    describe "Standard Tests" $
+      testModel glm46 (Model GLM46 ZAI) provider
+        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+
+-- | Test GLM 4.7 via ZAI
+testsGLM47ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsGLM47ZAI provider = do
+  describe "GLM 4.7 via ZAI" $ do
+    describe "Standard Tests" $
+      testModel glm47 (Model GLM47 ZAI) provider
+        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 5 via ZAI
 --

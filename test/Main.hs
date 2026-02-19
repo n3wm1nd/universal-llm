@@ -398,6 +398,9 @@ main = do
       Models.ZhipuAI.GLM.testsGLM45AirOpenRouter openrouterProvider
       Models.ZhipuAI.GLM.testsGLM45AirLlamaCpp llamacppProvider "GLM-4.5-Air"
       Models.ZhipuAI.GLM.testsGLM45AirZAI zaiProvider
+      Models.ZhipuAI.GLM.testsGLM45ZAI zaiProvider
+      Models.ZhipuAI.GLM.testsGLM46ZAI zaiProvider
+      Models.ZhipuAI.GLM.testsGLM47ZAI zaiProvider
       Models.ZhipuAI.GLM.testsGLM5ZAI zaiProvider
       Models.Alibaba.Qwen3Coder.testsLlamaCpp llamacppProvider "Qwen-3-Coder"
       Models.Google.Gemini.testsGemini3FlashOpenRouter openrouterProvider
