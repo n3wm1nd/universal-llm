@@ -411,6 +411,7 @@ main = do
       Models.Anthropic.Claude.testsHaiku45 anthropicProvider
       Models.Anthropic.Claude.testsOpus46 anthropicProvider
       Models.Moonshot.KimiK25.testsOpenRouter openrouterProvider
+      Models.Minimax.MinimaxM25.testsLlamaCpp llamacppProvider "MiniMax-M2.5"
       Models.Minimax.MinimaxM25.testsOpenRouter openrouterProvider
 
     describe "Composable Handlers" ComposableHandlersSpec.spec
