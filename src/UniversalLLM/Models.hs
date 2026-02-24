@@ -73,6 +73,9 @@ module UniversalLLM.Models
     -- * MiniMax Models
     -- | MiniMax models
   , module UniversalLLM.Models.Minimax.M
+    -- * OpenAI Models
+    -- | OpenAI open-weight models
+  , module UniversalLLM.Models.OpenAI.GPT
     -- * OpenRouter Parametric Models
     -- | Catch-all parametric models for OpenRouter
   , module UniversalLLM.Models.OpenRouter
@@ -85,4 +88,5 @@ import UniversalLLM.Models.ZhipuAI.GLM
 import UniversalLLM.Models.Alibaba.Qwen
 import UniversalLLM.Models.Moonshot.Kimi
 import UniversalLLM.Models.Minimax.M
+import UniversalLLM.Models.OpenAI.GPT
 import UniversalLLM.Models.OpenRouter

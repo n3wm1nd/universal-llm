@@ -152,3 +152,8 @@ canonicalizationTests = describe "GGUF Name Canonicalization" $ do
     result `shouldContain` ["Qwen3-Coder"]
     result `shouldContain` ["Qwen-3-Coder"]  -- Dash variant
     result `shouldContain` ["qwen-3-coder"]  -- Lowercase
+
+  it "handles GPT-OSS multi-part GGUF" $ do
+    let result = canonicalizeGGUFNames "gpt-oss-120b-Q4_K_M-00001-of-00002.gguf"
+    result `shouldContain` ["gpt-oss-120b"]
+    result `shouldContain` ["gpt-oss"]

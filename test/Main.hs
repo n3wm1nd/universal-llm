@@ -26,6 +26,7 @@ import qualified Models.Amazon.Nova2Lite
 import qualified Models.Anthropic.Claude
 import qualified Models.Moonshot.KimiK25
 import qualified Models.Minimax.MinimaxM25
+import qualified Models.OpenAI.GPTOSS
 import GGUFNames (canonicalizationTests)
 import TestProviders (Providers(..), buildProviders)
 
@@ -53,6 +54,8 @@ main = do
       Models.Anthropic.Claude.testsOpus46 (anthropicProvider p)
       Models.Moonshot.KimiK25.testsOpenRouter (openrouterProvider p)
       Models.Minimax.MinimaxM25.testsLlamaCpp (llamacppProvider p) "MiniMax-M2.5"
+      Models.OpenAI.GPTOSS.testsLlamaCpp (llamacppProvider p) "gpt-oss-120b"
+      Models.OpenAI.GPTOSS.testsOpenRouter (openrouterProvider p)
       Models.Minimax.MinimaxM25.testsOpenRouter (openrouterProvider p)
 
     describe "Composable Handlers" ComposableHandlersSpec.spec

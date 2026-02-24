@@ -43,6 +43,7 @@ library
     UniversalLLM.Models.Alibaba.Qwen
     UniversalLLM.Models.Moonshot.Kimi
     UniversalLLM.Models.Minimax.M
+    UniversalLLM.Models.OpenAI.GPT
     UniversalLLM.Models.OpenRouter
     UniversalLLM.Protocols.OpenAI
     UniversalLLM.Protocols.Anthropic
@@ -124,6 +125,7 @@ test-suite universal-llm-tests
     Models.Alibaba.Qwen3Coder
     Models.Moonshot.KimiK25
     Models.Minimax.MinimaxM25
+    Models.OpenAI.GPTOSS
   hs-source-dirs: test
 
   build-depends:
