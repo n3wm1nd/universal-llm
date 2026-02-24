@@ -3,10 +3,11 @@
 {- |
 Module: Models.Alibaba.Qwen3Coder
 
-Model test suite for Qwen 3 Coder
+Model test suite for Qwen 3 Coder variants
 
-This module tests Qwen 3 Coder when served through llama.cpp's OpenAI-compatible
-endpoint. Unlike GLM-4.5, Qwen uses proper tool_calls field (not XML).
+This module tests Qwen 3 Coder models when served through llama.cpp's
+OpenAI-compatible endpoint. Unlike GLM-4.5, Qwen uses proper tool_calls
+field (not XML).
 
 = Discovered Capabilities
 
@@ -21,35 +22,31 @@ __llama.cpp:__
 
 -}
 
-module Models.Alibaba.Qwen3Coder (testsLlamaCpp) where
+module Models.Alibaba.Qwen3Coder (testsLlamaCppNext, testsLlamaCpp30bInstruct) where
 
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..))
 import UniversalLLM.Models.Alibaba.Qwen
-  ( Qwen3Coder(..)
-  , qwen3Coder
+  ( Qwen3CoderNext(..)
+  , qwen3CoderNext
+  , Qwen3Coder30bInstruct(..)
+  , qwen3Coder30bInstruct
   )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
 import TestCache (ResponseProvider)
 import TestHelpers (testModel)
 import Test.Hspec (Spec, describe)
-import qualified Data.Text as T
 import Data.Text (Text)
 
--- | Test Qwen 3 Coder via llama.cpp
---
--- Takes the canonicalized model name as determined by querying the llama.cpp
--- server. The model name is extracted from the loaded GGUF file.
---
--- Includes both protocol probes (wire format) and standard tests (high-level API).
-testsLlamaCpp :: ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
-testsLlamaCpp provider modelName = do
-  describe ("Qwen 3 Coder via llama.cpp with " <> T.unpack modelName) $ do
+-- | Test Qwen 3 Coder Next via llama.cpp
+testsLlamaCppNext :: ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+testsLlamaCppNext provider modelName = do
+  describe "Qwen 3 Coder Next via llama.cpp" $ do
     describe "Protocol" $ do
       basicText provider modelName
-      toolCalling provider modelName  -- Uses proper tool_calls (not XML)
+      toolCalling provider modelName
       acceptsToolResults provider modelName
       acceptsToolResultNoTools provider modelName
       acceptsToolResultToolGone provider modelName
@@ -59,5 +56,24 @@ testsLlamaCpp provider modelName = do
       startsWithAssistant provider modelName
 
     describe "Standard Tests" $
-      testModel qwen3Coder (Model Qwen3Coder LlamaCpp) provider
+      testModel qwen3CoderNext (Model Qwen3CoderNext LlamaCpp) provider
+        [ ST.text, ST.tools ]
+
+-- | Test Qwen 3 Coder 30B Instruct via llama.cpp
+testsLlamaCpp30bInstruct :: ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+testsLlamaCpp30bInstruct provider modelName = do
+  describe "Qwen 3 Coder 30B Instruct via llama.cpp" $ do
+    describe "Protocol" $ do
+      basicText provider modelName
+      toolCalling provider modelName
+      acceptsToolResults provider modelName
+      acceptsToolResultNoTools provider modelName
+      acceptsToolResultToolGone provider modelName
+      acceptsStaleToolInHistory provider modelName
+      acceptsOldToolCallStillAvailable provider modelName
+      consecutiveUserMessages provider modelName
+      startsWithAssistant provider modelName
+
+    describe "Standard Tests" $
+      testModel qwen3Coder30bInstruct (Model Qwen3Coder30bInstruct LlamaCpp) provider
         [ ST.text, ST.tools ]

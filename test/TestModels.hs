@@ -26,7 +26,8 @@ module TestModels
   , GLM46(..)
   , GLM47(..)
   , ZAI(..)
-  , Qwen3Coder(..)
+  , Qwen3CoderNext(..)
+  , Qwen3Coder
   , Gemini3FlashPreview(..)
   , Gemini3ProPreview(..)
   , Nova2Lite(..)
@@ -112,7 +113,8 @@ import UniversalLLM.Models.ZhipuAI.GLM
   , glm47
   )
 import UniversalLLM.Models.Alibaba.Qwen
-  ( Qwen3Coder(..)
+  ( Qwen3CoderNext(..)
+  , Qwen3Coder
   , qwen3Coder
   )
 import UniversalLLM.Models.Google.Gemini

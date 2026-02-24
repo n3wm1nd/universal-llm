@@ -44,7 +44,8 @@ main = do
       Models.ZhipuAI.GLM.testsGLM46ZAI (zaiProvider p)
       Models.ZhipuAI.GLM.testsGLM47ZAI (zaiProvider p)
       Models.ZhipuAI.GLM.testsGLM5ZAI (zaiProvider p)
-      Models.Alibaba.Qwen3Coder.testsLlamaCpp (llamacppProvider p) "Qwen-3-Coder"
+      Models.Alibaba.Qwen3Coder.testsLlamaCppNext (llamacppProvider p) "Qwen3-Coder-Next"
+      Models.Alibaba.Qwen3Coder.testsLlamaCpp30bInstruct (llamacppProvider p) "Qwen3-Coder-30B-Instruct"
       Models.Google.Gemini.testsGemini3FlashOpenRouter (openrouterProvider p)
       Models.Google.Gemini.testsGemini3ProOpenRouter (openrouterProvider p)
       Models.Amazon.Nova2Lite.testsOpenRouter (openrouterProvider p)
