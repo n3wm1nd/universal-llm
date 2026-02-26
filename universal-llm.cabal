@@ -123,6 +123,7 @@ test-suite universal-llm-tests
     Models.Amazon.Nova2Lite
     Models.ZhipuAI.GLM
     Models.Alibaba.Qwen3Coder
+    Models.Alibaba.Qwen35
     Models.Moonshot.KimiK25
     Models.Minimax.MinimaxM25
     Models.OpenAI.GPTOSS

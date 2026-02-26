@@ -21,6 +21,7 @@ import qualified ReasoningConfigSpec
 import qualified Protocol.OpenAITests
 import qualified Models.ZhipuAI.GLM
 import qualified Models.Alibaba.Qwen3Coder
+import qualified Models.Alibaba.Qwen35
 import qualified Models.Google.Gemini
 import qualified Models.Amazon.Nova2Lite
 import qualified Models.Anthropic.Claude
@@ -44,6 +45,8 @@ main = do
       Models.ZhipuAI.GLM.testsGLM46ZAI (zaiProvider p)
       Models.ZhipuAI.GLM.testsGLM47ZAI (zaiProvider p)
       Models.ZhipuAI.GLM.testsGLM5ZAI (zaiProvider p)
+      Models.Alibaba.Qwen35.testsOpenRouter (openrouterProvider p)
+      Models.Alibaba.Qwen35.testsLlamaCpp (llamacppProvider p) "Qwen3.5-122B"
       Models.Alibaba.Qwen3Coder.testsLlamaCppNext (llamacppProvider p) "Qwen3-Coder-Next"
       Models.Alibaba.Qwen3Coder.testsLlamaCpp30bInstruct (llamacppProvider p) "Qwen3-Coder-30B-Instruct"
       Models.Google.Gemini.testsGemini3FlashOpenRouter (openrouterProvider p)
