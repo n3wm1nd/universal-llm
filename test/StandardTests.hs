@@ -14,6 +14,9 @@
 module StandardTests
   ( StandardTest(..)
   , text
+  , systemMessage
+  , systemMessageMidConversation
+  , multipleSystemPrompts
   , tools
   , toolWithName
   , reasoning
@@ -90,6 +93,83 @@ text = StandardTest $ \cp model initialState getResponse -> do
 
       -- Second response should also contain messages
       length parsedMsgs2 `shouldSatisfy` (> 0)
+
+-- ============================================================================
+-- System Message Ordering Tests
+-- ============================================================================
+
+-- | Test that system messages at the start of conversation work
+systemMessage :: ( Monoid (ProviderRequest m)
+                 , SupportsMaxTokens (ProviderOf m)
+                 )
+              => StandardTest m state
+systemMessage = StandardTest $ \cp model initialState getResponse -> do
+  describe "System Message" $ do
+    it "handles system message at start of conversation" $ do
+      let configs = [MaxTokens 2048]
+          msgs = [ SystemText "You are a helpful assistant."
+                 , UserText "What is 2+2?"
+                 ]
+          (_, req) = toProviderRequest cp model configs initialState msgs
+
+      resp <- getResponse req
+
+      let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs initialState resp
+
+      length parsedMsgs `shouldSatisfy` (> 0)
+
+-- | Test that system messages mid-conversation are handled by the provider
+--
+-- Some chat templates (e.g. Qwen3.5) require system messages at the beginning.
+-- The composable provider should handle this transparently — callers should be
+-- able to place SystemText anywhere in the message list.
+systemMessageMidConversation :: ( Monoid (ProviderRequest m)
+                                , SupportsMaxTokens (ProviderOf m)
+                                )
+                             => StandardTest m state
+systemMessageMidConversation = StandardTest $ \cp model initialState getResponse -> do
+  describe "System Message Mid-Conversation" $ do
+    it "handles system message after assistant response" $ do
+      let configs = [MaxTokens 2048]
+          msgs = [ UserText "What is 2+2?"
+                 , AssistantText "4"
+                 , SystemText "You are a helpful assistant."
+                 , UserText "And what is 3+3?"
+                 ]
+          (_, req) = toProviderRequest cp model configs initialState msgs
+
+      resp <- getResponse req
+
+      let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs initialState resp
+
+      length parsedMsgs `shouldSatisfy` (> 0)
+
+-- | Test that multiple SystemPrompt configs are handled correctly
+--
+-- runix-code sends multiple SystemPrompt configs (main prompt + CLAUDE.md files).
+-- Each becomes a separate role:"system" message in the request. Some chat templates
+-- (e.g. Qwen3.5) may only accept a single system message.
+multipleSystemPrompts :: ( Monoid (ProviderRequest m)
+                         , SupportsMaxTokens (ProviderOf m)
+                         , SupportsSystemPrompt (ProviderOf m)
+                         )
+                      => StandardTest m state
+multipleSystemPrompts = StandardTest $ \cp model initialState getResponse -> do
+  describe "Multiple System Prompts" $ do
+    it "handles multiple SystemPrompt configs" $ do
+      let configs = [ MaxTokens 2048
+                    , SystemPrompt "You are a helpful assistant."
+                    , SystemPrompt "Always respond concisely."
+                    , SystemPrompt "Use plain language."
+                    ]
+          msgs = [UserText "What is 2+2?"]
+          (_, req) = toProviderRequest cp model configs initialState msgs
+
+      resp <- getResponse req
+
+      let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs initialState resp
+
+      length parsedMsgs `shouldSatisfy` (> 0)
 
 -- ============================================================================
 -- Tool Tests

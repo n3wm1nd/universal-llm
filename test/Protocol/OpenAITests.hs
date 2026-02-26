@@ -294,6 +294,62 @@ startsWithAssistant makeRequest modelName = do
     resp <- makeRequest req
     assertHasAssistantText resp
 
+-- | Probe: System message mid-conversation
+--
+-- __Tests:__ Does the API accept a system message after user/assistant messages?
+--
+-- __Checks:__ Response succeeds with system message in the middle of history
+--
+-- __Expected to pass:__ APIs that allow system messages anywhere
+--
+-- __Expected to fail:__ Models with chat templates that require system at beginning
+-- (e.g. Qwen3.5 raises "System message must be at the beginning")
+--
+-- __Note:__ If this fails but systemMessageAtStart passes, the model requires
+-- system messages to be hoisted to the front. Use systemMessagesFirst provider handler.
+systemMessageMidConversation :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+systemMessageMidConversation makeRequest modelName = do
+  it "accepts system message mid-conversation" $ do
+    let req = requestWithSystemMidConversation { model = modelName }
+    resp <- makeRequest req
+    assertHasAssistantText resp
+
+-- | Probe: System message at start of conversation
+--
+-- __Tests:__ Does the API accept a system message at the beginning?
+--
+-- __Checks:__ Response succeeds with system message before user message
+--
+-- __Expected to pass:__ Almost all models
+--
+-- __Expected to fail:__ Models that don't support system messages at all
+systemMessageAtStart :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+systemMessageAtStart makeRequest modelName = do
+  it "accepts system message at start" $ do
+    let req = requestWithSystemAtStart { model = modelName }
+    resp <- makeRequest req
+    assertHasAssistantText resp
+
+-- | Probe: Multiple system messages
+--
+-- __Tests:__ Does the API accept multiple system messages at the start?
+--
+-- __Checks:__ Response succeeds with three system messages before user message
+--
+-- __Expected to pass:__ APIs/templates that accept multiple system messages
+--
+-- __Expected to fail:__ Templates that only accept a single system message
+-- (e.g. Qwen3.5 raises "System message must be at the beginning")
+--
+-- __Note:__ If this fails, the model needs mergeSystemMessages provider handler
+-- to collapse multiple SystemPrompt configs into one.
+multipleSystemMessages :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+multipleSystemMessages makeRequest modelName = do
+  it "accepts multiple system messages" $ do
+    let req = requestWithMultipleSystemMessages { model = modelName }
+    resp <- makeRequest req
+    assertHasAssistantText resp
+
 -- | Probe: Tool result with no tools defined
 --
 -- __Tests:__ Does the API accept tool results when tools field is None/empty?

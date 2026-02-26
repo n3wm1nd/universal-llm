@@ -58,10 +58,13 @@ testsOpenRouter provider = do
       startsWithAssistant provider "qwen/qwen3.5-122b-a10b"
       reasoningViaDetails provider "qwen/qwen3.5-122b-a10b"
       toolCallingWithReasoning provider "qwen/qwen3.5-122b-a10b"
+      systemMessageAtStart provider "qwen/qwen3.5-122b-a10b"
+      systemMessageMidConversation provider "qwen/qwen3.5-122b-a10b"
+      multipleSystemMessages provider "qwen/qwen3.5-122b-a10b"
 
     describe "Standard Tests" $
       testModel qwen35_122BOpenRouter (Model Qwen35_122B OpenRouter) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
 
 -- | Test Qwen 3.5 122B via llama.cpp
 testsLlamaCpp :: ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
@@ -78,7 +81,13 @@ testsLlamaCpp provider modelName = do
       consecutiveUserMessages provider modelName
       startsWithAssistant provider modelName
       reasoning provider modelName
+      systemMessageAtStart provider modelName
+      -- Note: multipleSystemMessages and systemMessageMidConversation fail -
+      -- Qwen3.5 chat template requires exactly one system message at the beginning.
+      -- Mitigated by mergeSystemMessages and systemMessagesFirst in provider.
+      -- multipleSystemMessages provider modelName
+      -- systemMessageMidConversation provider modelName
 
     describe "Standard Tests" $
       testModel qwen35_122B (Model Qwen35_122B LlamaCpp) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]

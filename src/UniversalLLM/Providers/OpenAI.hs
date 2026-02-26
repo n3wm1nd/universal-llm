@@ -346,6 +346,65 @@ baseComposableProvider modelProxy configs _s = noopHandler
             _ -> Right Nothing
         [] -> Right Nothing
 
+-- | Composable provider that hoists system messages to the front of the message list.
+--
+-- Some chat templates (e.g. Qwen3.5) require all system messages to appear before
+-- any user/assistant messages. This provider rewrites the message list to move all
+-- SystemText messages to the beginning, preserving their relative order.
+--
+-- Chain this into providers for models with this constraint:
+--
+-- @
+-- myProvider = systemMessagesFirst \`chainProviders\` withTools \`chainProviders\` baseComposableProvider
+-- @
+systemMessagesFirst :: forall m. ComposableProvider m ()
+systemMessagesFirst _m _configs _s = noopHandler
+  { cpPureMessageRequest = hoistSystemMessages
+  }
+  where
+    hoistSystemMessages msgs =
+      let (sysMsgs, others) = partition isSystemMessage msgs
+      in sysMsgs ++ others
+
+    isSystemMessage (SystemText _) = True
+    isSystemMessage _ = False
+
+    partition _ [] = ([], [])
+    partition p (x:xs)
+      | p x       = let (yes, no) = partition p xs in (x:yes, no)
+      | otherwise  = let (yes, no) = partition p xs in (yes, x:no)
+
+-- | Composable provider that merges multiple system messages into one.
+--
+-- Some chat templates (e.g. Qwen3.5) only accept a single system message.
+-- When multiple 'SystemPrompt' configs are provided, 'baseComposableProvider'
+-- creates one @role: "system"@ message per config. This provider merges them
+-- all into a single system message, concatenating their content with newlines.
+--
+-- Operates on the encoded 'OpenAIRequest' via 'cpConfigHandler', so it runs
+-- after 'baseComposableProvider' has already inserted the system messages.
+--
+-- @
+-- myProvider = mergeSystemMessages \`chainProviders\` systemMessagesFirst \`chainProviders\` ... \`chainProviders\` baseComposableProvider
+-- @
+mergeSystemMessages :: forall m. (ProviderRequest m ~ OpenAIRequest) => ComposableProvider m ()
+mergeSystemMessages _m _configs _s = noopHandler
+  { cpConfigHandler = modifyMessages mergeSystemMsgs
+  }
+  where
+    mergeSystemMsgs msgs =
+      let (sysMsgs, others) = partition (\msg -> role msg == "system") msgs
+      in case sysMsgs of
+           []  -> others
+           [_] -> sysMsgs ++ others
+           _   -> let merged = systemMessage (T.intercalate "\n\n" [t | msg <- sysMsgs, Just t <- [content msg]])
+                  in merged : others
+
+    partition _ [] = ([], [])
+    partition p (x:xs)
+      | p x       = let (yes, no) = partition p xs in (x:yes, no)
+      | otherwise  = let (yes, no) = partition p xs in (yes, x:no)
+
 -- Standalone reasoning provider
 openAIReasoning :: forall m state. (HasReasoning m, ProviderRequest m ~ OpenAIRequest, ProviderResponse m ~ OpenAIResponse) => ComposableProvider m state
 openAIReasoning _m configs _s = noopHandler

@@ -189,6 +189,50 @@ toolResponseMessage callId result = emptyMessage
   , content = Just result
   }
 
+-- | Create a system message
+systemMsg :: Text -> OpenAIMessage
+systemMsg txt = emptyMessage { role = "system", content = Just txt }
+
+-- | Create a request with system message mid-conversation
+--
+-- History: user message, then system message, then user message.
+-- Tests if the API accepts system messages that are not at the beginning.
+requestWithSystemMidConversation :: OpenAIRequest
+requestWithSystemMidConversation = mempty
+  { messages =
+      [ userMessage "What is 2+2?"
+      , assistantMessage "4"
+      , systemMsg "You are a helpful assistant."
+      , userMessage "And what is 3+3?"
+      ]
+  }
+
+-- | Create a request with system message at the beginning
+--
+-- History: system message, then user message.
+-- This is the expected/standard positioning.
+requestWithSystemAtStart :: OpenAIRequest
+requestWithSystemAtStart = mempty
+  { messages =
+      [ systemMsg "You are a helpful assistant."
+      , userMessage "What is 2+2?"
+      ]
+  }
+
+-- | Create a request with multiple system messages
+--
+-- History: three system messages, then user message.
+-- Tests if the API accepts more than one system message.
+requestWithMultipleSystemMessages :: OpenAIRequest
+requestWithMultipleSystemMessages = mempty
+  { messages =
+      [ systemMsg "You are a helpful assistant."
+      , systemMsg "Always respond concisely."
+      , systemMsg "Use plain language."
+      , userMessage "What is 2+2?"
+      ]
+  }
+
 -- | Create a request with fabricated tool call history
 --
 -- This creates a conversation with:

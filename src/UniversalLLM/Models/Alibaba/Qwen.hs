@@ -95,8 +95,13 @@ instance HasReasoning (Model Qwen35_122B LlamaCpp) where
   withReasoning = OpenAI.openAIReasoning
 
 -- | Composable provider for Qwen 3.5 122B via llama.cpp
-qwen35_122B :: ComposableProvider (Model Qwen35_122B LlamaCpp) ((), ((), ((), ())))
-qwen35_122B = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen35_122B LlamaCpp)
+--
+-- Qwen3.5's chat template requires exactly one system message at the beginning.
+-- Two mitigations are chained:
+--   * 'systemMessagesFirst' hoists mid-conversation SystemText to the front
+--   * 'mergeSystemMessages' collapses multiple system messages into one
+qwen35_122B :: ComposableProvider (Model Qwen35_122B LlamaCpp) ((), ((), ((), ((), ((), ())))))
+qwen35_122B = OpenAI.mergeSystemMessages `chainProviders` OpenAI.systemMessagesFirst `chainProviders` withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen35_122B LlamaCpp)
 
 --------------------------------------------------------------------------------
 -- Qwen 3.5 122B via OpenRouter
