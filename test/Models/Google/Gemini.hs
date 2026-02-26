@@ -74,7 +74,7 @@ testsGemini3FlashOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel gemini3FlashPreview (Model Gemini3FlashPreview OpenRouter) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.openAIReasoningDetailsPreservation ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.openAIReasoningDetailsPreservation ]
 
 -- | Test Gemini 3 Pro via OpenRouter
 --
@@ -85,4 +85,4 @@ testsGemini3ProOpenRouter provider = do
   describe "Gemini 3 Pro via OpenRouter" $ do
     describe "Standard Tests" $
       testModel gemini3ProPreview (Model Gemini3ProPreview OpenRouter) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]

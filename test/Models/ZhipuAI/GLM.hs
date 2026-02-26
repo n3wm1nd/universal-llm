@@ -84,7 +84,7 @@ testsGLM45AirOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel glm45AirOpenRouter (Model GLM45Air OpenRouter) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 4.5 Air via llama.cpp
 --
@@ -109,7 +109,7 @@ testsGLM45AirLlamaCpp provider modelName = do
 
     describe "Standard Tests" $
       testModel glm45AirLlamaCpp (Model GLM45Air LlamaCpp) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
 
 -- | Test GLM 4.5 Air via ZAI
 --
@@ -119,7 +119,7 @@ testsGLM45AirZAI provider = do
   describe "GLM 4.5 Air via ZAI" $ do
     describe "Standard Tests" $
       testModel glm45AirZAI (Model GLM45Air ZAI) provider
-        [ ST.text, ST.tools, ST.reasoning ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning ]
 
 -- | Test GLM 4.5 (full) via ZAI
 testsGLM45ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
@@ -127,7 +127,7 @@ testsGLM45ZAI provider = do
   describe "GLM 4.5 via ZAI" $ do
     describe "Standard Tests" $
       testModel glm45 (Model GLM45 ZAI) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 4.6 via ZAI
 testsGLM46ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
@@ -135,7 +135,7 @@ testsGLM46ZAI provider = do
   describe "GLM 4.6 via ZAI" $ do
     describe "Standard Tests" $
       testModel glm46 (Model GLM46 ZAI) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 4.7 via ZAI
 testsGLM47ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
@@ -143,7 +143,7 @@ testsGLM47ZAI provider = do
   describe "GLM 4.7 via ZAI" $ do
     describe "Standard Tests" $
       testModel glm47 (Model GLM47 ZAI) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 5 via ZAI
 --
@@ -165,4 +165,4 @@ testsGLM5ZAI provider = do
 
     describe "Standard Tests" $
       testModel glm5 (Model GLM5 ZAI) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]

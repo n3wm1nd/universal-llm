@@ -61,4 +61,4 @@ testsOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel kimiK25 (Model KimiK25 OpenRouter) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]

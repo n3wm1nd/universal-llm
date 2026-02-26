@@ -64,7 +64,7 @@ testsOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel gptOSSOpenRouter (Model GPTOSS OpenRouter) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
 
 -- | Test GPT-OSS via llama.cpp
 --
@@ -89,4 +89,4 @@ testsLlamaCpp provider modelName = do
 
     describe "Standard Tests" $
       testModel gptOSS (Model GPTOSS LlamaCpp) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]

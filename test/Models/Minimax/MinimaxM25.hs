@@ -67,7 +67,7 @@ testsOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel minimaxM25 (Model MinimaxM25 OpenRouter) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
 
 -- | Test MiniMax M2.5 via llama.cpp
 --
@@ -92,4 +92,4 @@ testsLlamaCpp provider modelName = do
 
     describe "Standard Tests" $
       testModel minimaxM25LlamaCpp (Model MinimaxM25 LlamaCpp) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]

@@ -73,7 +73,7 @@ testsSonnet45 provider = do
 
     describe "Standard Tests" $
       testModel claudeSonnet45OAuth (Model ClaudeSonnet45 Anthropic.AnthropicOAuth) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
 
     describe "OAuth Provider Tests" $
       testModel claudeSonnet45OAuth (Model ClaudeSonnet45 Anthropic.AnthropicOAuth) provider
@@ -106,7 +106,7 @@ testsSonnet46 provider = do
 
     describe "Standard Tests" $
       testModel claudeSonnet46OAuth (Model ClaudeSonnet46 Anthropic.AnthropicOAuth) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
 
     describe "OAuth Provider Tests" $
       testModel claudeSonnet46OAuth (Model ClaudeSonnet46 Anthropic.AnthropicOAuth) provider
@@ -139,7 +139,7 @@ testsHaiku45 provider = do
 
     describe "Standard Tests" $
       testModel claudeHaiku45OAuth (Model ClaudeHaiku45 Anthropic.AnthropicOAuth) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
 
     describe "OAuth Provider Tests" $
       testModel claudeHaiku45OAuth (Model ClaudeHaiku45 Anthropic.AnthropicOAuth) provider
@@ -174,7 +174,7 @@ testsOpus46 provider = do
 
     describe "Standard Tests" $
       testModel claudeOpus46OAuth (Model ClaudeOpus46 Anthropic.AnthropicOAuth) provider
-        [ ST.text, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
 
     describe "OAuth Provider Tests" $
       testModel claudeOpus46OAuth (Model ClaudeOpus46 Anthropic.AnthropicOAuth) provider

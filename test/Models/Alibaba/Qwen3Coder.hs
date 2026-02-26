@@ -57,7 +57,7 @@ testsLlamaCppNext provider modelName = do
 
     describe "Standard Tests" $
       testModel qwen3CoderNext (Model Qwen3CoderNext LlamaCpp) provider
-        [ ST.text, ST.tools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
 
 -- | Test Qwen 3 Coder 30B Instruct via llama.cpp
 testsLlamaCpp30bInstruct :: ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
@@ -76,4 +76,4 @@ testsLlamaCpp30bInstruct provider modelName = do
 
     describe "Standard Tests" $
       testModel qwen3Coder30bInstruct (Model Qwen3Coder30bInstruct LlamaCpp) provider
-        [ ST.text, ST.tools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]

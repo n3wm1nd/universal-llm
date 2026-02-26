@@ -86,4 +86,4 @@ testsOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel nova2Lite (Model Nova2Lite OpenRouter) provider
-        [ ST.text, ST.tools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
