@@ -33,13 +33,16 @@ buildStreamingRequestWithReasoning :: [ModelConfig (Model TestModels.ClaudeSonne
 buildStreamingRequestWithReasoning configs msgs = buildStreamingRequestGeneric TestModels.anthropicSonnet45OAuth (Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth) (def, ((), ((), ()))) configs msgs
 
 -- Generic helper to build streaming request with explicit composable provider
-buildStreamingRequestGeneric :: forall model s. ComposableProvider (Model model Provider.AnthropicOAuth) s
+buildStreamingRequestGeneric :: forall model s. HasStreaming (Model model Provider.AnthropicOAuth)
+                           => ComposableProvider (Model model Provider.AnthropicOAuth) s
                            -> Model model Provider.AnthropicOAuth
                            -> s
                            -> [ModelConfig (Model model Provider.AnthropicOAuth)]
                            -> [Message (Model model Provider.AnthropicOAuth)]
                            -> AnthropicRequest
-buildStreamingRequestGeneric composableProvider modelValue s configs msgs = snd $ toProviderRequest composableProvider modelValue configs s msgs
+buildStreamingRequestGeneric composableProvider modelValue s configs msgs =
+  let req = snd $ toProviderRequest composableProvider modelValue configs s msgs
+  in Proto.enableAnthropicStreaming req
 
 spec :: ResponseProvider AnthropicRequest BSL.ByteString -> Spec
 spec getResponse = do
@@ -47,7 +50,7 @@ spec getResponse = do
 
     it "sends streaming request and receives SSE response with message_stop event" $ do
       let model = Model ClaudeSonnet45 Provider.Anthropic
-          configs = [MaxTokens 100, Streaming True]
+          configs = [MaxTokens 100]
           msgs = [UserText "Say hello"]
           req = Provider.withMagicSystemPrompt $
                  buildStreamingRequest configs msgs
@@ -84,7 +87,7 @@ spec getResponse = do
                 , "required" .= (["location"] :: [Text])
                 ]
             }
-          configs = [MaxTokens 2048, Tools [toolDef], Streaming True]
+          configs = [MaxTokens 2048, Tools [toolDef]]
           msgs = [UserText "What's the weather in Paris?"]
           req = Provider.withMagicSystemPrompt $
                  buildStreamingRequest configs msgs
@@ -112,7 +115,7 @@ spec getResponse = do
     it "sends streaming request with extended thinking and receives SSE response with thinking_delta events" $ do
       -- Use ClaudeSonnet45 for this test since reasoning requires HasReasoning instance
       let model = Model ClaudeSonnet45 Provider.Anthropic
-          configs = [MaxTokens 16000, Streaming True, Reasoning True]
+          configs = [MaxTokens 16000, Reasoning True]
           msgs = [UserText "Solve this puzzle: What has cities but no houses, forests but no trees, and water but no fish?"]
           req = Provider.withMagicSystemPrompt $
                  buildStreamingRequestWithReasoning configs msgs
@@ -154,7 +157,7 @@ spec getResponse = do
                 , "required" .= (["location"] :: [Text])
                 ]
             }
-          configs = [MaxTokens 16000, Tools [toolDef], Streaming True, Reasoning True]
+          configs = [MaxTokens 16000, Tools [toolDef], Reasoning True]
           msgs = [UserText "What's the weather in Paris?"]
           req = Provider.withMagicSystemPrompt $
                  buildStreamingRequestWithReasoning configs msgs
@@ -197,7 +200,7 @@ spec getResponse = do
                 , "required" .= (["location"] :: [Text])
                 ]
             }
-          configs = [MaxTokens 16000, Tools [toolDef], Streaming True, Reasoning True]
+          configs = [MaxTokens 16000, Tools [toolDef], Reasoning True]
           msgs = [UserText "What's the weather in Paris?"]
           req = Provider.withMagicSystemPrompt $
                  buildStreamingRequestWithReasoning configs msgs

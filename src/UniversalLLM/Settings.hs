@@ -24,9 +24,8 @@ import Data.Text
 
 -- | Setting types - newtypes wrapping configuration values
 -- These can be used to build type-safe config records for models
-
-newtype StreamingSetting = StreamingSetting Bool
-  deriving (Show, Eq, Generic)
+-- NOTE: Streaming is NOT a setting - it's determined by which interpreter is used
+-- (interpretLLM for non-streaming, interpretLLMStream for streaming)
 
 newtype ReasoningSetting = ReasoningSetting Bool
   deriving (Show, Eq, Generic)
@@ -41,9 +40,6 @@ newtype MaxTokensSetting = MaxTokensSetting Int
 class SettingDescription setting where
   settingDescription :: Text
 
-instance SettingDescription StreamingSetting where
-  settingDescription = "Enable streaming responses"
-
 instance SettingDescription ReasoningSetting where
   settingDescription = "Enable reasoning extraction"
 
@@ -54,9 +50,6 @@ instance SettingDescription MaxTokensSetting where
   settingDescription = "Maximum tokens to generate"
 
 -- | Default values for settings
-instance Default StreamingSetting where
-  def = StreamingSetting True
-
 instance Default ReasoningSetting where
   def = ReasoningSetting True
 
@@ -70,9 +63,6 @@ instance Default MaxTokensSetting where
 -- Instances are constraint-based, ensuring only valid settings can be applied
 class ApplySetting setting model where
   applySetting :: setting -> ModelConfig model
-
-instance SupportsStreaming (ProviderOf model) => ApplySetting StreamingSetting model where
-  applySetting (StreamingSetting b) = Streaming b
 
 instance HasReasoning model => ApplySetting ReasoningSetting model where
   applySetting (ReasoningSetting b) = Reasoning b

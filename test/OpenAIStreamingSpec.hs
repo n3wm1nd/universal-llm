@@ -31,14 +31,16 @@ buildStreamingRequest :: [ModelConfig TestModel]
 buildStreamingRequest configs msgs = buildStreamingRequestGeneric TestModels.openRouterGLM45Air (Model GLM45Air Provider.OpenRouter) (def, ((), ((), ()))) configs msgs
 
 -- Generic helper to build streaming request with explicit composable provider
-buildStreamingRequestGeneric :: forall m s. (ProviderRequest m ~ OpenAIRequest, Monoid (ProviderRequest m))
+buildStreamingRequestGeneric :: forall m s. (ProviderRequest m ~ OpenAIRequest, Monoid (ProviderRequest m), HasStreaming m)
                            => ComposableProvider m s
                            -> m
                            -> s
                            -> [ModelConfig m]
                            -> [Message m]
                            -> OpenAIRequest
-buildStreamingRequestGeneric composableProvider model s configs msgs = snd $ toProviderRequest composableProvider model configs s msgs
+buildStreamingRequestGeneric composableProvider model s configs msgs =
+  let req = snd $ toProviderRequest composableProvider model configs s msgs
+  in Proto.enableOpenAIStreaming req
 
 spec :: ResponseProvider OpenAIRequest BSL.ByteString -> Spec
 spec getResponse = do
@@ -46,7 +48,7 @@ spec getResponse = do
 
     it "sends streaming request and receives SSE response with stream completion" $ do
       let model = GLM45
-          configs = [MaxTokens 100, Streaming True]
+          configs = [MaxTokens 100]
           msgs = [UserText "Say hello"]
           req = buildStreamingRequest configs msgs
 
@@ -84,7 +86,7 @@ spec getResponse = do
                 , "required" .= (["location"] :: [Text])
                 ]
             }
-          configs = [MaxTokens 2048, Tools [toolDef], Streaming True]
+          configs = [MaxTokens 2048, Tools [toolDef]]
           msgs = [UserText "What's the weather in Paris?"]
           req = buildStreamingRequest configs msgs
 
@@ -112,7 +114,7 @@ spec getResponse = do
     it "sends streaming request with reasoning and receives SSE response with reasoning_content" $ do
       let model = GLM45
           -- Reasoning config for models that support it
-          configs = [MaxTokens 16000, Streaming True, Reasoning True]
+          configs = [MaxTokens 16000, Reasoning True]
           msgs = [UserText "Solve this puzzle: What has cities but no houses, forests but no trees, and water but no fish?"]
           req = buildStreamingRequest configs msgs
 
@@ -161,7 +163,7 @@ spec getResponse = do
                 , "required" .= (["location"] :: [Text])
                 ]
             }
-          configs = [MaxTokens 16000, Tools [toolDef], Streaming True, Reasoning True]
+          configs = [MaxTokens 16000, Tools [toolDef], Reasoning True]
           msgs = [UserText "What's the weather in Paris?"]
           req = buildStreamingRequest configs msgs
 

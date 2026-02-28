@@ -208,10 +208,7 @@ baseComposableProvider model configs _s = noopHandler
           req1 = if null sysBlocks then req else setSystemBlocks sysBlocks req
           -- Add cache control to conversation history
           req2 = addConversationCacheControl req1
-          streamEnabled = case [s | Streaming s <- configs] of
-            (s:_) -> Just s
-            [] -> stream req2
-      in req2 { stream = streamEnabled }
+      in req2
   , cpFromResponse = parseTextResponse
   , cpSerializeMessage = serializeBaseMessage
   , cpDeserializeMessage = deserializeBaseMessage

@@ -319,10 +319,7 @@ baseComposableProvider modelProxy configs _s = noopHandler
       let systemPrompts = [sp | SystemPrompt sp <- configs]
           sysMessages = map systemMessage systemPrompts
           reqWithSysMessages = modifyMessages (sysMessages <>) req
-          streamEnabled = case [s | Streaming s <- configs] of
-            (s:_) -> Just s
-            [] -> stream reqWithSysMessages
-      in reqWithSysMessages { stream = streamEnabled }
+      in reqWithSysMessages
   , cpFromResponse = parseTextResponse
   , cpSerializeMessage = serializeBaseMessage
   , cpDeserializeMessage = deserializeBaseMessage

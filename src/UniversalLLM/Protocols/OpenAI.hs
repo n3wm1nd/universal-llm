@@ -342,6 +342,15 @@ convertFromToolCall (InvalidToolCall tcId tcName _tcArgs _err) = OpenAIToolCall
   }
 
 -- ============================================================================
+-- Streaming Helper
+-- ============================================================================
+
+-- | Enable streaming for OpenAI requests
+-- Only callable when the model has streaming support (constrained by HasStreaming)
+enableOpenAIStreaming :: OpenAIRequest -> OpenAIRequest
+enableOpenAIStreaming req = req { stream = Just True }
+
+-- ============================================================================
 -- OpenAI Completion API (Legacy /v1/completions endpoint)
 -- ============================================================================
 

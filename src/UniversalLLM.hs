@@ -83,6 +83,10 @@ class HasReasoning m where
   type ReasoningState m = ()
   withReasoning :: ComposableProvider m (ReasoningState m)
 
+-- HasStreaming checks if the provider supports streaming
+-- This is just a type alias constraint, not a separate class
+type HasStreaming m = SupportsStreaming (ProviderOf m)
+
 -- ModelConfig GADT - configuration values with model constraints
 -- Only constructible if the provider supports the parameter and/or model
 data ModelConfig m where
@@ -94,7 +98,6 @@ data ModelConfig m where
   Tools :: HasTools m => [ToolDefinition] -> ModelConfig m
   Reasoning :: HasReasoning m => Bool -> ModelConfig m
   ReasoningEffort :: HasReasoning m => Text -> ModelConfig m  -- Effort level: "low", "medium", "high", "max" (Opus 4.6+)
-  Streaming :: SupportsStreaming (ProviderOf m) => Bool -> ModelConfig m
 
 -- Provider-specific model names
 class ModelName m where

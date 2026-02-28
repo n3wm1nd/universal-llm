@@ -370,6 +370,15 @@ withToolCacheControl tools = init tools ++ [lastTool { anthropicToolCacheControl
 -- NOTE: ProtocolHandleTools was removed - tool handling is now done inline in the provider
 
 -- ============================================================================
+-- Streaming Helper
+-- ============================================================================
+
+-- | Enable streaming for Anthropic requests
+-- Only callable when the model has streaming support (constrained by HasStreaming)
+enableAnthropicStreaming :: AnthropicRequest -> AnthropicRequest
+enableAnthropicStreaming req = req { stream = Just True }
+
+-- ============================================================================
 -- Streaming Support - Delta Merger for SSE
 -- ============================================================================
 

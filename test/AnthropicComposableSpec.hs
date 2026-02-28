@@ -30,6 +30,13 @@ buildRequest :: TestModel
              -> AnthropicRequest
 buildRequest model = buildRequestGeneric TestModels.anthropicSonnet45NoReasonOAuth model ((), ((), ()))
 
+-- Helper to build STREAMING request for ClaudeSonnet45NoReason
+buildStreamingRequest :: TestModel
+                      -> [ModelConfig TestModel]
+                      -> [Message TestModel]
+                      -> AnthropicRequest
+buildStreamingRequest model = buildStreamingRequestGeneric TestModels.anthropicSonnet45NoReasonOAuth model ((), ((), ()))
+
 -- Type alias for the reasoning test model
 type TestModelWithReasoning = Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth
 
@@ -40,6 +47,13 @@ buildRequestWithReasoning :: TestModelWithReasoning
                           -> AnthropicRequest
 buildRequestWithReasoning model = buildRequestGeneric TestModels.anthropicSonnet45OAuth model (def, ((), ((), ())))
 
+-- Helper to build STREAMING request for ClaudeSonnet45 (with reasoning)
+buildStreamingRequestWithReasoning :: TestModelWithReasoning
+                                   -> [ModelConfig TestModelWithReasoning]
+                                   -> [Message TestModelWithReasoning]
+                                   -> AnthropicRequest
+buildStreamingRequestWithReasoning model = buildStreamingRequestGeneric TestModels.anthropicSonnet45OAuth model (def, ((), ((), ())))
+
 -- Generic helper to build request with explicit composable provider
 buildRequestGeneric :: forall m s. (ProviderRequest m ~ AnthropicRequest)
                     => ComposableProvider m s
@@ -48,7 +62,20 @@ buildRequestGeneric :: forall m s. (ProviderRequest m ~ AnthropicRequest)
                     -> [ModelConfig m]
                     -> [Message m]
                     -> AnthropicRequest
-buildRequestGeneric composableProvider model s configs = snd . toProviderRequest composableProvider model configs s
+buildRequestGeneric composableProvider model s configs msgs =
+  snd $ toProviderRequest composableProvider model configs s msgs
+
+-- Generic helper to build STREAMING request with explicit composable provider
+buildStreamingRequestGeneric :: forall m s. (ProviderRequest m ~ AnthropicRequest, HasStreaming m)
+                             => ComposableProvider m s
+                             -> m
+                             -> s
+                             -> [ModelConfig m]
+                             -> [Message m]
+                             -> AnthropicRequest
+buildStreamingRequestGeneric composableProvider model s configs msgs =
+  let req = snd $ toProviderRequest composableProvider model configs s msgs
+  in Proto.enableAnthropicStreaming req
 
 -- Helper to parse response for ClaudeSonnet45NoReason
 parseResponse :: TestModel
@@ -307,9 +334,9 @@ spec getResponse = do
                     ]
                 ]
             }
-          configs = [MaxTokens 2048, Tools [toolDef], Streaming True]
+          configs = [MaxTokens 2048, Tools [toolDef]]
           msgs = [UserText "Calculate 2+2" :: Message TestModel]
-          req = buildRequest model configs msgs
+          req = buildStreamingRequest model configs msgs
 
       -- Verify streaming is enabled
       Proto.stream req `shouldBe` Just True
@@ -335,9 +362,9 @@ spec getResponse = do
                     ]
                 ]
             }
-          configs = [MaxTokens 4000, Tools [toolDef], Streaming True]
+          configs = [MaxTokens 4000, Tools [toolDef]]
           msgs = [UserText "Search for Haskell" :: Message TestModelWithReasoning]
-          req = buildRequestWithReasoning model configs msgs
+          req = buildStreamingRequestWithReasoning model configs msgs
 
       -- Verify streaming and reasoning are enabled
       Proto.stream req `shouldBe` Just True
@@ -501,10 +528,10 @@ spec getResponse = do
                 , "required" .= (["location"] :: [Text])
                 ]
             }
-          configs = [MaxTokens 2048, Tools [toolDef], Streaming True]
+          configs = [MaxTokens 2048, Tools [toolDef]]
           msgs = [UserText "What's the weather in Paris?" :: Message TestModel]
           req = Provider.withMagicSystemPrompt $
-                 buildRequest model configs msgs
+                 buildStreamingRequest model configs msgs
 
       -- Verify the request is correctly configured for streaming
       Proto.stream req `shouldBe` Just True
