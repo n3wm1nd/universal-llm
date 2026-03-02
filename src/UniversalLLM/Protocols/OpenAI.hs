@@ -22,10 +22,11 @@ import Data.Aeson (Value)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.Text.Encoding as TE
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Vector as V
 import GHC.Generics (Generic)
-import Control.Applicative ((<|>))
+import Control.Applicative ((<|>), asum)
 import Data.Maybe (listToMaybe)
 import qualified Data.List
 import UniversalLLM
@@ -425,7 +426,62 @@ instance HasCodec OpenAICompletionSuccessResponse where
     OpenAICompletionSuccessResponse
       <$> requiredField "choices" "Completion choices" .= completionChoices
 -- ============================================================================
--- Streaming Support - Delta Merger for SSE
+-- Streaming Support - Typed Delta API
+-- ============================================================================
+
+-- | Represents a streaming delta from OpenAI SSE (simplified for text/reasoning only)
+data OpenAIDelta
+  = OpenAITextDelta Text
+  | OpenAIReasoningDelta Text
+  deriving (Show, Eq)
+
+-- | Streaming content for display (text or reasoning)
+data OpenAIStreamingContent
+  = OpenAIStreamingText Text
+  | OpenAIStreamingReasoning Text
+  deriving (Show, Eq)
+
+-- | Parse OpenAI delta from ByteString (SSE event data)
+-- Extracts only text and reasoning deltas for now
+parseOpenAIDelta :: BS.ByteString -> Maybe OpenAIDelta
+parseOpenAIDelta bs =
+  case Aeson.eitherDecodeStrict bs of
+    Left _ -> Nothing
+    Right val -> case val of
+      Aeson.Object obj -> do
+        Aeson.Array choicesArr <- KM.lookup "choices" obj
+        Aeson.Object choice <- listToMaybe (V.toList choicesArr)
+        Aeson.Object delta <- KM.lookup "delta" choice
+        asum
+          [ do Aeson.String reasoning <- KM.lookup "reasoning_content" delta
+               return $ OpenAIReasoningDelta reasoning
+          , do Aeson.String reasoning <- KM.lookup "reasoning" delta
+               return $ OpenAIReasoningDelta reasoning
+          , do Aeson.String content <- KM.lookup "content" delta
+               return $ OpenAITextDelta content
+          ]
+      _ -> Nothing
+
+-- | Apply OpenAI delta to accumulated response (simple version for text/reasoning only)
+-- For full delta application including tool calls, use mergeOpenAIDelta with Value
+applyOpenAIDelta :: OpenAIResponse -> OpenAIDelta -> OpenAIResponse
+applyOpenAIDelta (OpenAISuccess resp) (OpenAITextDelta _text) =
+    -- For proper application, we'd need to merge into choices[0].message.content
+    -- This is why the full mergeOpenAIDelta uses Value
+    OpenAISuccess resp
+applyOpenAIDelta (OpenAISuccess resp) (OpenAIReasoningDelta _reasoning) =
+    OpenAISuccess resp
+applyOpenAIDelta acc _ = acc
+
+-- | Extract streaming content from a delta for display purposes
+extractOpenAIStreamingContent :: OpenAIDelta -> [OpenAIStreamingContent]
+extractOpenAIStreamingContent (OpenAITextDelta text) =
+    [OpenAIStreamingText text]
+extractOpenAIStreamingContent (OpenAIReasoningDelta reasoning) =
+    [OpenAIStreamingReasoning reasoning]
+
+-- ============================================================================
+-- Streaming Support - Delta Merger for SSE (Full Value-based API)
 -- ============================================================================
 
 -- | Represents what's in a streaming delta

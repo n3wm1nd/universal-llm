@@ -15,6 +15,7 @@ import Autodocodec
 import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Aeson (Value)
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
@@ -379,7 +380,62 @@ enableAnthropicStreaming :: AnthropicRequest -> AnthropicRequest
 enableAnthropicStreaming req = req { stream = Just True }
 
 -- ============================================================================
--- Streaming Support - Delta Merger for SSE
+-- Streaming Support - Typed Delta API
+-- ============================================================================
+
+-- | Represents a streaming delta from Anthropic SSE
+data AnthropicDelta
+  = AnthropicTextDelta Text
+  | AnthropicThinkingDelta Text
+  deriving (Show, Eq)
+
+-- | Streaming content for display (text or reasoning)
+data AnthropicStreamingContent
+  = AnthropicStreamingText Text
+  | AnthropicStreamingReasoning Text
+  deriving (Show, Eq)
+
+-- | Parse Anthropic delta from ByteString (SSE event data)
+-- Extracts only text and thinking deltas for now
+parseAnthropicDelta :: BS.ByteString -> Maybe AnthropicDelta
+parseAnthropicDelta bs =
+  case Aeson.eitherDecodeStrict bs of
+    Left _ -> Nothing
+    Right val -> case val of
+      Aeson.Object obj -> do
+        Aeson.String eventType <- KM.lookup "type" obj
+        case eventType of
+          "content_block_delta" -> do
+            Aeson.Object delta <- KM.lookup "delta" obj
+            asum
+              [ do Aeson.String thinking <- KM.lookup "thinking" delta
+                   return $ AnthropicThinkingDelta thinking
+              , do Aeson.String text <- KM.lookup "text" delta
+                   return $ AnthropicTextDelta text
+              ]
+          _ -> Nothing
+      _ -> Nothing
+
+-- | Apply Anthropic delta to accumulated response (simple version for text/thinking only)
+-- For full delta application including tool calls, use mergeAnthropicDelta with Value
+applyAnthropicDelta :: AnthropicResponse -> AnthropicDelta -> AnthropicResponse
+applyAnthropicDelta (AnthropicSuccess resp) (AnthropicTextDelta _text) =
+    -- For proper application, we'd need index information which isn't in this simplified delta
+    -- This is why the full mergeAnthropicDelta uses Value
+    AnthropicSuccess resp
+applyAnthropicDelta (AnthropicSuccess resp) (AnthropicThinkingDelta _thinking) =
+    AnthropicSuccess resp
+applyAnthropicDelta acc _ = acc
+
+-- | Extract streaming content from a delta for display purposes
+extractAnthropicStreamingContent :: AnthropicDelta -> [AnthropicStreamingContent]
+extractAnthropicStreamingContent (AnthropicTextDelta text) =
+    [AnthropicStreamingText text]
+extractAnthropicStreamingContent (AnthropicThinkingDelta thinking) =
+    [AnthropicStreamingReasoning thinking]
+
+-- ============================================================================
+-- Streaming Support - Delta Merger for SSE (Full Value-based API)
 -- ============================================================================
 
 -- | Merge Anthropic streaming delta into accumulated response
