@@ -8,14 +8,19 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeApplications #-}
 
 
 module UniversalLLM.Settings where
 
 import UniversalLLM
 import GHC.Generics
+import GHC.TypeLits (KnownSymbol, symbolVal)
 import Data.Default (Default(..))
-import Data.Text
+import Data.Proxy (Proxy(..))
+import Data.Text (Text, pack)
 
 
 -- ============================================================================
@@ -144,3 +149,197 @@ toModelConfigs cfg = gApplySettings (from cfg)
 -- The canonical config is expected to always work for the model, though other
 -- compatible config types may also be used.
 type family ConfigFor model
+
+-- ============================================================================
+-- Runtime Setting Introspection
+-- ============================================================================
+
+-- | Runtime representation of any setting value
+data SettingValue = BoolValue Bool | DoubleValue Double | IntValue Int
+  deriving (Show, Eq)
+
+-- | A single field fully reified for UI display
+data SettingField = SettingField
+  { sfName        :: Text
+  , sfDescription :: Text
+  , sfValue       :: SettingValue
+  , sfOptional    :: Bool    -- ^ True if the field is Maybe-wrapped
+  , sfEnabled     :: Bool    -- ^ For optional fields: True if Just, False if Nothing
+  } deriving (Show, Eq)
+
+-- | Bridge setting newtypes to SettingValue
+class SettingReify a where
+  reifySetting :: a -> SettingValue
+
+instance SettingReify ReasoningSetting where
+  reifySetting (ReasoningSetting b) = BoolValue b
+
+instance SettingReify TemperatureSetting where
+  reifySetting (TemperatureSetting t) = DoubleValue t
+
+instance SettingReify MaxTokensSetting where
+  reifySetting (MaxTokensSetting n) = IntValue n
+
+-- | Inject a SettingValue back into a setting newtype
+class SettingInject a where
+  injectSetting :: SettingValue -> Maybe a
+
+instance SettingInject ReasoningSetting where
+  injectSetting (BoolValue b) = Just (ReasoningSetting b)
+  injectSetting _ = Nothing
+
+instance SettingInject TemperatureSetting where
+  injectSetting (DoubleValue t) = Just (TemperatureSetting t)
+  injectSetting _ = Nothing
+
+instance SettingInject MaxTokensSetting where
+  injectSetting (IntValue n) = Just (MaxTokensSetting n)
+  injectSetting _ = Nothing
+
+-- ============================================================================
+-- Generic Field Introspection
+-- ============================================================================
+
+-- | Extract [SettingField] from a generic config record
+class GSettingFields f where
+  gSettingFields :: f p -> [SettingField]
+
+instance GSettingFields U1 where
+  gSettingFields U1 = []
+
+instance (GSettingFields f, GSettingFields g) => GSettingFields (f :*: g) where
+  gSettingFields (f :*: g) = gSettingFields f ++ gSettingFields g
+
+instance GSettingFields f => GSettingFields (D1 d f) where
+  gSettingFields (M1 x) = gSettingFields x
+
+instance GSettingFields f => GSettingFields (C1 c f) where
+  gSettingFields (M1 x) = gSettingFields x
+
+-- Required field: S1 with a non-Maybe type
+instance {-# OVERLAPPABLE #-}
+  (KnownSymbol name, SettingReify a, SettingDescription a)
+  => GSettingFields (S1 ('MetaSel ('Just name) su ss ds) (Rec0 a)) where
+  gSettingFields (M1 (K1 x)) =
+    [ SettingField
+        { sfName = pack (symbolVal (Proxy :: Proxy name))
+        , sfDescription = settingDescription @a
+        , sfValue = reifySetting x
+        , sfOptional = False
+        , sfEnabled = True
+        }
+    ]
+
+-- Optional field: S1 with a Maybe-wrapped type
+instance {-# OVERLAPPING #-}
+  (KnownSymbol name, SettingReify a, SettingDescription a, Default a)
+  => GSettingFields (S1 ('MetaSel ('Just name) su ss ds) (Rec0 (Maybe a))) where
+  gSettingFields (M1 (K1 mx)) =
+    [ SettingField
+        { sfName = pack (symbolVal (Proxy :: Proxy name))
+        , sfDescription = settingDescription @a
+        , sfValue = case mx of
+            Just x  -> reifySetting x
+            Nothing -> reifySetting (def :: a)  -- Show default when disabled
+        , sfOptional = True
+        , sfEnabled = case mx of { Just _ -> True; Nothing -> False }
+        }
+    ]
+
+-- | Top-level: extract all setting fields from a config record
+settingFields :: (Generic cfg, GSettingFields (Rep cfg)) => cfg -> [SettingField]
+settingFields cfg = gSettingFields (from cfg)
+
+-- ============================================================================
+-- Generic Field Modification
+-- ============================================================================
+
+-- | Modify a field by name given a SettingValue
+class GSetField f where
+  gSetField :: Text -> SettingValue -> f p -> Maybe (f p)
+
+instance GSetField U1 where
+  gSetField _ _ _ = Nothing
+
+instance (GSetField f, GSetField g) => GSetField (f :*: g) where
+  gSetField name val (f :*: g) =
+    case gSetField name val f of
+      Just f' -> Just (f' :*: g)
+      Nothing -> case gSetField name val g of
+        Just g' -> Just (f :*: g')
+        Nothing -> Nothing
+
+instance GSetField f => GSetField (D1 d f) where
+  gSetField name val (M1 x) = M1 <$> gSetField name val x
+
+instance GSetField f => GSetField (C1 c f) where
+  gSetField name val (M1 x) = M1 <$> gSetField name val x
+
+-- Required field
+instance {-# OVERLAPPABLE #-}
+  (KnownSymbol name, SettingInject a)
+  => GSetField (S1 ('MetaSel ('Just name) su ss ds) (Rec0 a)) where
+  gSetField fieldName val (M1 (K1 _))
+    | fieldName == pack (symbolVal (Proxy :: Proxy name)) =
+        case injectSetting val of
+          Just a  -> Just (M1 (K1 a))
+          Nothing -> Nothing
+    | otherwise = Nothing
+
+-- Optional (Maybe) field — set value inside Just
+instance {-# OVERLAPPING #-}
+  (KnownSymbol name, SettingInject a)
+  => GSetField (S1 ('MetaSel ('Just name) su ss ds) (Rec0 (Maybe a))) where
+  gSetField fieldName val (M1 (K1 _))
+    | fieldName == pack (symbolVal (Proxy :: Proxy name)) =
+        case injectSetting val of
+          Just a  -> Just (M1 (K1 (Just a)))
+          Nothing -> Nothing
+    | otherwise = Nothing
+
+-- | Top-level: set a field by name
+setField :: (Generic cfg, GSetField (Rep cfg)) => Text -> SettingValue -> cfg -> Maybe cfg
+setField name val cfg = to <$> gSetField name val (from cfg)
+
+-- ============================================================================
+-- Generic Field Toggle (enable/disable Maybe fields)
+-- ============================================================================
+
+-- | Toggle enable/disable for Maybe-wrapped fields
+class GToggleField f where
+  gToggleField :: Text -> Bool -> f p -> Maybe (f p)
+
+instance GToggleField U1 where
+  gToggleField _ _ _ = Nothing
+
+instance (GToggleField f, GToggleField g) => GToggleField (f :*: g) where
+  gToggleField name enabled (f :*: g) =
+    case gToggleField name enabled f of
+      Just f' -> Just (f' :*: g)
+      Nothing -> case gToggleField name enabled g of
+        Just g' -> Just (f :*: g')
+        Nothing -> Nothing
+
+instance GToggleField f => GToggleField (D1 d f) where
+  gToggleField name enabled (M1 x) = M1 <$> gToggleField name enabled x
+
+instance GToggleField f => GToggleField (C1 c f) where
+  gToggleField name enabled (M1 x) = M1 <$> gToggleField name enabled x
+
+-- Non-Maybe fields can't be toggled
+instance {-# OVERLAPPABLE #-}
+  GToggleField (S1 ('MetaSel ('Just name) su ss ds) (Rec0 a)) where
+  gToggleField _ _ _ = Nothing
+
+-- Maybe fields: enable → Just def, disable → Nothing
+instance {-# OVERLAPPING #-}
+  (KnownSymbol name, Default a)
+  => GToggleField (S1 ('MetaSel ('Just name) su ss ds) (Rec0 (Maybe a))) where
+  gToggleField fieldName enabled (M1 (K1 _))
+    | fieldName == pack (symbolVal (Proxy :: Proxy name)) =
+        Just $ M1 $ K1 $ if enabled then Just def else Nothing
+    | otherwise = Nothing
+
+-- | Top-level: toggle an optional field on or off
+toggleField :: (Generic cfg, GToggleField (Rep cfg)) => Text -> Bool -> cfg -> Maybe cfg
+toggleField name enabled cfg = to <$> gToggleField name enabled (from cfg)
