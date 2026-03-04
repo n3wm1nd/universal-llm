@@ -67,6 +67,7 @@ import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Types (parseEither)
 import Data.List (find)
 import Data.Functor.Identity (Identity(..))
+import UniversalLLM.SchemaCoercion (coerceWithCodec)
 
 -- Re-export from Core.Types
 import UniversalLLM
@@ -250,9 +251,14 @@ instance {-# OVERLAPPING #-} (ToolParameter a, HasCodec a, TupleParser rest) => 
     parsedParam <- case KM.lookup paramKey obj of
       Nothing -> Right Nothing           -- Missing = Nothing
       Just Aeson.Null -> Right Nothing   -- Explicit null = Nothing
-      Just val -> case parseEither parseJSONViaCodec val of
-        Left err -> Left $ "Failed to parse parameter " <> paramName' <> ": " <> T.pack err
-        Right v -> Right (Just v)
+      Just val -> do
+        -- Apply schema-guided coercion to fix broken providers (e.g., z.ai stringifying integers)
+        coerced <- case coerceWithCodec @a val of
+          Left err -> Left $ "Coercion failed for " <> paramName' <> ": " <> err
+          Right v -> Right v
+        case parseEither parseJSONViaCodec coerced of
+          Left err -> Left $ "Failed to parse parameter " <> paramName' <> ": " <> T.pack err
+          Right v -> Right (Just v)
 
     -- Recursively parse the rest
     restParams <- parseJsonToTuple (Proxy @rest) (drop 1 metas) obj
@@ -272,8 +278,13 @@ instance (ToolParameter a, TupleParser rest) => TupleParser (a, rest) where
       Nothing -> Left $ "Missing parameter: " <> paramName'
       Just val -> Right val
 
+    -- Apply schema-guided coercion to fix broken providers (e.g., z.ai stringifying integers)
+    coercedValue <- case coerceWithCodec @a paramValue of
+      Left err -> Left $ "Coercion failed for " <> paramName' <> ": " <> err
+      Right v -> Right v
+
     -- Parse the value using HasCodec
-    parsedParam <- case parseEither parseJSONViaCodec paramValue of
+    parsedParam <- case parseEither parseJSONViaCodec coercedValue of
       Left err -> Left $ "Failed to parse parameter " <> paramName' <> ": " <> T.pack err
       Right val -> Right val
 

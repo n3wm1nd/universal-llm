@@ -31,6 +31,7 @@ library
     UniversalLLM
     UniversalLLM.Tools
     UniversalLLM.Serialization
+    UniversalLLM.SchemaCoercion
     UniversalLLM.ProviderM
     UniversalLLM.Settings
     UniversalLLM.Models
