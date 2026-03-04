@@ -123,8 +123,8 @@ instance ToolParameter a => ToolParameter [a] where
   paramDescription _p = "a list of " <> paramDescription (Proxy @a)
 
 instance ToolParameter a => ToolParameter (Maybe a) where
-  paramName _ n = "optional_" <> T.pack (show n)
-  paramDescription _p = "an optional " <> paramDescription (Proxy @a)
+  paramName p n = paramName (Proxy @a) n
+  paramDescription _p = paramDescription (Proxy @a)
 
 -- | Type family to detect if a type is Maybe
 type family IsOptional a :: Bool where

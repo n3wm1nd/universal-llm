@@ -98,7 +98,8 @@ spec = describe "Tools" $ do
             Just (Aeson.Object props) -> do
               KM.size props `shouldBe` 2
               KM.member "text_0" props `shouldBe` True
-              KM.member "optional_1" props `shouldBe` True
+              -- Maybe Int uses Int's parameter name: "number_1"
+              KM.member "number_1" props `shouldBe` True
             _ -> expectationFailure "properties should have two fields"
           case KM.lookup "required" obj of
             Just (Aeson.Array arr) -> do
@@ -256,7 +257,8 @@ spec = describe "Tools" $ do
         Right _ -> expectationFailure "Should have failed with type error"
 
     it "parses Maybe parameter when present" $ do
-      let obj = KM.fromList [("text_0", Aeson.String "hello"), ("optional_1", Aeson.Number 42)]
+      -- Maybe Int uses Int's parameter name: "number_1"
+      let obj = KM.fromList [("text_0", Aeson.String "hello"), ("number_1", Aeson.Number 42)]
           result = parseJsonToDefaultTuple (Proxy @(Text, (Maybe Int, ()))) obj
       result `shouldBe` Right ("hello", (Just 42, ()))
 
@@ -266,7 +268,8 @@ spec = describe "Tools" $ do
       result `shouldBe` Right ("hello", (Nothing, ()))
 
     it "parses Maybe parameter when explicitly null (as Nothing)" $ do
-      let obj = KM.fromList [("text_0", Aeson.String "hello"), ("optional_1", Aeson.Null)]
+      -- Maybe Int uses Int's parameter name: "number_1"
+      let obj = KM.fromList [("text_0", Aeson.String "hello"), ("number_1", Aeson.Null)]
           result = parseJsonToDefaultTuple (Proxy @(Text, (Maybe Int, ()))) obj
       result `shouldBe` Right ("hello", (Nothing, ()))
 
