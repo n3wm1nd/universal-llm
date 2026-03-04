@@ -34,12 +34,14 @@ module Models.ZhipuAI.GLM
   , testsGLM45ZAI
   , testsGLM46ZAI
   , testsGLM47ZAI
+  , testsGLM47AlibabaCloud
   , testsGLM5ZAI
+  , testsGLM5AlibabaCloud
   ) where
 
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
-import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
+import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud(..))
 import UniversalLLM.Models.ZhipuAI.GLM
   ( GLM45(..)
   , GLM45Air(..)
@@ -48,6 +50,8 @@ import UniversalLLM.Models.ZhipuAI.GLM
   , GLM5(..)
   , ZAI(..)
   , glm45
+  , glm47AlibabaCloud
+  , glm5AlibabaCloud
   , glm45AirLlamaCpp
   , glm45AirOpenRouter
   , glm45AirZAI
@@ -166,3 +170,47 @@ testsGLM5ZAI provider = do
     describe "Standard Tests" $
       testModel glm5 (Model GLM5 ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+
+-- | Test GLM 4.7 via AlibabaCloud
+testsGLM47AlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsGLM47AlibabaCloud provider = do
+  describe "GLM 4.7 via AlibabaCloud" $ do
+    describe "Protocol" $ do
+      basicText provider "glm-4.7"
+      toolCalling provider "glm-4.7"
+      acceptsToolResults provider "glm-4.7"
+      acceptsToolResultNoTools provider "glm-4.7"
+      acceptsToolResultToolGone provider "glm-4.7"
+      acceptsStaleToolInHistory provider "glm-4.7"
+      acceptsOldToolCallStillAvailable provider "glm-4.7"
+      consecutiveUserMessages provider "glm-4.7"
+      startsWithAssistant provider "glm-4.7"
+      systemMessageAtStart provider "glm-4.7"
+      systemMessageMidConversation provider "glm-4.7"
+      multipleSystemMessages provider "glm-4.7"
+
+    describe "Standard Tests" $
+      testModel glm47AlibabaCloud (Model GLM47 AlibabaCloud) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
+
+-- | Test GLM 5 via AlibabaCloud
+testsGLM5AlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsGLM5AlibabaCloud provider = do
+  describe "GLM 5 via AlibabaCloud" $ do
+    describe "Protocol" $ do
+      basicText provider "glm-5"
+      toolCalling provider "glm-5"
+      acceptsToolResults provider "glm-5"
+      acceptsToolResultNoTools provider "glm-5"
+      acceptsToolResultToolGone provider "glm-5"
+      acceptsStaleToolInHistory provider "glm-5"
+      acceptsOldToolCallStillAvailable provider "glm-5"
+      consecutiveUserMessages provider "glm-5"
+      startsWithAssistant provider "glm-5"
+      systemMessageAtStart provider "glm-5"
+      systemMessageMidConversation provider "glm-5"
+      multipleSystemMessages provider "glm-5"
+
+    describe "Standard Tests" $
+      testModel glm5AlibabaCloud (Model GLM5 AlibabaCloud) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]

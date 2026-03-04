@@ -22,16 +22,19 @@ __llama.cpp:__
 
 -}
 
-module Models.Alibaba.Qwen3Coder (testsLlamaCppNext, testsLlamaCpp30bInstruct) where
+module Models.Alibaba.Qwen3Coder (testsLlamaCppNext, testsLlamaCpp30bInstruct, testsQwen3CoderNextAlibabaCloud, testsQwen3CoderPlusAlibabaCloud) where
 
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
-import UniversalLLM.Providers.OpenAI (LlamaCpp(..))
+import UniversalLLM.Providers.OpenAI (LlamaCpp(..), AlibabaCloud(..))
 import UniversalLLM.Models.Alibaba.Qwen
   ( Qwen3CoderNext(..)
   , qwen3CoderNext
+  , qwen3CoderNextAlibabaCloud
   , Qwen3Coder30bInstruct(..)
   , qwen3Coder30bInstruct
+  , Qwen3CoderPlus(..)
+  , qwen3CoderPlus
   )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
@@ -76,4 +79,48 @@ testsLlamaCpp30bInstruct provider modelName = do
 
     describe "Standard Tests" $
       testModel qwen3Coder30bInstruct (Model Qwen3Coder30bInstruct LlamaCpp) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
+
+-- | Test Qwen 3 Coder Next via AlibabaCloud
+testsQwen3CoderNextAlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsQwen3CoderNextAlibabaCloud provider = do
+  describe "Qwen 3 Coder Next via AlibabaCloud" $ do
+    describe "Protocol" $ do
+      basicText provider "qwen3-coder-next"
+      toolCalling provider "qwen3-coder-next"
+      acceptsToolResults provider "qwen3-coder-next"
+      acceptsToolResultNoTools provider "qwen3-coder-next"
+      acceptsToolResultToolGone provider "qwen3-coder-next"
+      acceptsStaleToolInHistory provider "qwen3-coder-next"
+      acceptsOldToolCallStillAvailable provider "qwen3-coder-next"
+      consecutiveUserMessages provider "qwen3-coder-next"
+      startsWithAssistant provider "qwen3-coder-next"
+      systemMessageAtStart provider "qwen3-coder-next"
+      systemMessageMidConversation provider "qwen3-coder-next"
+      multipleSystemMessages provider "qwen3-coder-next"
+
+    describe "Standard Tests" $
+      testModel qwen3CoderNextAlibabaCloud (Model Qwen3CoderNext AlibabaCloud) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
+
+-- | Test Qwen 3 Coder Plus via AlibabaCloud
+testsQwen3CoderPlusAlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsQwen3CoderPlusAlibabaCloud provider = do
+  describe "Qwen 3 Coder Plus via AlibabaCloud" $ do
+    describe "Protocol" $ do
+      basicText provider "qwen3-coder-plus"
+      toolCalling provider "qwen3-coder-plus"
+      acceptsToolResults provider "qwen3-coder-plus"
+      acceptsToolResultNoTools provider "qwen3-coder-plus"
+      acceptsToolResultToolGone provider "qwen3-coder-plus"
+      acceptsStaleToolInHistory provider "qwen3-coder-plus"
+      acceptsOldToolCallStillAvailable provider "qwen3-coder-plus"
+      consecutiveUserMessages provider "qwen3-coder-plus"
+      startsWithAssistant provider "qwen3-coder-plus"
+      systemMessageAtStart provider "qwen3-coder-plus"
+      systemMessageMidConversation provider "qwen3-coder-plus"
+      multipleSystemMessages provider "qwen3-coder-plus"
+
+    describe "Standard Tests" $
+      testModel qwen3CoderPlus (Model Qwen3CoderPlus AlibabaCloud) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]

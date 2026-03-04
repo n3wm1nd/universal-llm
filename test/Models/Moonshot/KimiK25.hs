@@ -22,14 +22,15 @@ __OpenRouter:__
 
 -}
 
-module Models.Moonshot.KimiK25 (testsOpenRouter) where
+module Models.Moonshot.KimiK25 (testsOpenRouter, testsAlibabaCloud) where
 
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
-import UniversalLLM.Providers.OpenAI (OpenRouter(..))
+import UniversalLLM.Providers.OpenAI (OpenRouter(..), AlibabaCloud(..))
 import UniversalLLM.Models.Moonshot.Kimi
   ( KimiK25(..)
   , kimiK25
+  , kimiK25AlibabaCloud
   )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
@@ -62,3 +63,25 @@ testsOpenRouter provider = do
     describe "Standard Tests" $
       testModel kimiK25 (Model KimiK25 OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+
+-- | Test Kimi K2.5 via AlibabaCloud
+testsAlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsAlibabaCloud provider = do
+  describe "Moonshot AI Kimi K2.5 via AlibabaCloud" $ do
+    describe "Protocol" $ do
+      basicText provider "kimi-k2.5"
+      toolCalling provider "kimi-k2.5"
+      acceptsToolResults provider "kimi-k2.5"
+      acceptsToolResultNoTools provider "kimi-k2.5"
+      acceptsToolResultToolGone provider "kimi-k2.5"
+      acceptsStaleToolInHistory provider "kimi-k2.5"
+      acceptsOldToolCallStillAvailable provider "kimi-k2.5"
+      consecutiveUserMessages provider "kimi-k2.5"
+      startsWithAssistant provider "kimi-k2.5"
+      systemMessageAtStart provider "kimi-k2.5"
+      systemMessageMidConversation provider "kimi-k2.5"
+      multipleSystemMessages provider "kimi-k2.5"
+
+    describe "Standard Tests" $
+      testModel kimiK25AlibabaCloud (Model KimiK25 AlibabaCloud) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]

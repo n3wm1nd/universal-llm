@@ -24,6 +24,7 @@ data Providers = Providers
   , openrouterProvider         :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
   , openrouterStreamingProvider :: TestCache.ResponseProvider OpenAIRequest BSL.ByteString
   , zaiProvider                :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
+  , alibabaCloudProvider       :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
   , llamacppProvider           :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
   , openaiCompatProvider       :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
   , anthropicProvider          :: TestCache.ResponseProvider AnthropicRequest AnthropicResponse
@@ -43,6 +44,7 @@ buildProviders = do
   openaiApiKey <- lookupEnv "OPENAI_API_KEY"
   openrouterApiKey <- lookupEnv "OPENROUTER_API_KEY"
   zaiApiKey <- lookupEnv "ZAI_API_KEY"
+  alibabaCloudApiKey <- lookupEnv "ALIBABACLOUD_API_KEY"
   llamacppUrl <- lookupEnv "LLAMACPP_ENDPOINT"
   openaiCompatUrl <- lookupEnv "OPENAI_COMPAT_URL"
   _openaiCompatModel <- lookupEnv "OPENAI_COMPAT_MODEL"
@@ -82,6 +84,7 @@ buildProviders = do
     , openrouterProvider = buildOpenRouter mode openrouterApiKey cachePath
     , openrouterStreamingProvider = buildOpenRouterStreaming mode openrouterApiKey cachePath
     , zaiProvider = buildZAI mode zaiApiKey cachePath
+    , alibabaCloudProvider = buildAlibabaCloud mode alibabaCloudApiKey cachePath
     , llamacppProvider = buildLlamaCpp mode llamacppUrl modelMatches cachePath
     , openaiCompatProvider = buildOpenAICompat mode openaiCompatUrl cachePath
     , anthropicProvider = buildAnthropic mode anthropicToken cachePath
@@ -159,6 +162,23 @@ buildZAI mode zaiApiKey cachePath = case mode of
     let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
     in TestCache.liveMode $
       TestHTTP.httpCall "https://api.z.ai/api/coding/paas/v4/chat/completions" headers
+  _ -> TestCache.playbackMode cachePath
+
+buildAlibabaCloud :: Maybe String -> Maybe String -> TestCache.CachePath
+                  -> TestCache.ResponseProvider OpenAIRequest OpenAIResponse
+buildAlibabaCloud mode alibabaCloudApiKey cachePath = case mode of
+  Just "record" | Just apiKey <- alibabaCloudApiKey ->
+    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+    in TestCache.recordMode cachePath $
+      TestHTTP.httpCall "https://coding-intl.dashscope.aliyuncs.com/v1/chat/completions" headers
+  Just "update" | Just apiKey <- alibabaCloudApiKey ->
+    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+    in TestCache.updateMode cachePath $
+      TestHTTP.httpCall "https://coding-intl.dashscope.aliyuncs.com/v1/chat/completions" headers
+  Just "live" | Just apiKey <- alibabaCloudApiKey ->
+    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+    in TestCache.liveMode $
+      TestHTTP.httpCall "https://coding-intl.dashscope.aliyuncs.com/v1/chat/completions" headers
   _ -> TestCache.playbackMode cachePath
 
 buildLlamaCpp :: Maybe String -> Maybe String -> (OpenAIRequest -> (Bool, String)) -> TestCache.CachePath

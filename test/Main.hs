@@ -44,11 +44,16 @@ main = do
       Models.ZhipuAI.GLM.testsGLM45ZAI (zaiProvider p)
       Models.ZhipuAI.GLM.testsGLM46ZAI (zaiProvider p)
       Models.ZhipuAI.GLM.testsGLM47ZAI (zaiProvider p)
+      Models.ZhipuAI.GLM.testsGLM47AlibabaCloud (alibabaCloudProvider p)
       Models.ZhipuAI.GLM.testsGLM5ZAI (zaiProvider p)
+      Models.ZhipuAI.GLM.testsGLM5AlibabaCloud (alibabaCloudProvider p)
       Models.Alibaba.Qwen35.testsOpenRouter (openrouterProvider p)
       Models.Alibaba.Qwen35.testsLlamaCpp (llamacppProvider p) "Qwen3.5-122B"
+      Models.Alibaba.Qwen35.testsQwen35PlusAlibabaCloud (alibabaCloudProvider p)
       Models.Alibaba.Qwen3Coder.testsLlamaCppNext (llamacppProvider p) "Qwen3-Coder-Next"
       Models.Alibaba.Qwen3Coder.testsLlamaCpp30bInstruct (llamacppProvider p) "Qwen3-Coder-30B-Instruct"
+      Models.Alibaba.Qwen3Coder.testsQwen3CoderNextAlibabaCloud (alibabaCloudProvider p)
+      Models.Alibaba.Qwen3Coder.testsQwen3CoderPlusAlibabaCloud (alibabaCloudProvider p)
       Models.Google.Gemini.testsGemini3FlashOpenRouter (openrouterProvider p)
       Models.Google.Gemini.testsGemini3ProOpenRouter (openrouterProvider p)
       Models.Amazon.Nova2Lite.testsOpenRouter (openrouterProvider p)
@@ -57,7 +62,9 @@ main = do
       Models.Anthropic.Claude.testsHaiku45 (anthropicProvider p)
       Models.Anthropic.Claude.testsOpus46 (anthropicProvider p)
       Models.Moonshot.KimiK25.testsOpenRouter (openrouterProvider p)
+      Models.Moonshot.KimiK25.testsAlibabaCloud (alibabaCloudProvider p)
       Models.Minimax.MinimaxM25.testsLlamaCpp (llamacppProvider p) "MiniMax-M2.5"
+      Models.Minimax.MinimaxM25.testsAlibabaCloud (alibabaCloudProvider p)
       Models.OpenAI.GPTOSS.testsLlamaCpp (llamacppProvider p) "gpt-oss-120b"
       Models.OpenAI.GPTOSS.testsOpenRouter (openrouterProvider p)
       Models.Minimax.MinimaxM25.testsOpenRouter (openrouterProvider p)

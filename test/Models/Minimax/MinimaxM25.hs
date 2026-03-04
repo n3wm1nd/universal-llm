@@ -25,17 +25,18 @@ __LlamaCpp:__
 
 -}
 
-module Models.Minimax.MinimaxM25 (testsOpenRouter, testsLlamaCpp) where
+module Models.Minimax.MinimaxM25 (testsOpenRouter, testsLlamaCpp, testsAlibabaCloud) where
 
 import Data.Text (Text)
 import qualified Data.Text as T
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
-import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
+import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud(..))
 import UniversalLLM.Models.Minimax.M
   ( MinimaxM25(..)
   , minimaxM25
   , minimaxM25LlamaCpp
+  , minimaxM25AlibabaCloud
   )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
@@ -93,3 +94,25 @@ testsLlamaCpp provider modelName = do
     describe "Standard Tests" $
       testModel minimaxM25LlamaCpp (Model MinimaxM25 LlamaCpp) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+
+-- | Test MiniMax M2.5 via AlibabaCloud
+testsAlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsAlibabaCloud provider = do
+  describe "MiniMax M2.5 via AlibabaCloud" $ do
+    describe "Protocol" $ do
+      basicText provider "MiniMax-M2.5"
+      toolCalling provider "MiniMax-M2.5"
+      acceptsToolResults provider "MiniMax-M2.5"
+      acceptsToolResultNoTools provider "MiniMax-M2.5"
+      acceptsToolResultToolGone provider "MiniMax-M2.5"
+      acceptsStaleToolInHistory provider "MiniMax-M2.5"
+      acceptsOldToolCallStillAvailable provider "MiniMax-M2.5"
+      consecutiveUserMessages provider "MiniMax-M2.5"
+      startsWithAssistant provider "MiniMax-M2.5"
+      systemMessageAtStart provider "MiniMax-M2.5"
+      systemMessageMidConversation provider "MiniMax-M2.5"
+      multipleSystemMessages provider "MiniMax-M2.5"
+
+    describe "Standard Tests" $
+      testModel minimaxM25AlibabaCloud (Model MinimaxM25 AlibabaCloud) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]

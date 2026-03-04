@@ -161,6 +161,7 @@ data LlamaCpp = LlamaCpp deriving (Show, Eq)                  -- llama.cpp serve
 data Ollama = Ollama deriving (Show, Eq)                      -- Ollama
 data VLLM = VLLM deriving (Show, Eq)                          -- vLLM
 data LiteLLM = LiteLLM deriving (Show, Eq)                    -- LiteLLM proxy
+data AlibabaCloud = AlibabaCloud deriving (Show, Eq)          -- Alibaba Cloud DashScope
 
 -- Declare parameter support for all OpenAI-compatible providers
 -- All support the same parameter set (temperature, max_tokens, seed, system_prompt, stop)
@@ -213,6 +214,13 @@ instance SupportsSystemPrompt LiteLLM
 instance SupportsStop LiteLLM
 instance SupportsStreaming LiteLLM
 
+instance SupportsTemperature AlibabaCloud
+instance SupportsMaxTokens AlibabaCloud
+instance SupportsSeed AlibabaCloud
+instance SupportsSystemPrompt AlibabaCloud
+instance SupportsStop AlibabaCloud
+instance SupportsStreaming AlibabaCloud
+
 -- OpenAI capabilities are now declared per-model (see model files)
 
 -- All OpenAI-compatible providers use the same request/response types
@@ -242,7 +250,11 @@ instance Provider (Model aiModel VLLM) where
 
 instance Provider (Model aiModel LiteLLM) where
   type ProviderRequest (Model aiModel LiteLLM) = OpenAIRequest
-  type ProviderResponse (Model aiModel LiteLLM) = OpenAIResponse 
+  type ProviderResponse (Model aiModel LiteLLM) = OpenAIResponse
+
+instance Provider (Model aiModel AlibabaCloud) where
+  type ProviderRequest (Model aiModel AlibabaCloud) = OpenAIRequest
+  type ProviderResponse (Model aiModel AlibabaCloud) = OpenAIResponse
 
 -- Helper: Get last message from request
 lastMessage :: OpenAIRequest -> Maybe OpenAIMessage

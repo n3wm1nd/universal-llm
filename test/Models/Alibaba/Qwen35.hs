@@ -25,15 +25,17 @@ __llama.cpp:__
 
 -}
 
-module Models.Alibaba.Qwen35 (testsLlamaCpp, testsOpenRouter) where
+module Models.Alibaba.Qwen35 (testsLlamaCpp, testsOpenRouter, testsQwen35PlusAlibabaCloud) where
 
 import UniversalLLM (Model(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
-import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
+import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud(..))
 import UniversalLLM.Models.Alibaba.Qwen
   ( Qwen35_122B(..)
+  , Qwen35Plus(..)
   , qwen35_122B
   , qwen35_122BOpenRouter
+  , qwen35Plus
   )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
@@ -91,3 +93,25 @@ testsLlamaCpp provider modelName = do
     describe "Standard Tests" $
       testModel qwen35_122B (Model Qwen35_122B LlamaCpp) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+
+-- | Test Qwen 3.5 Plus via AlibabaCloud
+testsQwen35PlusAlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsQwen35PlusAlibabaCloud provider = do
+  describe "Qwen 3.5 Plus via AlibabaCloud" $ do
+    describe "Protocol" $ do
+      basicText provider "qwen3.5-plus"
+      toolCalling provider "qwen3.5-plus"
+      acceptsToolResults provider "qwen3.5-plus"
+      acceptsToolResultNoTools provider "qwen3.5-plus"
+      acceptsToolResultToolGone provider "qwen3.5-plus"
+      acceptsStaleToolInHistory provider "qwen3.5-plus"
+      acceptsOldToolCallStillAvailable provider "qwen3.5-plus"
+      consecutiveUserMessages provider "qwen3.5-plus"
+      startsWithAssistant provider "qwen3.5-plus"
+      systemMessageAtStart provider "qwen3.5-plus"
+      systemMessageMidConversation provider "qwen3.5-plus"
+      multipleSystemMessages provider "qwen3.5-plus"
+
+    describe "Standard Tests" $
+      testModel qwen35Plus (Model Qwen35Plus AlibabaCloud) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]

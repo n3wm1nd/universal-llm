@@ -83,8 +83,10 @@ module UniversalLLM.Models.ZhipuAI.GLM
   , glm46
     -- ** GLM-4.7
   , glm47
+  , glm47AlibabaCloud
     -- ** GLM-5
   , glm5
+  , glm5AlibabaCloud
     -- * Workaround Combinators
   , glmEnsureMinTokens
   , glmFixNullContent
@@ -92,7 +94,7 @@ module UniversalLLM.Models.ZhipuAI.GLM
 
 import UniversalLLM
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
-import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), OpenAICompatible(..))
+import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), OpenAICompatible(..), AlibabaCloud(..))
 import UniversalLLM.Providers.XMLToolCalls (xmlResponseParser)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest(..), OpenAIMessage(..), OpenAIResponse)
 import Data.Text (Text)
@@ -361,3 +363,37 @@ instance HasJSON (Model GLM5 ZAI) where
 -- | Composable provider for GLM-5
 glm5 :: ComposableProvider (Model GLM5 ZAI) ((), ((), ((), ())))
 glm5 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM5 ZAI)
+
+--------------------------------------------------------------------------------
+-- GLM-4.7 via AlibabaCloud
+--------------------------------------------------------------------------------
+
+instance ModelName (Model GLM47 AlibabaCloud) where
+  modelName (Model _ _) = "glm-4.7"
+
+instance HasTools (Model GLM47 AlibabaCloud) where
+  withTools = OpenAI.openAITools
+
+instance HasJSON (Model GLM47 AlibabaCloud) where
+  withJSON = OpenAI.openAIJSON
+
+-- | Composable provider for GLM-4.7 via AlibabaCloud
+glm47AlibabaCloud :: ComposableProvider (Model GLM47 AlibabaCloud) ((), ((), ()))
+glm47AlibabaCloud = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47 AlibabaCloud)
+
+--------------------------------------------------------------------------------
+-- GLM-5 via AlibabaCloud
+--------------------------------------------------------------------------------
+
+instance ModelName (Model GLM5 AlibabaCloud) where
+  modelName (Model _ _) = "glm-5"
+
+instance HasTools (Model GLM5 AlibabaCloud) where
+  withTools = OpenAI.openAITools
+
+instance HasJSON (Model GLM5 AlibabaCloud) where
+  withJSON = OpenAI.openAIJSON
+
+-- | Composable provider for GLM-5 via AlibabaCloud
+glm5AlibabaCloud :: ComposableProvider (Model GLM5 AlibabaCloud) ((), ((), ()))
+glm5AlibabaCloud = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM5 AlibabaCloud)

@@ -42,11 +42,12 @@ module UniversalLLM.Models.Minimax.M
     -- * Composable Providers
   , minimaxM25
   , minimaxM25LlamaCpp
+  , minimaxM25AlibabaCloud
   ) where
 
 import UniversalLLM
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
-import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
+import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud(..))
 
 --------------------------------------------------------------------------------
 -- MiniMax M2.5
@@ -96,3 +97,17 @@ instance HasReasoning (Model MinimaxM25 LlamaCpp) where
 -- Uses standard reasoning_content (not OpenRouter's reasoning_details).
 minimaxM25LlamaCpp :: ComposableProvider (Model MinimaxM25 LlamaCpp) ((), ((), ()))
 minimaxM25LlamaCpp = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model MinimaxM25 LlamaCpp)
+
+--------------------------------------------------------------------------------
+-- MiniMax M2.5 via AlibabaCloud
+--------------------------------------------------------------------------------
+
+instance ModelName (Model MinimaxM25 AlibabaCloud) where
+  modelName (Model _ _) = "MiniMax-M2.5"
+
+instance HasTools (Model MinimaxM25 AlibabaCloud) where
+  withTools = OpenAI.openAITools
+
+-- | Composable provider for MiniMax M2.5 via AlibabaCloud
+minimaxM25AlibabaCloud :: ComposableProvider (Model MinimaxM25 AlibabaCloud) ((), ())
+minimaxM25AlibabaCloud = withTools `chainProviders` OpenAI.baseComposableProvider @(Model MinimaxM25 AlibabaCloud)

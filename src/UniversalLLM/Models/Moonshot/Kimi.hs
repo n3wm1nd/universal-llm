@@ -35,11 +35,12 @@ module UniversalLLM.Models.Moonshot.Kimi
     KimiK25(..)
     -- * Composable Providers
   , kimiK25
+  , kimiK25AlibabaCloud
   ) where
 
 import UniversalLLM
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
-import UniversalLLM.Providers.OpenAI (OpenRouter(..))
+import UniversalLLM.Providers.OpenAI (OpenRouter(..), AlibabaCloud(..))
 
 --------------------------------------------------------------------------------
 -- Kimi K2.5
@@ -70,3 +71,17 @@ instance HasReasoning (Model KimiK25 OpenRouter) where
 -- Includes reasoning support via reasoning_details (OpenRouter style).
 kimiK25 :: ComposableProvider (Model KimiK25 OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ()))
 kimiK25 = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model KimiK25 OpenRouter)
+
+--------------------------------------------------------------------------------
+-- Kimi K2.5 via AlibabaCloud
+--------------------------------------------------------------------------------
+
+instance ModelName (Model KimiK25 AlibabaCloud) where
+  modelName (Model _ _) = "kimi-k2.5"
+
+instance HasTools (Model KimiK25 AlibabaCloud) where
+  withTools = OpenAI.openAITools
+
+-- | Composable provider for Kimi K2.5 via AlibabaCloud
+kimiK25AlibabaCloud :: ComposableProvider (Model KimiK25 AlibabaCloud) ((), ())
+kimiK25AlibabaCloud = withTools `chainProviders` OpenAI.baseComposableProvider @(Model KimiK25 AlibabaCloud)

@@ -56,6 +56,8 @@ module UniversalLLM.Models.Alibaba.Qwen
     Qwen35_122B(..)
   , Qwen3CoderNext(..)
   , Qwen3Coder30bInstruct(..)
+  , Qwen3CoderPlus(..)
+  , Qwen35Plus(..)
     -- * Aliases
   , Qwen3Coder
   , qwen3Coder
@@ -63,12 +65,15 @@ module UniversalLLM.Models.Alibaba.Qwen
   , qwen35_122BOpenRouter
   , qwen35_122B
   , qwen3CoderNext
+  , qwen3CoderNextAlibabaCloud
   , qwen3Coder30bInstruct
+  , qwen3CoderPlus
+  , qwen35Plus
   ) where
 
 import UniversalLLM
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
-import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
+import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud(..))
 
 --------------------------------------------------------------------------------
 -- Qwen 3.5 122B
@@ -173,6 +178,71 @@ instance HasJSON (Model Qwen3Coder30bInstruct LlamaCpp) where
 -- | Composable provider for Qwen 3 Coder 30B Instruct via llama.cpp
 qwen3Coder30bInstruct :: ComposableProvider (Model Qwen3Coder30bInstruct LlamaCpp) ((), ((), ()))
 qwen3Coder30bInstruct = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen3Coder30bInstruct LlamaCpp)
+
+--------------------------------------------------------------------------------
+-- Qwen 3.5 Plus (AlibabaCloud)
+--------------------------------------------------------------------------------
+
+-- | Qwen 3.5 Plus - Cloud-based model via Alibaba Cloud
+--
+-- Capabilities:
+-- - Tool calling
+-- - JSON mode
+data Qwen35Plus = Qwen35Plus deriving (Show, Eq)
+
+instance ModelName (Model Qwen35Plus AlibabaCloud) where
+  modelName (Model _ _) = "qwen3.5-plus"
+
+instance HasTools (Model Qwen35Plus AlibabaCloud) where
+  withTools = OpenAI.openAITools
+
+instance HasJSON (Model Qwen35Plus AlibabaCloud) where
+  withJSON = OpenAI.openAIJSON
+
+-- | Composable provider for Qwen 3.5 Plus via AlibabaCloud
+qwen35Plus :: ComposableProvider (Model Qwen35Plus AlibabaCloud) ((), ((), ()))
+qwen35Plus = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen35Plus AlibabaCloud)
+
+--------------------------------------------------------------------------------
+-- Qwen 3 Coder Next via AlibabaCloud
+--------------------------------------------------------------------------------
+
+instance ModelName (Model Qwen3CoderNext AlibabaCloud) where
+  modelName (Model _ _) = "qwen3-coder-next"
+
+instance HasTools (Model Qwen3CoderNext AlibabaCloud) where
+  withTools = OpenAI.openAITools
+
+instance HasJSON (Model Qwen3CoderNext AlibabaCloud) where
+  withJSON = OpenAI.openAIJSON
+
+-- | Composable provider for Qwen 3 Coder Next via AlibabaCloud
+qwen3CoderNextAlibabaCloud :: ComposableProvider (Model Qwen3CoderNext AlibabaCloud) ((), ((), ()))
+qwen3CoderNextAlibabaCloud = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen3CoderNext AlibabaCloud)
+
+--------------------------------------------------------------------------------
+-- Qwen 3 Coder Plus (AlibabaCloud)
+--------------------------------------------------------------------------------
+
+-- | Qwen 3 Coder Plus - Enhanced coding model
+--
+-- Capabilities:
+-- - Tool calling
+-- - JSON mode
+data Qwen3CoderPlus = Qwen3CoderPlus deriving (Show, Eq)
+
+instance ModelName (Model Qwen3CoderPlus AlibabaCloud) where
+  modelName (Model _ _) = "qwen3-coder-plus"
+
+instance HasTools (Model Qwen3CoderPlus AlibabaCloud) where
+  withTools = OpenAI.openAITools
+
+instance HasJSON (Model Qwen3CoderPlus AlibabaCloud) where
+  withJSON = OpenAI.openAIJSON
+
+-- | Composable provider for Qwen 3 Coder Plus via AlibabaCloud
+qwen3CoderPlus :: ComposableProvider (Model Qwen3CoderPlus AlibabaCloud) ((), ((), ()))
+qwen3CoderPlus = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen3CoderPlus AlibabaCloud)
 
 --------------------------------------------------------------------------------
 -- Aliases (Qwen3Coder = latest = Qwen3CoderNext)
