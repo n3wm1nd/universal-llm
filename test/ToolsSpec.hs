@@ -20,6 +20,7 @@ import qualified Data.Text as T
 import Data.Aeson (Value, Object)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
+import qualified Data.Vector as V
 
 import UniversalLLM.Tools
 
@@ -87,6 +88,26 @@ spec = describe "Tools" $ do
           case KM.lookup "required" obj of
             Just (Aeson.Array arr) -> length arr `shouldBe` 0
             _ -> expectationFailure "required should be an empty array"
+        _ -> expectationFailure "Schema should decode to Object"
+
+    it "marks Maybe parameters as optional in schema" $ do
+      let schema = tupleToDefaultSchema (Proxy @(Text, (Maybe Int, ())))
+      case Aeson.fromJSON schema of
+        Aeson.Success (obj :: Object) -> do
+          case KM.lookup "properties" obj of
+            Just (Aeson.Object props) -> do
+              KM.size props `shouldBe` 2
+              KM.member "text_0" props `shouldBe` True
+              KM.member "optional_1" props `shouldBe` True
+            _ -> expectationFailure "properties should have two fields"
+          case KM.lookup "required" obj of
+            Just (Aeson.Array arr) -> do
+              -- Only text_0 should be required, not the Maybe Int
+              V.length arr `shouldBe` 1
+              case V.toList arr of
+                [Aeson.String name] -> name `shouldBe` "text_0"
+                _ -> expectationFailure "required should contain only text_0"
+            _ -> expectationFailure "required should be an array with one element"
         _ -> expectationFailure "Schema should decode to Object"
 
     it "generates schema for single parameter (Text, ())" $ do
@@ -233,6 +254,21 @@ spec = describe "Tools" $ do
       case result of
         Left err -> T.unpack err `shouldContain` "Failed to parse parameter"
         Right _ -> expectationFailure "Should have failed with type error"
+
+    it "parses Maybe parameter when present" $ do
+      let obj = KM.fromList [("text_0", Aeson.String "hello"), ("optional_1", Aeson.Number 42)]
+          result = parseJsonToDefaultTuple (Proxy @(Text, (Maybe Int, ()))) obj
+      result `shouldBe` Right ("hello", (Just 42, ()))
+
+    it "parses Maybe parameter when missing (as Nothing)" $ do
+      let obj = KM.fromList [("text_0", Aeson.String "hello")]
+          result = parseJsonToDefaultTuple (Proxy @(Text, (Maybe Int, ()))) obj
+      result `shouldBe` Right ("hello", (Nothing, ()))
+
+    it "parses Maybe parameter when explicitly null (as Nothing)" $ do
+      let obj = KM.fromList [("text_0", Aeson.String "hello"), ("optional_1", Aeson.Null)]
+          result = parseJsonToDefaultTuple (Proxy @(Text, (Maybe Int, ()))) obj
+      result `shouldBe` Right ("hello", (Nothing, ()))
 
   describe "Round-trip tests (toToolDefinition + executeToolCall)" $ do
     it "round-trips a 0-arity IO action" $ do
@@ -401,6 +437,68 @@ spec = describe "Tools" $ do
       case result of
         ToolResult _ (Left err) -> T.unpack err `shouldContain` "Failed to parse parameter"
         ToolResult _ (Right _) -> expectationFailure "Should have failed with type error"
+
+    it "round-trips function with optional parameter (provided)" $ do
+      let greet :: Text -> Maybe Text -> IO Text
+          greet name maybeTitle = return $ case maybeTitle of
+            Just title -> title <> " " <> name
+            Nothing -> name
+          tool = mkToolWithMeta "greet" "greets a person" greet
+                   "name" "person's name"
+                   "title" "optional title (Mr, Ms, Dr, etc)"
+          toolDef = toToolDefinition tool
+
+      -- Verify schema marks title as optional
+      case Aeson.fromJSON (toolDefParameters toolDef) of
+        Aeson.Success (obj :: Object) -> do
+          case KM.lookup "required" obj of
+            Just (Aeson.Array arr) -> do
+              -- Only "name" should be required
+              length arr `shouldBe` 1
+            _ -> expectationFailure "required should be an array"
+        _ -> expectationFailure "Schema should decode to Object"
+
+      -- Test with title provided
+      let toolCall1 = ToolCall "call-1" "greet"
+                        (Aeson.object [("name", Aeson.String "Smith"), ("title", Aeson.String "Dr")])
+      result1 <- executeToolCall tool toolCall1
+      case result1 of
+        ToolResult _ (Right jsonResult) -> jsonResult `shouldBe` Aeson.String "Dr Smith"
+        ToolResult _ (Left err) -> expectationFailure $ "Tool call failed: " <> T.unpack err
+
+    it "round-trips function with optional parameter (omitted)" $ do
+      let greet :: Text -> Maybe Text -> IO Text
+          greet name maybeTitle = return $ case maybeTitle of
+            Just title -> title <> " " <> name
+            Nothing -> name
+          tool = mkToolWithMeta "greet" "greets a person" greet
+                   "name" "person's name"
+                   "title" "optional title (Mr, Ms, Dr, etc)"
+
+      -- Test without title (omitted)
+      let toolCall2 = ToolCall "call-2" "greet"
+                        (Aeson.object [("name", Aeson.String "Smith")])
+      result2 <- executeToolCall tool toolCall2
+      case result2 of
+        ToolResult _ (Right jsonResult) -> jsonResult `shouldBe` Aeson.String "Smith"
+        ToolResult _ (Left err) -> expectationFailure $ "Tool call failed: " <> T.unpack err
+
+    it "round-trips function with optional parameter (explicit null)" $ do
+      let greet :: Text -> Maybe Text -> IO Text
+          greet name maybeTitle = return $ case maybeTitle of
+            Just title -> title <> " " <> name
+            Nothing -> name
+          tool = mkToolWithMeta "greet" "greets a person" greet
+                   "name" "person's name"
+                   "title" "optional title (Mr, Ms, Dr, etc)"
+
+      -- Test with explicit null
+      let toolCall3 = ToolCall "call-3" "greet"
+                        (Aeson.object [("name", Aeson.String "Smith"), ("title", Aeson.Null)])
+      result3 <- executeToolCall tool toolCall3
+      case result3 of
+        ToolResult _ (Right jsonResult) -> jsonResult `shouldBe` Aeson.String "Smith"
+        ToolResult _ (Left err) -> expectationFailure $ "Tool call failed: " <> T.unpack err
 
   describe "Bare functions with ToolFunction (no mkTool wrapper)" $ do
     it "works with partially applied function returning ToolFunction type" $ do

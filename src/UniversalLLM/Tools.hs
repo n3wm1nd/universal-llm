@@ -14,6 +14,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PolyKinds #-}
 
 module UniversalLLM.Tools
   ( -- * Core type classes
@@ -125,32 +126,48 @@ instance ToolParameter a => ToolParameter (Maybe a) where
   paramName _ n = "optional_" <> T.pack (show n)
   paramDescription _p = "an optional " <> paramDescription (Proxy @a)
 
+-- | Type family to detect if a type is Maybe
+type family IsOptional a :: Bool where
+  IsOptional (Maybe _) = 'True
+  IsOptional _         = 'False
+
+-- | Type class for known boolean values at type level
+class KnownBool (b :: Bool) where
+  boolVal :: Proxy b -> Bool
+
+instance KnownBool 'True where
+  boolVal _ = True
+
+instance KnownBool 'False where
+  boolVal _ = False
+
 -- | Type class to extract parameter schemas from nested tuple types
 -- Takes a list of (name, description) metadata and uses it for schema generation
 class TupleSchema params where
-  -- Takes metadata list and returns (name, description, schema) triples
-  tupleToSchemaList :: Proxy params -> [(Text, Text)] -> [(Text, Text, Value)]
+  -- Takes metadata list and returns (name, description, schema, isRequired) quads
+  tupleToSchemaList :: Proxy params -> [(Text, Text)] -> [(Text, Text, Value, Bool)]
 
 -- Base case: () means no more parameters
 instance TupleSchema () where
   tupleToSchemaList _ _ = []
 
 -- Recursive case: (a, rest) - use metadata from list
-instance (ToolParameter a, TupleSchema rest) => TupleSchema (a, rest) where
+instance (ToolParameter a, TupleSchema rest, KnownBool (IsOptional a)) => TupleSchema (a, rest) where
   tupleToSchemaList _ metas =
     let restSchemas = tupleToSchemaList (Proxy @rest) (drop 1 metas)
         (name, desc) = case metas of
                         ((n, d):_) -> (n, d)
                         [] -> error "tupleToSchemaList: metadata list too short"
         schema = Aeson.toJSON $ jsonSchemaViaCodec @a
-    in (name, desc, schema) : restSchemas
+        isRequired = not $ boolVal (Proxy @(IsOptional a))
+    in (name, desc, schema, isRequired) : restSchemas
 
 -- | Convert tuple schema to JSON object schema using provided metadata
 tupleToSchema :: TupleSchema params => Proxy params -> [(Text, Text)] -> Value
 tupleToSchema p metas =
   let params = tupleToSchemaList p metas
-      properties = Aeson.object [ (Key.fromText name, schema) | (name, _desc, schema) <- params ]
-      required = [ name | (name, _, _) <- params ]
+      properties = Aeson.object [ (Key.fromText name, schema) | (name, _desc, schema, _) <- params ]
+      required = [ name | (name, _, _, True) <- params ]  -- Only required params
   in Aeson.object
        [ "type" Aeson..= ("object" :: Text)
        , "properties" Aeson..= properties
@@ -180,6 +197,28 @@ parseJsonToDefaultTuple p obj = parseJsonToTuple p (defaultParamMeta p) obj
 -- Base case: () means no parameters
 instance TupleParser () where
   parseJsonToTuple _ _ _ = Right ()
+
+-- Overlapping instance for Maybe parameters - missing or null means Nothing
+instance {-# OVERLAPPING #-} (ToolParameter a, HasCodec a, TupleParser rest) => TupleParser (Maybe a, rest) where
+  parseJsonToTuple _ metas obj = do
+    -- Get parameter name from metadata
+    let paramName' = case metas of
+                      ((n, _):_) -> n
+                      [] -> error "parseJsonToTuple: metadata list too short"
+        paramKey = Key.fromText paramName'
+
+    -- For Maybe parameters: missing key or null -> Nothing, present -> parse
+    parsedParam <- case KM.lookup paramKey obj of
+      Nothing -> Right Nothing           -- Missing = Nothing
+      Just Aeson.Null -> Right Nothing   -- Explicit null = Nothing
+      Just val -> case parseEither parseJSONViaCodec val of
+        Left err -> Left $ "Failed to parse parameter " <> paramName' <> ": " <> T.pack err
+        Right v -> Right (Just v)
+
+    -- Recursively parse the rest
+    restParams <- parseJsonToTuple (Proxy @rest) (drop 1 metas) obj
+
+    return (parsedParam, restParams)
 
 -- Recursive case: (a, rest) - parse 'a' using name from metadata
 instance (ToolParameter a, TupleParser rest) => TupleParser (a, rest) where
