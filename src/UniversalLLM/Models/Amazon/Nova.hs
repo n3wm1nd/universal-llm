@@ -29,7 +29,7 @@ import UniversalLLM
 import UniversalLLM.Models.Amazon.Nova
 
 let model = Model Nova2Lite OpenRouter
-let provider = nova2Lite
+let provider = route
 @
 
 = Authentication
@@ -40,8 +40,6 @@ Set @OPENROUTER_API_KEY@ environment variable.
 module UniversalLLM.Models.Amazon.Nova
   ( -- * Model Types
     Nova2Lite(..)
-    -- * Composable Providers
-  , nova2Lite
   ) where
 
 import UniversalLLM
@@ -74,8 +72,6 @@ instance HasReasoning (Model Nova2Lite OpenRouter) where
   type ReasoningState (Model Nova2Lite OpenRouter) = OpenAI.OpenRouterReasoningState
   withReasoning = OpenAI.openRouterReasoning
 
--- | Composable provider for Amazon Nova 2 Lite
---
--- Includes normalizeEmptyContent to handle Nova's requirement for non-null content.
-nova2Lite :: ComposableProvider (Model Nova2Lite OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ())))
-nova2Lite = withReasoning `chainProviders` withTools `chainProviders` OpenAI.normalizeEmptyContent `chainProviders` OpenAI.baseComposableProvider @(Model Nova2Lite OpenRouter)
+instance Routing (Model Nova2Lite OpenRouter) where
+  type RoutingState (Model Nova2Lite OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.normalizeEmptyContent `chainProviders` OpenAI.baseComposableProvider @(Model Nova2Lite OpenRouter)

@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 {- |
 Module: Models.Alibaba.Qwen35
@@ -27,15 +29,12 @@ __llama.cpp:__
 
 module Models.Alibaba.Qwen35 (testsLlamaCpp, testsOpenRouter, testsQwen35PlusAlibabaCloud) where
 
-import UniversalLLM (Model(..))
+import UniversalLLM (route, via)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud(..))
 import UniversalLLM.Models.Alibaba.Qwen
   ( Qwen35_122B(..)
   , Qwen35Plus(..)
-  , qwen35_122B
-  , qwen35_122BOpenRouter
-  , qwen35Plus
   )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
@@ -65,7 +64,7 @@ testsOpenRouter provider = do
       multipleSystemMessages provider "qwen/qwen3.5-122b-a10b"
 
     describe "Standard Tests" $
-      testModel qwen35_122BOpenRouter (Model Qwen35_122B OpenRouter) provider
+      testModel route (Qwen35_122B `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
 
 -- | Test Qwen 3.5 122B via llama.cpp
@@ -91,7 +90,7 @@ testsLlamaCpp provider modelName = do
       -- systemMessageMidConversation provider modelName
 
     describe "Standard Tests" $
-      testModel qwen35_122B (Model Qwen35_122B LlamaCpp) provider
+      testModel route (Qwen35_122B `via` LlamaCpp) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test Qwen 3.5 Plus via AlibabaCloud
@@ -113,5 +112,5 @@ testsQwen35PlusAlibabaCloud provider = do
       multipleSystemMessages provider "qwen3.5-plus"
 
     describe "Standard Tests" $
-      testModel qwen35Plus (Model Qwen35Plus AlibabaCloud) provider
+      testModel route (Qwen35Plus `via` AlibabaCloud) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]

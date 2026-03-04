@@ -31,25 +31,6 @@ module TestModels
   , Gemini3FlashPreview(..)
   , Gemini3ProPreview(..)
   , Nova2Lite(..)
-    -- * Production Providers
-  , claudeSonnet45
-  , claudeSonnet45NoReason
-  , claudeSonnet45OAuth
-  , claudeSonnet45NoReasonOAuth
-  , claudeHaiku45
-  , claudeHaiku45OAuth
-  , claudeOpus46
-  , claudeOpus46OAuth
-  , glm45
-  , glm45AirLlamaCpp
-  , glm45AirOpenRouter
-  , glm45AirZAI
-  , glm46
-  , glm47
-  , qwen3Coder
-  , gemini3FlashPreview
-  , gemini3ProPreview
-  , nova2Lite
     -- * Backward Compatibility Provider Aliases
   , anthropicSonnet45
   , anthropicSonnet45NoReason
@@ -90,14 +71,6 @@ import UniversalLLM.Models.Anthropic.Claude
   , ClaudeSonnet45NoReason(..)
   , ClaudeHaiku45(..)
   , ClaudeOpus46(..)
-  , claudeSonnet45
-  , claudeSonnet45NoReason
-  , claudeSonnet45OAuth
-  , claudeSonnet45NoReasonOAuth
-  , claudeHaiku45
-  , claudeHaiku45OAuth
-  , claudeOpus46
-  , claudeOpus46OAuth
   )
 import UniversalLLM.Models.ZhipuAI.GLM
   ( GLM45(..)
@@ -105,27 +78,17 @@ import UniversalLLM.Models.ZhipuAI.GLM
   , GLM46(..)
   , GLM47(..)
   , ZAI(..)
-  , glm45
-  , glm45AirLlamaCpp
-  , glm45AirOpenRouter
-  , glm45AirZAI
-  , glm46
-  , glm47
   )
 import UniversalLLM.Models.Alibaba.Qwen
   ( Qwen3CoderNext(..)
   , Qwen3Coder
-  , qwen3Coder
   )
 import UniversalLLM.Models.Google.Gemini
   ( Gemini3FlashPreview(..)
   , Gemini3ProPreview(..)
-  , gemini3FlashPreview
-  , gemini3ProPreview
   )
 import UniversalLLM.Models.Amazon.Nova
   ( Nova2Lite(..)
-  , nova2Lite
   )
 
 -- ============================================================================
@@ -133,52 +96,53 @@ import UniversalLLM.Models.Amazon.Nova
 -- ============================================================================
 
 -- Provider aliases for backward compatibility with tests
+-- All now use route instead of named provider functions
 anthropicSonnet45 :: ComposableProvider (Model ClaudeSonnet45 Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
-anthropicSonnet45 = claudeSonnet45
+anthropicSonnet45 = route
 
 anthropicSonnet45NoReason :: ComposableProvider (Model ClaudeSonnet45NoReason Anthropic) ((), ())
-anthropicSonnet45NoReason = claudeSonnet45NoReason
+anthropicSonnet45NoReason = route
 
 -- NOTE: OAuthToolsState removed as of 2025 - blacklist workaround no longer needed
 anthropicSonnet45OAuth :: ComposableProvider (Model ClaudeSonnet45 AnthropicOAuth) (Anthropic.AnthropicReasoningState, ((), ((), ())))
-anthropicSonnet45OAuth = claudeSonnet45OAuth
+anthropicSonnet45OAuth = route
 
 anthropicSonnet45NoReasonOAuth :: ComposableProvider (Model ClaudeSonnet45NoReason AnthropicOAuth) ((), ((), ()))
-anthropicSonnet45NoReasonOAuth = claudeSonnet45NoReasonOAuth
+anthropicSonnet45NoReasonOAuth = route
 
 anthropicHaiku45 :: ComposableProvider (Model ClaudeHaiku45 Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
-anthropicHaiku45 = claudeHaiku45
+anthropicHaiku45 = route
 
 anthropicHaiku45OAuth :: ComposableProvider (Model ClaudeHaiku45 AnthropicOAuth) (Anthropic.AnthropicReasoningState, ((), ((), ())))
-anthropicHaiku45OAuth = claudeHaiku45OAuth
+anthropicHaiku45OAuth = route
 
 anthropicOpus46 :: ComposableProvider (Model ClaudeOpus46 Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
-anthropicOpus46 = claudeOpus46
+anthropicOpus46 = route
 
 anthropicOpus46OAuth :: ComposableProvider (Model ClaudeOpus46 AnthropicOAuth) (Anthropic.AnthropicReasoningState, ((), ((), ())))
-anthropicOpus46OAuth = claudeOpus46OAuth
+anthropicOpus46OAuth = route
 
 -- Backward compat aliases for GLM45Air providers
 llamaCppGLM45 :: ComposableProvider (Model GLM45Air LlamaCpp) ((), ((), ((), ())))
-llamaCppGLM45 = glm45AirLlamaCpp
+llamaCppGLM45 = route
 
 openRouterGLM45Air :: ComposableProvider (Model GLM45Air OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ())))
-openRouterGLM45Air = glm45AirOpenRouter
+openRouterGLM45Air = route
 
 zaiGLM45 :: ComposableProvider (Model GLM45Air ZAI) ((), ((), ((), ())))
-zaiGLM45 = glm45AirZAI
+zaiGLM45 = route
 
 llamaCppQwen3Coder :: ComposableProvider (Model Qwen3Coder LlamaCpp) ((), ((), ()))
-llamaCppQwen3Coder = qwen3Coder
+llamaCppQwen3Coder = route
 
 openRouterNova2Lite :: ComposableProvider (Model Nova2Lite OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ())))
-openRouterNova2Lite = nova2Lite
+openRouterNova2Lite = route
 
 openRouterGemini3ProPreview :: ComposableProvider (Model Gemini3ProPreview OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ()))
-openRouterGemini3ProPreview = gemini3ProPreview
+openRouterGemini3ProPreview = route
 
 openRouterGemini3FlashPreview :: ComposableProvider (Model Gemini3FlashPreview OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ()))
-openRouterGemini3FlashPreview = gemini3FlashPreview
+openRouterGemini3FlashPreview = route
 
 -- Test-specific instances for GLM45
 -- Note: GLM45 via LlamaCpp should use GLM45Air (better for self-hosting)
@@ -186,7 +150,7 @@ openRouterGemini3FlashPreview = gemini3FlashPreview
 -- Backward compat alias for tests that used GLM45 with OpenRouter
 -- Now redirects to GLM45Air which is the correct model
 openRouterGLM45 :: ComposableProvider (Model GLM45Air OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ())))
-openRouterGLM45 = glm45AirOpenRouter
+openRouterGLM45 = route
 
 -- ============================================================================
 -- Test-Only Models (not suitable for production)

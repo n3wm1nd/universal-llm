@@ -9,7 +9,7 @@ Module: UniversalLLM.Models.Minimax.M
 Description: Production-ready MiniMax model definitions
 
 This module provides tested, production-ready definitions for MiniMax's
-M2.5 model, accessed through OpenRouter or a local llama.cpp server.
+M2.5 model, accessed through OpenRouter, llama.cpp, or AlibabaCloud.
 
 = Available Models
 
@@ -23,26 +23,27 @@ import UniversalLLM.Models.Minimax.M
 
 -- Via OpenRouter
 let model = Model MinimaxM25 OpenRouter
-let provider = minimaxM25
+let provider = route
 
 -- Via llama.cpp
 let model = Model MinimaxM25 LlamaCpp
-let provider = minimaxM25LlamaCpp
+let provider = route
+
+-- Via AlibabaCloud
+let model = Model MinimaxM25 AlibabaCloud
+let provider = route
 @
 
 = Authentication
 
-OpenRouter: Set @OPENROUTER_API_KEY@ environment variable.
-LlamaCpp: Set @LLAMACPP_URL@ environment variable.
+- OpenRouter: Set @OPENROUTER_API_KEY@ environment variable
+- LlamaCpp: Set @LLAMACPP_URL@ environment variable
+- AlibabaCloud: Set @ALIBABACLOUD_API_KEY@ environment variable
 -}
 
 module UniversalLLM.Models.Minimax.M
   ( -- * Model Types
     MinimaxM25(..)
-    -- * Composable Providers
-  , minimaxM25
-  , minimaxM25LlamaCpp
-  , minimaxM25AlibabaCloud
   ) where
 
 import UniversalLLM
@@ -73,11 +74,9 @@ instance HasReasoning (Model MinimaxM25 OpenRouter) where
   type ReasoningState (Model MinimaxM25 OpenRouter) = OpenAI.OpenRouterReasoningState
   withReasoning = OpenAI.openRouterReasoning
 
--- | Composable provider for MiniMax M2.5 via OpenRouter
---
--- Includes reasoning support via reasoning_details (OpenRouter style).
-minimaxM25 :: ComposableProvider (Model MinimaxM25 OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ()))
-minimaxM25 = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model MinimaxM25 OpenRouter)
+instance Routing (Model MinimaxM25 OpenRouter) where
+  type RoutingState (Model MinimaxM25 OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ()))
+  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model MinimaxM25 OpenRouter)
 
 --------------------------------------------------------------------------------
 -- MiniMax M2.5 via LlamaCpp
@@ -92,11 +91,9 @@ instance HasTools (Model MinimaxM25 LlamaCpp) where
 instance HasReasoning (Model MinimaxM25 LlamaCpp) where
   withReasoning = OpenAI.openAIReasoning
 
--- | Composable provider for MiniMax M2.5 via llama.cpp
---
--- Uses standard reasoning_content (not OpenRouter's reasoning_details).
-minimaxM25LlamaCpp :: ComposableProvider (Model MinimaxM25 LlamaCpp) ((), ((), ()))
-minimaxM25LlamaCpp = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model MinimaxM25 LlamaCpp)
+instance Routing (Model MinimaxM25 LlamaCpp) where
+  type RoutingState (Model MinimaxM25 LlamaCpp) = ((), ((), ()))
+  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model MinimaxM25 LlamaCpp)
 
 --------------------------------------------------------------------------------
 -- MiniMax M2.5 via AlibabaCloud
@@ -108,6 +105,6 @@ instance ModelName (Model MinimaxM25 AlibabaCloud) where
 instance HasTools (Model MinimaxM25 AlibabaCloud) where
   withTools = OpenAI.openAITools
 
--- | Composable provider for MiniMax M2.5 via AlibabaCloud
-minimaxM25AlibabaCloud :: ComposableProvider (Model MinimaxM25 AlibabaCloud) ((), ())
-minimaxM25AlibabaCloud = withTools `chainProviders` OpenAI.baseComposableProvider @(Model MinimaxM25 AlibabaCloud)
+instance Routing (Model MinimaxM25 AlibabaCloud) where
+  type RoutingState (Model MinimaxM25 AlibabaCloud) = ((), ())
+  route = withTools `chainProviders` OpenAI.baseComposableProvider @(Model MinimaxM25 AlibabaCloud)

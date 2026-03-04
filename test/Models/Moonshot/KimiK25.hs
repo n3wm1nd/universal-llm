@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 {- |
 Module: Models.Moonshot.KimiK25
@@ -24,14 +26,10 @@ __OpenRouter:__
 
 module Models.Moonshot.KimiK25 (testsOpenRouter, testsAlibabaCloud) where
 
-import UniversalLLM (Model(..))
+import UniversalLLM (route, via)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (OpenRouter(..), AlibabaCloud(..))
-import UniversalLLM.Models.Moonshot.Kimi
-  ( KimiK25(..)
-  , kimiK25
-  , kimiK25AlibabaCloud
-  )
+import UniversalLLM.Models.Moonshot.Kimi (KimiK25(..))
 import Protocol.OpenAITests
 import qualified StandardTests as ST
 import TestCache (ResponseProvider)
@@ -61,7 +59,7 @@ testsOpenRouter provider = do
       toolCallingWithReasoning provider "moonshotai/kimi-k2.5"
 
     describe "Standard Tests" $
-      testModel kimiK25 (Model KimiK25 OpenRouter) provider
+      testModel route (KimiK25 `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
 
 -- | Test Kimi K2.5 via AlibabaCloud
@@ -83,5 +81,5 @@ testsAlibabaCloud provider = do
       multipleSystemMessages provider "kimi-k2.5"
 
     describe "Standard Tests" $
-      testModel kimiK25AlibabaCloud (Model KimiK25 AlibabaCloud) provider
+      testModel route (KimiK25 `via` AlibabaCloud) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]

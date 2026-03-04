@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 {- |
 Module: Models.Google.Gemini
@@ -27,14 +29,12 @@ __OpenRouter:__
 
 module Models.Google.Gemini (testsGemini3FlashOpenRouter, testsGemini3ProOpenRouter) where
 
-import UniversalLLM (Model(..))
+import UniversalLLM (route, via)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (OpenRouter(..))
 import UniversalLLM.Models.Google.Gemini
   ( Gemini3FlashPreview(..)
   , Gemini3ProPreview(..)
-  , gemini3FlashPreview
-  , gemini3ProPreview
   )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
@@ -73,7 +73,7 @@ testsGemini3FlashOpenRouter provider = do
       toolCallingWithReasoning provider "google/gemini-3-flash-preview"
 
     describe "Standard Tests" $
-      testModel gemini3FlashPreview (Model Gemini3FlashPreview OpenRouter) provider
+      testModel route (Gemini3FlashPreview `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.openAIReasoningDetailsPreservation ]
 
 -- | Test Gemini 3 Pro via OpenRouter
@@ -84,5 +84,5 @@ testsGemini3ProOpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Sp
 testsGemini3ProOpenRouter provider = do
   describe "Gemini 3 Pro via OpenRouter" $ do
     describe "Standard Tests" $
-      testModel gemini3ProPreview (Model Gemini3ProPreview OpenRouter) provider
+      testModel route (Gemini3ProPreview `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]

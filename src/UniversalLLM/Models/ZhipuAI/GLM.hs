@@ -44,17 +44,13 @@ These quirks are handled automatically by the composable providers.
 import UniversalLLM
 import UniversalLLM.Models.ZhipuAI.GLM
 
--- Use via llama.cpp
-let model = Model GLM45Air LlamaCpp
-let provider = glm45AirLlamaCpp
+-- All models use the route function via the Routing typeclass
+let model = GLM45Air \`via\` LlamaCpp
+let provider = route
 
--- Use via OpenRouter
+-- Or with Model constructor
 let model = Model GLM45Air OpenRouter
-let provider = glm45AirOpenRouter
-
--- Use via ZAI
-let model = Model GLM45Air ZAI
-let provider = glm45AirZAI
+let provider = route
 @
 
 = Authentication
@@ -72,21 +68,6 @@ module UniversalLLM.Models.ZhipuAI.GLM
   , GLM47(..)
   , GLM5(..)
   , ZAI(..)
-    -- * Composable Providers
-    -- ** GLM-4.5
-  , glm45
-    -- ** GLM-4.5-Air
-  , glm45AirLlamaCpp
-  , glm45AirOpenRouter
-  , glm45AirZAI
-    -- ** GLM-4.6
-  , glm46
-    -- ** GLM-4.7
-  , glm47
-  , glm47AlibabaCloud
-    -- ** GLM-5
-  , glm5
-  , glm5AlibabaCloud
     -- * Workaround Combinators
   , glmEnsureMinTokens
   , glmFixNullContent
@@ -200,9 +181,9 @@ instance HasReasoning (Model GLM45 ZAI) where
 instance HasJSON (Model GLM45 ZAI) where
   withJSON = OpenAI.openAIJSON
 
--- | Composable provider for GLM-4.5
-glm45 :: ComposableProvider (Model GLM45 ZAI) ((), ((), ((), ())))
-glm45 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45 ZAI)
+instance Routing (Model GLM45 ZAI) where
+  type RoutingState (Model GLM45 ZAI) = ((), ((), ((), ())))
+  route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45 ZAI)
 
 --------------------------------------------------------------------------------
 -- GLM-4.5-Air
@@ -230,9 +211,9 @@ instance HasReasoning (Model GLM45Air LlamaCpp) where
 instance HasJSON (Model GLM45Air LlamaCpp) where
   withJSON = OpenAI.openAIJSON
 
--- | Composable provider for GLM-4.5-Air via llama.cpp
-glm45AirLlamaCpp :: ComposableProvider (Model GLM45Air LlamaCpp) ((), ((), ((), ())))
-glm45AirLlamaCpp = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45Air LlamaCpp)
+instance Routing (Model GLM45Air LlamaCpp) where
+  type RoutingState (Model GLM45Air LlamaCpp) = ((), ((), ((), ())))
+  route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45Air LlamaCpp)
 
 -- OpenRouter provider (native OpenAI format)
 instance ModelName (Model GLM45Air OpenRouter) where
@@ -248,9 +229,9 @@ instance HasReasoning (Model GLM45Air OpenRouter) where
 instance HasJSON (Model GLM45Air OpenRouter) where
   withJSON = OpenAI.openAIJSON
 
--- | Composable provider for GLM-4.5-Air via OpenRouter
-glm45AirOpenRouter :: ComposableProvider (Model GLM45Air OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ())))
-glm45AirOpenRouter = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45Air OpenRouter)
+instance Routing (Model GLM45Air OpenRouter) where
+  type RoutingState (Model GLM45Air OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45Air OpenRouter)
 
 -- ZAI provider (official API)
 -- Define ZAI as a provider
@@ -279,9 +260,9 @@ instance HasReasoning (Model GLM45Air ZAI) where
 instance HasJSON (Model GLM45Air ZAI) where
   withJSON = OpenAI.openAIJSON
 
--- | Composable provider for GLM-4.5-Air via ZAI
-glm45AirZAI :: ComposableProvider (Model GLM45Air ZAI) ((), ((), ((), ())))
-glm45AirZAI = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45Air ZAI)
+instance Routing (Model GLM45Air ZAI) where
+  type RoutingState (Model GLM45Air ZAI) = ((), ((), ((), ())))
+  route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45Air ZAI)
 
 --------------------------------------------------------------------------------
 -- GLM-4.6
@@ -306,9 +287,9 @@ instance HasReasoning (Model GLM46 ZAI) where
 instance HasJSON (Model GLM46 ZAI) where
   withJSON = OpenAI.openAIJSON
 
--- | Composable provider for GLM-4.6
-glm46 :: ComposableProvider (Model GLM46 ZAI) ((), ((), ((), ())))
-glm46 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM46 ZAI)
+instance Routing (Model GLM46 ZAI) where
+  type RoutingState (Model GLM46 ZAI) = ((), ((), ((), ())))
+  route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM46 ZAI)
 
 --------------------------------------------------------------------------------
 -- GLM-4.7
@@ -333,9 +314,9 @@ instance HasReasoning (Model GLM47 ZAI) where
 instance HasJSON (Model GLM47 ZAI) where
   withJSON = OpenAI.openAIJSON
 
--- | Composable provider for GLM-4.7
-glm47 :: ComposableProvider (Model GLM47 ZAI) ((), ((), ((), ())))
-glm47 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47 ZAI)
+instance Routing (Model GLM47 ZAI) where
+  type RoutingState (Model GLM47 ZAI) = ((), ((), ((), ())))
+  route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47 ZAI)
 
 --------------------------------------------------------------------------------
 -- GLM-5
@@ -360,9 +341,9 @@ instance HasReasoning (Model GLM5 ZAI) where
 instance HasJSON (Model GLM5 ZAI) where
   withJSON = OpenAI.openAIJSON
 
--- | Composable provider for GLM-5
-glm5 :: ComposableProvider (Model GLM5 ZAI) ((), ((), ((), ())))
-glm5 = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM5 ZAI)
+instance Routing (Model GLM5 ZAI) where
+  type RoutingState (Model GLM5 ZAI) = ((), ((), ((), ())))
+  route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM5 ZAI)
 
 --------------------------------------------------------------------------------
 -- GLM-4.7 via AlibabaCloud
@@ -377,9 +358,9 @@ instance HasTools (Model GLM47 AlibabaCloud) where
 instance HasJSON (Model GLM47 AlibabaCloud) where
   withJSON = OpenAI.openAIJSON
 
--- | Composable provider for GLM-4.7 via AlibabaCloud
-glm47AlibabaCloud :: ComposableProvider (Model GLM47 AlibabaCloud) ((), ((), ()))
-glm47AlibabaCloud = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47 AlibabaCloud)
+instance Routing (Model GLM47 AlibabaCloud) where
+  type RoutingState (Model GLM47 AlibabaCloud) = ((), ((), ()))
+  route = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47 AlibabaCloud)
 
 --------------------------------------------------------------------------------
 -- GLM-5 via AlibabaCloud
@@ -394,6 +375,6 @@ instance HasTools (Model GLM5 AlibabaCloud) where
 instance HasJSON (Model GLM5 AlibabaCloud) where
   withJSON = OpenAI.openAIJSON
 
--- | Composable provider for GLM-5 via AlibabaCloud
-glm5AlibabaCloud :: ComposableProvider (Model GLM5 AlibabaCloud) ((), ((), ()))
-glm5AlibabaCloud = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM5 AlibabaCloud)
+instance Routing (Model GLM5 AlibabaCloud) where
+  type RoutingState (Model GLM5 AlibabaCloud) = ((), ((), ()))
+  route = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM5 AlibabaCloud)

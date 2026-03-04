@@ -23,11 +23,11 @@ import UniversalLLM.Models.OpenAI.GPT
 
 -- Via OpenRouter
 let model = Model GPTOSS OpenRouter
-let provider = gptOSSOpenRouter
+let provider = route
 
 -- Via llama.cpp
 let model = Model GPTOSS LlamaCpp
-let provider = gptOSS
+let provider = route
 @
 
 = Authentication
@@ -39,9 +39,6 @@ LlamaCpp: Set @LLAMACPP_URL@ environment variable.
 module UniversalLLM.Models.OpenAI.GPT
   ( -- * Model Types
     GPTOSS(..)
-    -- * Composable Providers
-  , gptOSSOpenRouter
-  , gptOSS
   ) where
 
 import UniversalLLM
@@ -73,11 +70,9 @@ instance HasReasoning (Model GPTOSS OpenRouter) where
   type ReasoningState (Model GPTOSS OpenRouter) = OpenAI.OpenRouterReasoningState
   withReasoning = OpenAI.openRouterReasoning
 
--- | Composable provider for GPT-OSS via OpenRouter
---
--- Includes reasoning support via reasoning_details (OpenRouter style).
-gptOSSOpenRouter :: ComposableProvider (Model GPTOSS OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ()))
-gptOSSOpenRouter = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GPTOSS OpenRouter)
+instance Routing (Model GPTOSS OpenRouter) where
+  type RoutingState (Model GPTOSS OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ()))
+  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GPTOSS OpenRouter)
 
 --------------------------------------------------------------------------------
 -- GPT-OSS via LlamaCpp
@@ -92,8 +87,6 @@ instance HasTools (Model GPTOSS LlamaCpp) where
 instance HasReasoning (Model GPTOSS LlamaCpp) where
   withReasoning = OpenAI.openAIReasoning
 
--- | Composable provider for GPT-OSS via llama.cpp
---
--- Uses standard reasoning_content (not OpenRouter's reasoning_details).
-gptOSS :: ComposableProvider (Model GPTOSS LlamaCpp) ((), ((), ()))
-gptOSS = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GPTOSS LlamaCpp)
+instance Routing (Model GPTOSS LlamaCpp) where
+  type RoutingState (Model GPTOSS LlamaCpp) = ((), ((), ()))
+  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GPTOSS LlamaCpp)

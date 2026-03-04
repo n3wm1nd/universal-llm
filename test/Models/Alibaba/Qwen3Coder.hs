@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 {- |
 Module: Models.Alibaba.Qwen3Coder
@@ -24,17 +26,13 @@ __llama.cpp:__
 
 module Models.Alibaba.Qwen3Coder (testsLlamaCppNext, testsLlamaCpp30bInstruct, testsQwen3CoderNextAlibabaCloud, testsQwen3CoderPlusAlibabaCloud) where
 
-import UniversalLLM (Model(..))
+import UniversalLLM (route, via)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), AlibabaCloud(..))
 import UniversalLLM.Models.Alibaba.Qwen
   ( Qwen3CoderNext(..)
-  , qwen3CoderNext
-  , qwen3CoderNextAlibabaCloud
   , Qwen3Coder30bInstruct(..)
-  , qwen3Coder30bInstruct
   , Qwen3CoderPlus(..)
-  , qwen3CoderPlus
   )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
@@ -59,7 +57,7 @@ testsLlamaCppNext provider modelName = do
       startsWithAssistant provider modelName
 
     describe "Standard Tests" $
-      testModel qwen3CoderNext (Model Qwen3CoderNext LlamaCpp) provider
+      testModel route (Qwen3CoderNext `via` LlamaCpp) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
 
 -- | Test Qwen 3 Coder 30B Instruct via llama.cpp
@@ -78,7 +76,7 @@ testsLlamaCpp30bInstruct provider modelName = do
       startsWithAssistant provider modelName
 
     describe "Standard Tests" $
-      testModel qwen3Coder30bInstruct (Model Qwen3Coder30bInstruct LlamaCpp) provider
+      testModel route (Qwen3Coder30bInstruct `via` LlamaCpp) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
 
 -- | Test Qwen 3 Coder Next via AlibabaCloud
@@ -100,7 +98,7 @@ testsQwen3CoderNextAlibabaCloud provider = do
       multipleSystemMessages provider "qwen3-coder-next"
 
     describe "Standard Tests" $
-      testModel qwen3CoderNextAlibabaCloud (Model Qwen3CoderNext AlibabaCloud) provider
+      testModel route (Qwen3CoderNext `via` AlibabaCloud) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
 
 -- | Test Qwen 3 Coder Plus via AlibabaCloud
@@ -122,5 +120,5 @@ testsQwen3CoderPlusAlibabaCloud provider = do
       multipleSystemMessages provider "qwen3-coder-plus"
 
     describe "Standard Tests" $
-      testModel qwen3CoderPlus (Model Qwen3CoderPlus AlibabaCloud) provider
+      testModel route (Qwen3CoderPlus `via` AlibabaCloud) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]

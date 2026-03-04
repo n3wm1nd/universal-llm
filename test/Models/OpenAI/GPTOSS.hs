@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 {- |
 Module: Models.OpenAI.GPTOSS
@@ -29,14 +31,10 @@ module Models.OpenAI.GPTOSS (testsOpenRouter, testsLlamaCpp) where
 
 import Data.Text (Text)
 import qualified Data.Text as T
-import UniversalLLM (Model(..))
+import UniversalLLM (route, via)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
-import UniversalLLM.Models.OpenAI.GPT
-  ( GPTOSS(..)
-  , gptOSSOpenRouter
-  , gptOSS
-  )
+import UniversalLLM.Models.OpenAI.GPT (GPTOSS(..))
 import Protocol.OpenAITests
 import qualified StandardTests as ST
 import TestCache (ResponseProvider)
@@ -63,7 +61,7 @@ testsOpenRouter provider = do
       toolCallingWithReasoning provider "openai/gpt-oss-120b"
 
     describe "Standard Tests" $
-      testModel gptOSSOpenRouter (Model GPTOSS OpenRouter) provider
+      testModel route (GPTOSS `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
 
 -- | Test GPT-OSS via llama.cpp
@@ -88,5 +86,5 @@ testsLlamaCpp provider modelName = do
       reasoning provider modelName
 
     describe "Standard Tests" $
-      testModel gptOSS (Model GPTOSS LlamaCpp) provider
+      testModel route (GPTOSS `via` LlamaCpp) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]

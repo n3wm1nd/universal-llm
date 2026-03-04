@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 {- |
 Module: Models.Minimax.MinimaxM25
@@ -29,15 +31,10 @@ module Models.Minimax.MinimaxM25 (testsOpenRouter, testsLlamaCpp, testsAlibabaCl
 
 import Data.Text (Text)
 import qualified Data.Text as T
-import UniversalLLM (Model(..))
+import UniversalLLM (route, via)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud(..))
-import UniversalLLM.Models.Minimax.M
-  ( MinimaxM25(..)
-  , minimaxM25
-  , minimaxM25LlamaCpp
-  , minimaxM25AlibabaCloud
-  )
+import UniversalLLM.Models.Minimax.M (MinimaxM25(..))
 import Protocol.OpenAITests
 import qualified StandardTests as ST
 import TestCache (ResponseProvider)
@@ -67,7 +64,7 @@ testsOpenRouter provider = do
       toolCallingWithReasoning provider "minimax/minimax-m2.5"
 
     describe "Standard Tests" $
-      testModel minimaxM25 (Model MinimaxM25 OpenRouter) provider
+      testModel route (MinimaxM25 `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
 
 -- | Test MiniMax M2.5 via llama.cpp
@@ -92,7 +89,7 @@ testsLlamaCpp provider modelName = do
       -- Reasoning + tools is covered by ST.reasoningWithTools in Standard Tests.
 
     describe "Standard Tests" $
-      testModel minimaxM25LlamaCpp (Model MinimaxM25 LlamaCpp) provider
+      testModel route (MinimaxM25 `via` LlamaCpp) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test MiniMax M2.5 via AlibabaCloud
@@ -114,5 +111,5 @@ testsAlibabaCloud provider = do
       multipleSystemMessages provider "MiniMax-M2.5"
 
     describe "Standard Tests" $
-      testModel minimaxM25AlibabaCloud (Model MinimaxM25 AlibabaCloud) provider
+      testModel route (MinimaxM25 `via` AlibabaCloud) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]

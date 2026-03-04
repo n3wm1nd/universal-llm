@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 {- |
 Module: Models.Amazon.Nova2Lite
@@ -29,13 +31,10 @@ __OpenRouter/Amazon Bedrock:__
 
 module Models.Amazon.Nova2Lite (testsOpenRouter) where
 
-import UniversalLLM (Model(..))
+import UniversalLLM (route, via)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (OpenRouter(..))
-import UniversalLLM.Models.Amazon.Nova
-  ( Nova2Lite(..)
-  , nova2Lite
-  )
+import UniversalLLM.Models.Amazon.Nova (Nova2Lite(..))
 import Protocol.OpenAITests
 import qualified StandardTests as ST
 import TestCache (ResponseProvider)
@@ -85,5 +84,5 @@ testsOpenRouter provider = do
       -- toolCallingWithReasoning provider "amazon/nova-2-lite-v1"
 
     describe "Standard Tests" $
-      testModel nova2Lite (Model Nova2Lite OpenRouter) provider
+      testModel route (Nova2Lite `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]

@@ -15,6 +15,8 @@ This module provides tested, production-ready definitions for Alibaba's Qwen mod
 * 'Qwen35_122B' - Qwen 3.5 122B, large reasoning model
 * 'Qwen3CoderNext' - Latest Qwen 3 Coder variant (aliased as 'Qwen3Coder')
 * 'Qwen3Coder30bInstruct' - Qwen 3 Coder 30B Instruct
+* 'Qwen35Plus' - Qwen 3.5 Plus (via AlibabaCloud)
+* 'Qwen3CoderPlus' - Qwen 3 Coder Plus (via AlibabaCloud)
 
 = Provider Support
 
@@ -22,6 +24,7 @@ Qwen models are currently available through:
 
 - __llama.cpp__: Local inference with native tool support
 - __OpenRouter__: Qwen 3.5 122B
+- __AlibabaCloud__: Qwen 3.5 Plus, Qwen 3 Coder variants
 
 Unlike GLM models, Qwen's chat template properly converts XML tool calls to OpenAI format,
 so no special XML parsing is needed.
@@ -34,21 +37,22 @@ import UniversalLLM.Models.Alibaba.Qwen
 
 -- Qwen 3.5 122B via OpenRouter
 let model = Model Qwen35_122B OpenRouter
-let provider = qwen35_122BOpenRouter
+let provider = route
 
 -- Qwen 3.5 122B via llama.cpp
 let model = Model Qwen35_122B LlamaCpp
-let provider = qwen35_122B
+let provider = route
 
 -- Latest Qwen 3 Coder (currently Qwen3CoderNext)
 let model = Model Qwen3CoderNext LlamaCpp
-let provider = qwen3CoderNext
+let provider = route
 @
 
 = Authentication
 
 - llama.cpp: No auth needed (local)
 - OpenRouter: Set @OPENROUTER_API_KEY@ environment variable
+- AlibabaCloud: Set @ALIBABACLOUD_API_KEY@ environment variable
 -}
 
 module UniversalLLM.Models.Alibaba.Qwen
@@ -60,15 +64,6 @@ module UniversalLLM.Models.Alibaba.Qwen
   , Qwen35Plus(..)
     -- * Aliases
   , Qwen3Coder
-  , qwen3Coder
-    -- * Composable Providers
-  , qwen35_122BOpenRouter
-  , qwen35_122B
-  , qwen3CoderNext
-  , qwen3CoderNextAlibabaCloud
-  , qwen3Coder30bInstruct
-  , qwen3CoderPlus
-  , qwen35Plus
   ) where
 
 import UniversalLLM
@@ -99,14 +94,9 @@ instance HasJSON (Model Qwen35_122B LlamaCpp) where
 instance HasReasoning (Model Qwen35_122B LlamaCpp) where
   withReasoning = OpenAI.openAIReasoning
 
--- | Composable provider for Qwen 3.5 122B via llama.cpp
---
--- Qwen3.5's chat template requires exactly one system message at the beginning.
--- Two mitigations are chained:
---   * 'systemMessagesFirst' hoists mid-conversation SystemText to the front
---   * 'mergeSystemMessages' collapses multiple system messages into one
-qwen35_122B :: ComposableProvider (Model Qwen35_122B LlamaCpp) ((), ((), ((), ((), ((), ())))))
-qwen35_122B = OpenAI.mergeSystemMessages `chainProviders` OpenAI.systemMessagesFirst `chainProviders` withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen35_122B LlamaCpp)
+instance Routing (Model Qwen35_122B LlamaCpp) where
+  type RoutingState (Model Qwen35_122B LlamaCpp) = ((), ((), ((), ((), ((), ())))))
+  route = OpenAI.mergeSystemMessages `chainProviders` OpenAI.systemMessagesFirst `chainProviders` withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen35_122B LlamaCpp)
 
 --------------------------------------------------------------------------------
 -- Qwen 3.5 122B via OpenRouter
@@ -125,9 +115,9 @@ instance HasReasoning (Model Qwen35_122B OpenRouter) where
   type ReasoningState (Model Qwen35_122B OpenRouter) = OpenAI.OpenRouterReasoningState
   withReasoning = OpenAI.openRouterReasoning
 
--- | Composable provider for Qwen 3.5 122B via OpenRouter
-qwen35_122BOpenRouter :: ComposableProvider (Model Qwen35_122B OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ())))
-qwen35_122BOpenRouter = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen35_122B OpenRouter)
+instance Routing (Model Qwen35_122B OpenRouter) where
+  type RoutingState (Model Qwen35_122B OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen35_122B OpenRouter)
 
 --------------------------------------------------------------------------------
 -- Qwen 3 Coder Next
@@ -150,9 +140,9 @@ instance HasTools (Model Qwen3CoderNext LlamaCpp) where
 instance HasJSON (Model Qwen3CoderNext LlamaCpp) where
   withJSON = OpenAI.openAIJSON
 
--- | Composable provider for Qwen 3 Coder Next via llama.cpp
-qwen3CoderNext :: ComposableProvider (Model Qwen3CoderNext LlamaCpp) ((), ((), ()))
-qwen3CoderNext = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen3CoderNext LlamaCpp)
+instance Routing (Model Qwen3CoderNext LlamaCpp) where
+  type RoutingState (Model Qwen3CoderNext LlamaCpp) = ((), ((), ()))
+  route = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen3CoderNext LlamaCpp)
 
 --------------------------------------------------------------------------------
 -- Qwen 3 Coder 30B Instruct
@@ -175,9 +165,9 @@ instance HasTools (Model Qwen3Coder30bInstruct LlamaCpp) where
 instance HasJSON (Model Qwen3Coder30bInstruct LlamaCpp) where
   withJSON = OpenAI.openAIJSON
 
--- | Composable provider for Qwen 3 Coder 30B Instruct via llama.cpp
-qwen3Coder30bInstruct :: ComposableProvider (Model Qwen3Coder30bInstruct LlamaCpp) ((), ((), ()))
-qwen3Coder30bInstruct = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen3Coder30bInstruct LlamaCpp)
+instance Routing (Model Qwen3Coder30bInstruct LlamaCpp) where
+  type RoutingState (Model Qwen3Coder30bInstruct LlamaCpp) = ((), ((), ()))
+  route = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen3Coder30bInstruct LlamaCpp)
 
 --------------------------------------------------------------------------------
 -- Qwen 3.5 Plus (AlibabaCloud)
@@ -199,9 +189,9 @@ instance HasTools (Model Qwen35Plus AlibabaCloud) where
 instance HasJSON (Model Qwen35Plus AlibabaCloud) where
   withJSON = OpenAI.openAIJSON
 
--- | Composable provider for Qwen 3.5 Plus via AlibabaCloud
-qwen35Plus :: ComposableProvider (Model Qwen35Plus AlibabaCloud) ((), ((), ()))
-qwen35Plus = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen35Plus AlibabaCloud)
+instance Routing (Model Qwen35Plus AlibabaCloud) where
+  type RoutingState (Model Qwen35Plus AlibabaCloud) = ((), ((), ()))
+  route = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen35Plus AlibabaCloud)
 
 --------------------------------------------------------------------------------
 -- Qwen 3 Coder Next via AlibabaCloud
@@ -216,9 +206,9 @@ instance HasTools (Model Qwen3CoderNext AlibabaCloud) where
 instance HasJSON (Model Qwen3CoderNext AlibabaCloud) where
   withJSON = OpenAI.openAIJSON
 
--- | Composable provider for Qwen 3 Coder Next via AlibabaCloud
-qwen3CoderNextAlibabaCloud :: ComposableProvider (Model Qwen3CoderNext AlibabaCloud) ((), ((), ()))
-qwen3CoderNextAlibabaCloud = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen3CoderNext AlibabaCloud)
+instance Routing (Model Qwen3CoderNext AlibabaCloud) where
+  type RoutingState (Model Qwen3CoderNext AlibabaCloud) = ((), ((), ()))
+  route = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen3CoderNext AlibabaCloud)
 
 --------------------------------------------------------------------------------
 -- Qwen 3 Coder Plus (AlibabaCloud)
@@ -240,9 +230,9 @@ instance HasTools (Model Qwen3CoderPlus AlibabaCloud) where
 instance HasJSON (Model Qwen3CoderPlus AlibabaCloud) where
   withJSON = OpenAI.openAIJSON
 
--- | Composable provider for Qwen 3 Coder Plus via AlibabaCloud
-qwen3CoderPlus :: ComposableProvider (Model Qwen3CoderPlus AlibabaCloud) ((), ((), ()))
-qwen3CoderPlus = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen3CoderPlus AlibabaCloud)
+instance Routing (Model Qwen3CoderPlus AlibabaCloud) where
+  type RoutingState (Model Qwen3CoderPlus AlibabaCloud) = ((), ((), ()))
+  route = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen3CoderPlus AlibabaCloud)
 
 --------------------------------------------------------------------------------
 -- Aliases (Qwen3Coder = latest = Qwen3CoderNext)
@@ -250,7 +240,3 @@ qwen3CoderPlus = withJSON `chainProviders` withTools `chainProviders` OpenAI.bas
 
 -- | Alias for the latest Qwen 3 Coder variant ('Qwen3CoderNext')
 type Qwen3Coder = Qwen3CoderNext
-
--- | Alias for 'qwen3CoderNext'
-qwen3Coder :: ComposableProvider (Model Qwen3CoderNext LlamaCpp) ((), ((), ()))
-qwen3Coder = qwen3CoderNext

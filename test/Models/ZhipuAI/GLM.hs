@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 {- |
 Module: Models.ZhipuAI.GLM
@@ -39,7 +41,7 @@ module Models.ZhipuAI.GLM
   , testsGLM5AlibabaCloud
   ) where
 
-import UniversalLLM (Model(..))
+import UniversalLLM (via, route)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud(..))
 import UniversalLLM.Models.ZhipuAI.GLM
@@ -49,15 +51,6 @@ import UniversalLLM.Models.ZhipuAI.GLM
   , GLM47(..)
   , GLM5(..)
   , ZAI(..)
-  , glm45
-  , glm47AlibabaCloud
-  , glm5AlibabaCloud
-  , glm45AirLlamaCpp
-  , glm45AirOpenRouter
-  , glm45AirZAI
-  , glm46
-  , glm47
-  , glm5
   )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
@@ -87,7 +80,7 @@ testsGLM45AirOpenRouter provider = do
       providerErrorResponse provider
 
     describe "Standard Tests" $
-      testModel glm45AirOpenRouter (Model GLM45Air OpenRouter) provider
+      testModel route (GLM45Air `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 4.5 Air via llama.cpp
@@ -112,7 +105,7 @@ testsGLM45AirLlamaCpp provider modelName = do
       reasoning provider modelName  -- llama.cpp uses standard reasoning_content
 
     describe "Standard Tests" $
-      testModel glm45AirLlamaCpp (Model GLM45Air LlamaCpp) provider
+      testModel route (GLM45Air `via` LlamaCpp) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
 
 -- | Test GLM 4.5 Air via ZAI
@@ -122,7 +115,7 @@ testsGLM45AirZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM45AirZAI provider = do
   describe "GLM 4.5 Air via ZAI" $ do
     describe "Standard Tests" $
-      testModel glm45AirZAI (Model GLM45Air ZAI) provider
+      testModel route (GLM45Air `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning ]
 
 -- | Test GLM 4.5 (full) via ZAI
@@ -130,7 +123,7 @@ testsGLM45ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM45ZAI provider = do
   describe "GLM 4.5 via ZAI" $ do
     describe "Standard Tests" $
-      testModel glm45 (Model GLM45 ZAI) provider
+      testModel route (GLM45 `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 4.6 via ZAI
@@ -138,7 +131,7 @@ testsGLM46ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM46ZAI provider = do
   describe "GLM 4.6 via ZAI" $ do
     describe "Standard Tests" $
-      testModel glm46 (Model GLM46 ZAI) provider
+      testModel route (GLM46 `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 4.7 via ZAI
@@ -146,7 +139,7 @@ testsGLM47ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM47ZAI provider = do
   describe "GLM 4.7 via ZAI" $ do
     describe "Standard Tests" $
-      testModel glm47 (Model GLM47 ZAI) provider
+      testModel route (GLM47 `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 5 via ZAI
@@ -168,7 +161,7 @@ testsGLM5ZAI provider = do
       reasoning provider "glm-5"
 
     describe "Standard Tests" $
-      testModel glm5 (Model GLM5 ZAI) provider
+      testModel route (GLM5 `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 4.7 via AlibabaCloud
@@ -190,7 +183,7 @@ testsGLM47AlibabaCloud provider = do
       multipleSystemMessages provider "glm-4.7"
 
     describe "Standard Tests" $
-      testModel glm47AlibabaCloud (Model GLM47 AlibabaCloud) provider
+      testModel route (GLM47 `via` AlibabaCloud) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
 
 -- | Test GLM 5 via AlibabaCloud
@@ -212,5 +205,5 @@ testsGLM5AlibabaCloud provider = do
       multipleSystemMessages provider "glm-5"
 
     describe "Standard Tests" $
-      testModel glm5AlibabaCloud (Model GLM5 AlibabaCloud) provider
+      testModel route (GLM5 `via` AlibabaCloud) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]

@@ -15,6 +15,9 @@ These models can be used directly in applications without redefinition.
 
 * 'ClaudeSonnet45' - Claude Sonnet 4.5 with reasoning and tool support (default)
 * 'ClaudeSonnet45NoReason' - Sonnet 4.5 with tools only, no reasoning state (exception)
+* 'ClaudeSonnet46' - Claude Sonnet 4.6 with reasoning and tool support
+* 'ClaudeHaiku45' - Claude Haiku 4.5 with reasoning and tool support
+* 'ClaudeOpus46' - Claude Opus 4.6 with adaptive reasoning and tool support
 
 = Usage
 
@@ -24,15 +27,15 @@ import UniversalLLM.Models.Anthropic.Claude
 
 -- Use with regular Anthropic API (with reasoning)
 let model = Model ClaudeSonnet45 Anthropic
-let provider = claudeSonnet45
+let provider = route
 
 -- Use with OAuth (with reasoning)
 let oauthModel = Model ClaudeSonnet45 AnthropicOAuth
-let oauthProvider = claudeSonnet45OAuth
+let provider = route
 
 -- Use without reasoning (rare)
 let noReasonModel = Model ClaudeSonnet45NoReason Anthropic
-let noReasonProvider = claudeSonnet45NoReason
+let provider = route
 @
 
 = Authentication
@@ -49,22 +52,11 @@ module UniversalLLM.Models.Anthropic.Claude
   , ClaudeSonnet46(..)
   , ClaudeHaiku45(..)
   , ClaudeOpus46(..)
-    -- * Composable Providers
-  , claudeSonnet45
-  , claudeSonnet45NoReason
-  , claudeSonnet45OAuth
-  , claudeSonnet45NoReasonOAuth
-  , claudeSonnet46
-  , claudeSonnet46OAuth
-  , claudeHaiku45
-  , claudeHaiku45OAuth
-  , claudeOpus46
-  , claudeOpus46OAuth
   ) where
 
 import UniversalLLM
 import qualified UniversalLLM.Providers.Anthropic as Anthropic
-import UniversalLLM.Providers.Anthropic (Anthropic(..), AnthropicOAuth(..), OAuthToolsState)
+import UniversalLLM.Providers.Anthropic (Anthropic(..), AnthropicOAuth(..))
 
 --------------------------------------------------------------------------------
 -- Claude Sonnet 4.5
@@ -89,11 +81,9 @@ instance HasReasoning (Model ClaudeSonnet45 Anthropic) where
   type ReasoningState (Model ClaudeSonnet45 Anthropic) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicReasoning
 
--- | Composable provider for Claude Sonnet 4.5 with reasoning and tools
---
--- This is the default provider with full reasoning state tracking.
-claudeSonnet45 :: ComposableProvider (Model ClaudeSonnet45 Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
-claudeSonnet45 = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45 Anthropic)
+instance Routing (Model ClaudeSonnet45 Anthropic) where
+  type RoutingState (Model ClaudeSonnet45 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ()))
+  route = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45 Anthropic)
 
 --------------------------------------------------------------------------------
 -- Claude Sonnet 4.5 without Reasoning
@@ -111,11 +101,9 @@ instance ModelName (Model ClaudeSonnet45NoReason Anthropic) where
 instance HasTools (Model ClaudeSonnet45NoReason Anthropic) where
   withTools = Anthropic.anthropicTools
 
--- | Composable provider for Claude Sonnet 4.5 without reasoning state
---
--- Provides tools only, without explicit reasoning state tracking.
-claudeSonnet45NoReason :: ComposableProvider (Model ClaudeSonnet45NoReason Anthropic) ((), ())
-claudeSonnet45NoReason = withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45NoReason Anthropic)
+instance Routing (Model ClaudeSonnet45NoReason Anthropic) where
+  type RoutingState (Model ClaudeSonnet45NoReason Anthropic) = ((), ())
+  route = withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45NoReason Anthropic)
 
 --------------------------------------------------------------------------------
 -- Claude Sonnet 4.6
@@ -141,11 +129,9 @@ instance HasReasoning (Model ClaudeSonnet46 Anthropic) where
   type ReasoningState (Model ClaudeSonnet46 Anthropic) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicReasoning
 
--- | Composable provider for Claude Sonnet 4.6 with reasoning and tools
---
--- This is the default provider with full reasoning state tracking.
-claudeSonnet46 :: ComposableProvider (Model ClaudeSonnet46 Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
-claudeSonnet46 = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet46 Anthropic)
+instance Routing (Model ClaudeSonnet46 Anthropic) where
+  type RoutingState (Model ClaudeSonnet46 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ()))
+  route = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet46 Anthropic)
 
 --------------------------------------------------------------------------------
 -- Claude Haiku 4.5
@@ -170,11 +156,9 @@ instance HasReasoning (Model ClaudeHaiku45 Anthropic) where
   type ReasoningState (Model ClaudeHaiku45 Anthropic) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicReasoning
 
--- | Composable provider for Claude Haiku 4.5 with reasoning and tools
---
--- This is the default provider with full reasoning state tracking.
-claudeHaiku45 :: ComposableProvider (Model ClaudeHaiku45 Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
-claudeHaiku45 = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeHaiku45 Anthropic)
+instance Routing (Model ClaudeHaiku45 Anthropic) where
+  type RoutingState (Model ClaudeHaiku45 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ()))
+  route = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeHaiku45 Anthropic)
 
 --------------------------------------------------------------------------------
 -- Claude Opus 4.6
@@ -200,11 +184,9 @@ instance HasReasoning (Model ClaudeOpus46 Anthropic) where
   type ReasoningState (Model ClaudeOpus46 Anthropic) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicAdaptiveReasoning
 
--- | Composable provider for Claude Opus 4.6 with adaptive reasoning and tools
---
--- Uses Opus 4.6's adaptive thinking with effort parameter instead of budget_tokens.
-claudeOpus46 :: ComposableProvider (Model ClaudeOpus46 Anthropic) (Anthropic.AnthropicReasoningState, ((), ()))
-claudeOpus46 = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus46 Anthropic)
+instance Routing (Model ClaudeOpus46 Anthropic) where
+  type RoutingState (Model ClaudeOpus46 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ()))
+  route = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus46 Anthropic)
 
 --------------------------------------------------------------------------------
 -- OAuth Versions
@@ -222,12 +204,9 @@ instance HasReasoning (Model ClaudeSonnet45 AnthropicOAuth) where
   type ReasoningState (Model ClaudeSonnet45 AnthropicOAuth) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicReasoning
 
--- | Composable provider for Claude Sonnet 4.5 via OAuth with reasoning
---
--- Combines reasoning state and the magic system prompt.
--- NOTE: Tool name blacklist workaround removed - no longer needed as of 2025.
-claudeSonnet45OAuth :: ComposableProvider (Model ClaudeSonnet45 AnthropicOAuth) (Anthropic.AnthropicReasoningState, ((), ((), ())))
-claudeSonnet45OAuth = withReasoning `chainProviders` withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45 AnthropicOAuth)
+instance Routing (Model ClaudeSonnet45 AnthropicOAuth) where
+  type RoutingState (Model ClaudeSonnet45 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45 AnthropicOAuth)
 
 -- OAuth version without reasoning
 -- NOTE: Tool name blacklist workaround removed as of 2025 - API no longer blocks tool names
@@ -237,12 +216,9 @@ instance ModelName (Model ClaudeSonnet45NoReason AnthropicOAuth) where
 instance HasTools (Model ClaudeSonnet45NoReason AnthropicOAuth) where
   withTools = Anthropic.anthropicTools
 
--- | Composable provider for Claude Sonnet 4.5 via OAuth without reasoning
---
--- Includes the magic system prompt, but no reasoning state.
--- NOTE: Tool name blacklist workaround removed - no longer needed as of 2025.
-claudeSonnet45NoReasonOAuth :: ComposableProvider (Model ClaudeSonnet45NoReason AnthropicOAuth) ((), ((), ()))
-claudeSonnet45NoReasonOAuth = withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45NoReason AnthropicOAuth)
+instance Routing (Model ClaudeSonnet45NoReason AnthropicOAuth) where
+  type RoutingState (Model ClaudeSonnet45NoReason AnthropicOAuth) = ((), ((), ()))
+  route = withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45NoReason AnthropicOAuth)
 
 -- OAuth version for ClaudeSonnet46 (with reasoning)
 -- NOTE: Tool name blacklist workaround removed as of 2025 - API no longer blocks tool names
@@ -256,12 +232,9 @@ instance HasReasoning (Model ClaudeSonnet46 AnthropicOAuth) where
   type ReasoningState (Model ClaudeSonnet46 AnthropicOAuth) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicReasoning
 
--- | Composable provider for Claude Sonnet 4.6 via OAuth with reasoning
---
--- Combines reasoning state and the magic system prompt.
--- NOTE: Tool name blacklist workaround removed - no longer needed as of 2025.
-claudeSonnet46OAuth :: ComposableProvider (Model ClaudeSonnet46 AnthropicOAuth) (Anthropic.AnthropicReasoningState, ((), ((), ())))
-claudeSonnet46OAuth = withReasoning `chainProviders` withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet46 AnthropicOAuth)
+instance Routing (Model ClaudeSonnet46 AnthropicOAuth) where
+  type RoutingState (Model ClaudeSonnet46 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet46 AnthropicOAuth)
 
 -- OAuth version for ClaudeHaiku45 (with reasoning)
 -- NOTE: Tool name blacklist workaround removed as of 2025 - API no longer blocks tool names
@@ -275,12 +248,9 @@ instance HasReasoning (Model ClaudeHaiku45 AnthropicOAuth) where
   type ReasoningState (Model ClaudeHaiku45 AnthropicOAuth) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicReasoning
 
--- | Composable provider for Claude Haiku 4.5 via OAuth with reasoning
---
--- Combines reasoning state and the magic system prompt.
--- NOTE: Tool name blacklist workaround removed - no longer needed as of 2025.
-claudeHaiku45OAuth :: ComposableProvider (Model ClaudeHaiku45 AnthropicOAuth) (Anthropic.AnthropicReasoningState, ((), ((), ())))
-claudeHaiku45OAuth = withReasoning `chainProviders` withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeHaiku45 AnthropicOAuth)
+instance Routing (Model ClaudeHaiku45 AnthropicOAuth) where
+  type RoutingState (Model ClaudeHaiku45 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeHaiku45 AnthropicOAuth)
 
 -- OAuth version for ClaudeOpus46 (with adaptive reasoning)
 -- NOTE: Tool name blacklist workaround removed as of 2025 - API no longer blocks tool names
@@ -294,9 +264,6 @@ instance HasReasoning (Model ClaudeOpus46 AnthropicOAuth) where
   type ReasoningState (Model ClaudeOpus46 AnthropicOAuth) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicAdaptiveReasoning
 
--- | Composable provider for Claude Opus 4.6 via OAuth with adaptive reasoning
---
--- Combines adaptive reasoning and the magic system prompt.
--- NOTE: Tool name blacklist workaround removed - no longer needed as of 2025.
-claudeOpus46OAuth :: ComposableProvider (Model ClaudeOpus46 AnthropicOAuth) (Anthropic.AnthropicReasoningState, ((), ((), ())))
-claudeOpus46OAuth = withReasoning `chainProviders` withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus46 AnthropicOAuth)
+instance Routing (Model ClaudeOpus46 AnthropicOAuth) where
+  type RoutingState (Model ClaudeOpus46 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus46 AnthropicOAuth)

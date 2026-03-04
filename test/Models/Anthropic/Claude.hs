@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 {- |
 Module: Models.Anthropic.Claude
@@ -30,7 +32,7 @@ __Anthropic API:__
 
 module Models.Anthropic.Claude (testsSonnet45, testsSonnet46, testsHaiku45, testsOpus46) where
 
-import UniversalLLM (Model(..))
+import UniversalLLM (route, via)
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse, model)
 import qualified UniversalLLM.Providers.Anthropic as Anthropic
 import UniversalLLM.Providers.Anthropic (Anthropic(..), AnthropicOAuth(..))
@@ -39,10 +41,6 @@ import UniversalLLM.Models.Anthropic.Claude
   , ClaudeSonnet46(..)
   , ClaudeHaiku45(..)
   , ClaudeOpus46(..)
-  , claudeSonnet45OAuth
-  , claudeSonnet46OAuth
-  , claudeHaiku45OAuth
-  , claudeOpus46OAuth
   )
 import Protocol.AnthropicTests
 import qualified Protocol.AnthropicOAuthBlacklist as Blacklist
@@ -72,11 +70,11 @@ testsSonnet45 provider = do
       return ()
 
     describe "Standard Tests" $
-      testModel claudeSonnet45OAuth (Model ClaudeSonnet45 Anthropic.AnthropicOAuth) provider
+      testModel route (ClaudeSonnet45 `via` AnthropicOAuth) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
 
     describe "OAuth Provider Tests" $
-      testModel claudeSonnet45OAuth (Model ClaudeSonnet45 Anthropic.AnthropicOAuth) provider
+      testModel route (ClaudeSonnet45 `via` AnthropicOAuth) provider
         [ ST.text
         , ST.tools
         , ST.toolWithName "grep"      -- Previously blacklisted, now works directly
@@ -105,11 +103,11 @@ testsSonnet46 provider = do
       return ()
 
     describe "Standard Tests" $
-      testModel claudeSonnet46OAuth (Model ClaudeSonnet46 Anthropic.AnthropicOAuth) provider
+      testModel route (ClaudeSonnet46 `via` AnthropicOAuth) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
 
     describe "OAuth Provider Tests" $
-      testModel claudeSonnet46OAuth (Model ClaudeSonnet46 Anthropic.AnthropicOAuth) provider
+      testModel route (ClaudeSonnet46 `via` AnthropicOAuth) provider
         [ ST.text
         , ST.tools
         , ST.toolWithName "grep"      -- Blacklisted, should work via prefix/unprefix
@@ -138,11 +136,11 @@ testsHaiku45 provider = do
       return ()
 
     describe "Standard Tests" $
-      testModel claudeHaiku45OAuth (Model ClaudeHaiku45 Anthropic.AnthropicOAuth) provider
+      testModel route (ClaudeHaiku45 `via` AnthropicOAuth) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
 
     describe "OAuth Provider Tests" $
-      testModel claudeHaiku45OAuth (Model ClaudeHaiku45 Anthropic.AnthropicOAuth) provider
+      testModel route (ClaudeHaiku45 `via` AnthropicOAuth) provider
         [ ST.text
         , ST.tools
         , ST.toolWithName "grep"      -- Blacklisted, should work via prefix/unprefix
@@ -173,11 +171,11 @@ testsOpus46 provider = do
       return ()
 
     describe "Standard Tests" $
-      testModel claudeOpus46OAuth (Model ClaudeOpus46 Anthropic.AnthropicOAuth) provider
+      testModel route (ClaudeOpus46 `via` AnthropicOAuth) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
 
     describe "OAuth Provider Tests" $
-      testModel claudeOpus46OAuth (Model ClaudeOpus46 Anthropic.AnthropicOAuth) provider
+      testModel route (ClaudeOpus46 `via` AnthropicOAuth) provider
         [ ST.text
         , ST.tools
         , ST.toolWithName "grep"      -- Blacklisted, should work via prefix/unprefix

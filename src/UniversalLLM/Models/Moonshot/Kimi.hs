@@ -9,7 +9,7 @@ Module: UniversalLLM.Models.Moonshot.Kimi
 Description: Production-ready Kimi model definitions
 
 This module provides a tested, production-ready definition for Moonshot AI's
-Kimi K2.5 model, accessed through OpenRouter.
+Kimi K2.5 model, accessed through OpenRouter or AlibabaCloud.
 
 = Available Models
 
@@ -22,20 +22,22 @@ import UniversalLLM
 import UniversalLLM.Models.Moonshot.Kimi
 
 let model = Model KimiK25 OpenRouter
-let provider = kimiK25
+let provider = route
+
+-- Or via AlibabaCloud
+let model = Model KimiK25 AlibabaCloud
+let provider = route
 @
 
 = Authentication
 
-Set @OPENROUTER_API_KEY@ environment variable.
+- OpenRouter: Set @OPENROUTER_API_KEY@ environment variable
+- AlibabaCloud: Set @ALIBABACLOUD_API_KEY@ environment variable
 -}
 
 module UniversalLLM.Models.Moonshot.Kimi
   ( -- * Model Types
     KimiK25(..)
-    -- * Composable Providers
-  , kimiK25
-  , kimiK25AlibabaCloud
   ) where
 
 import UniversalLLM
@@ -66,11 +68,9 @@ instance HasReasoning (Model KimiK25 OpenRouter) where
   type ReasoningState (Model KimiK25 OpenRouter) = OpenAI.OpenRouterReasoningState
   withReasoning = OpenAI.openRouterReasoning
 
--- | Composable provider for Kimi K2.5
---
--- Includes reasoning support via reasoning_details (OpenRouter style).
-kimiK25 :: ComposableProvider (Model KimiK25 OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ()))
-kimiK25 = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model KimiK25 OpenRouter)
+instance Routing (Model KimiK25 OpenRouter) where
+  type RoutingState (Model KimiK25 OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ()))
+  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model KimiK25 OpenRouter)
 
 --------------------------------------------------------------------------------
 -- Kimi K2.5 via AlibabaCloud
@@ -82,6 +82,6 @@ instance ModelName (Model KimiK25 AlibabaCloud) where
 instance HasTools (Model KimiK25 AlibabaCloud) where
   withTools = OpenAI.openAITools
 
--- | Composable provider for Kimi K2.5 via AlibabaCloud
-kimiK25AlibabaCloud :: ComposableProvider (Model KimiK25 AlibabaCloud) ((), ())
-kimiK25AlibabaCloud = withTools `chainProviders` OpenAI.baseComposableProvider @(Model KimiK25 AlibabaCloud)
+instance Routing (Model KimiK25 AlibabaCloud) where
+  type RoutingState (Model KimiK25 AlibabaCloud) = ((), ())
+  route = withTools `chainProviders` OpenAI.baseComposableProvider @(Model KimiK25 AlibabaCloud)

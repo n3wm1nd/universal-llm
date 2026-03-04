@@ -31,11 +31,11 @@ import UniversalLLM.Models.Google.Gemini
 
 -- Use Gemini 3 Flash
 let model = Model Gemini3FlashPreview OpenRouter
-let provider = gemini3FlashPreview
+let provider = route
 
 -- Use Gemini 3 Pro
 let model = Model Gemini3ProPreview OpenRouter
-let provider = gemini3ProPreview
+let provider = route
 @
 
 = Authentication
@@ -47,9 +47,6 @@ module UniversalLLM.Models.Google.Gemini
   ( -- * Model Types
     Gemini3FlashPreview(..)
   , Gemini3ProPreview(..)
-    -- * Composable Providers
-  , gemini3FlashPreview
-  , gemini3ProPreview
   ) where
 
 import UniversalLLM
@@ -82,9 +79,9 @@ instance HasReasoning (Model Gemini3FlashPreview OpenRouter) where
   type ReasoningState (Model Gemini3FlashPreview OpenRouter) = OpenAI.OpenRouterReasoningState
   withReasoning = OpenAI.openRouterReasoning
 
--- | Composable provider for Gemini 3 Flash Preview
-gemini3FlashPreview :: ComposableProvider (Model Gemini3FlashPreview OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ()))
-gemini3FlashPreview = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Gemini3FlashPreview OpenRouter)
+instance Routing (Model Gemini3FlashPreview OpenRouter) where
+  type RoutingState (Model Gemini3FlashPreview OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ()))
+  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Gemini3FlashPreview OpenRouter)
 
 --------------------------------------------------------------------------------
 -- Google Gemini 3 Pro Preview
@@ -105,6 +102,6 @@ instance HasReasoning (Model Gemini3ProPreview OpenRouter) where
   type ReasoningState (Model Gemini3ProPreview OpenRouter) = OpenAI.OpenRouterReasoningState
   withReasoning = OpenAI.openRouterReasoning
 
--- | Composable provider for Gemini 3 Pro Preview
-gemini3ProPreview :: ComposableProvider (Model Gemini3ProPreview OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ()))
-gemini3ProPreview = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Gemini3ProPreview OpenRouter)
+instance Routing (Model Gemini3ProPreview OpenRouter) where
+  type RoutingState (Model Gemini3ProPreview OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ()))
+  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Gemini3ProPreview OpenRouter)
