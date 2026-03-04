@@ -439,7 +439,7 @@ spec = describe "Tools" $ do
       result <- executeToolCall tool toolCall
 
       case result of
-        ToolResult _ (Left err) -> T.unpack err `shouldContain` "Failed to parse parameter"
+        ToolResult _ (Left err) -> T.unpack err `shouldContain` "Coercion failed"
         ToolResult _ (Right _) -> expectationFailure "Should have failed with type error"
 
     it "round-trips function with optional parameter (provided)" $ do
