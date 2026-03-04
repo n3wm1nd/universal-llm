@@ -33,6 +33,12 @@ data Model aiModel provider = Model aiModel provider
 -- | Type operator for nice syntax: GPT4 `Via` OpenRouter
 type a `Via` b = Model a b
 
+-- | Value-level constructor using infix notation
+-- Use this for cleaner syntax: (GLM45Air `via` ZAI) instead of (Model GLM45Air ZAI)
+via :: aiModel -> provider -> Model aiModel provider
+via = Model
+{-# INLINE via #-}
+
 -- | Extract the AI model type from a Model
 type family AIModelOf m where
   AIModelOf (Model a p) = a
@@ -49,6 +55,14 @@ class BaseComposableProvider m where
   type BaseState m
   type BaseState m = ()
   baseProvider :: ComposableProvider m (BaseState m)
+
+-- | Routing for a Model via Provider
+-- Provides the canonical composable provider for a Model/Provider combination
+-- Usage: route @(GLM5 `Via` AlibabaCloud)
+-- This eliminates the need for named provider exports (e.g., glm45AirZAI, claudeSonnet45)
+class Routing m where
+  type RoutingState m
+  route :: ComposableProvider m (RoutingState m)
 
 -- Unified capability classes
 -- SupportsX for parameters (things providers accept)
