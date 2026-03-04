@@ -147,6 +147,45 @@ class TupleSchema params where
   -- Takes metadata list and returns (name, description, schema, isRequired) quads
   tupleToSchemaList :: Proxy params -> [(Text, Text)] -> [(Text, Text, Value, Bool)]
 
+-- | Strip out meaningless full-range integer bounds from JSON Schema
+--
+-- IMPORTANT NOTE:
+-- Autodocodec's Int codec includes minimum/maximum bounds representing the full Int64 range
+-- (-9223372036854775808 to 9223372036854775807). While technically correct from a JSON Schema
+-- perspective, these bounds:
+--
+-- 1. Provide no useful validation (they're just the type's inherent range)
+-- 2. Waste tokens in the LLM API request
+-- 3. Trigger bugs in some providers:
+--    - llamacpp's grammar generator can't handle full Int64 range and raises:
+--      "At least one of min_value or max_value must be set"
+--    - Without bounds, it falls back to PRIMITIVE_RULES['integer'] which works fine
+--
+-- This function recursively strips minimum/maximum ONLY when they represent the full Int64 range.
+-- Actual useful constraints (e.g., "port must be 1-65535") are preserved.
+--
+-- Ideally, we'd keep these bounds for correctness, but practical considerations (provider bugs
+-- and token waste) force us to remove them.
+stripFullRangeIntBounds :: Value -> Value
+stripFullRangeIntBounds (Aeson.Object obj) =
+  let -- Check if this is an integer with full-range bounds
+      isInteger = KM.lookup (Key.fromText "type") obj == Just (Aeson.String "integer")
+      minVal = KM.lookup (Key.fromText "minimum") obj
+      maxVal = KM.lookup (Key.fromText "maximum") obj
+      isFullRange = minVal == Just (Aeson.Number (-9223372036854775808))
+                 && maxVal == Just (Aeson.Number 9223372036854775807)
+
+      -- Strip bounds if they're the full range
+      stripped = if isInteger && isFullRange
+                 then KM.delete (Key.fromText "minimum") $ KM.delete (Key.fromText "maximum") obj
+                 else obj
+
+      -- Recursively process nested objects/arrays
+      recursivelyStripped = KM.map stripFullRangeIntBounds stripped
+  in Aeson.Object recursivelyStripped
+stripFullRangeIntBounds (Aeson.Array arr) = Aeson.Array (fmap stripFullRangeIntBounds arr)
+stripFullRangeIntBounds v = v
+
 -- Base case: () means no more parameters
 instance TupleSchema () where
   tupleToSchemaList _ _ = []
@@ -158,7 +197,7 @@ instance (ToolParameter a, TupleSchema rest, KnownBool (IsOptional a)) => TupleS
         (name, desc) = case metas of
                         ((n, d):_) -> (n, d)
                         [] -> error "tupleToSchemaList: metadata list too short"
-        schema = Aeson.toJSON $ jsonSchemaViaCodec @a
+        schema = stripFullRangeIntBounds . Aeson.toJSON $ jsonSchemaViaCodec @a
         isRequired = not $ boolVal (Proxy @(IsOptional a))
     in (name, desc, schema, isRequired) : restSchemas
 
