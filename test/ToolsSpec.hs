@@ -21,6 +21,7 @@ import Data.Aeson (Value, Object)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.Vector as V
+import qualified UniversalLLM.Protocols.OpenAI as OpenAI
 
 import UniversalLLM.Tools
 
@@ -503,6 +504,23 @@ spec = describe "Tools" $ do
         ToolResult _ (Right jsonResult) -> jsonResult `shouldBe` Aeson.String "Smith"
         ToolResult _ (Left err) -> expectationFailure $ "Tool call failed: " <> T.unpack err
 
+    it "round-trips function with optional Int parameter (provided as number)" $ do
+      let repeat' :: Text -> Maybe Int -> IO Text
+          repeat' txt maybeCount = return $ case maybeCount of
+            Just n -> T.replicate n txt
+            Nothing -> txt
+          tool = mkToolWithMeta "repeat" "repeats text" repeat'
+                   "text" "text to repeat"
+                   "count" "number of times to repeat"
+
+      -- Test with count provided as integer (not string!)
+      let toolCall = ToolCall "call-1" "repeat"
+                       (Aeson.object [("text", Aeson.String "X"), ("count", Aeson.Number 3)])
+      result <- executeToolCall tool toolCall
+      case result of
+        ToolResult _ (Right jsonResult) -> jsonResult `shouldBe` Aeson.String "XXX"
+        ToolResult _ (Left err) -> expectationFailure $ "Tool call failed: " <> T.unpack err
+
   describe "Bare functions with ToolFunction (no mkTool wrapper)" $ do
     it "works with partially applied function returning ToolFunction type" $ do
       -- Define a search function with multiple parameters
@@ -578,6 +596,66 @@ spec = describe "Tools" $ do
             _ -> expectationFailure "Failed to parse results"
         ToolResult _ (Left err) -> expectationFailure $ "Tool call failed: " <> T.unpack err
 
+  describe "OpenAI Protocol Tool Call Parsing" $ do
+    it "correctly parses tool call with integer arguments" $ do
+      -- Simulate an OpenAI tool call with integer parameter
+      let openAICall = OpenAI.OpenAIToolCall
+            { OpenAI.callId = "call-123"
+            , OpenAI.toolCallType = "function"
+            , OpenAI.toolFunction = OpenAI.OpenAIToolFunction
+                { OpenAI.toolFunctionName = "test_func"
+                -- Arguments as JSON string with actual number (not quoted)
+                , OpenAI.toolFunctionArguments = "{\"count\":42}"
+                }
+            }
+
+      -- Convert to ToolCall
+      let toolCall = OpenAI.convertToolCall openAICall
+
+      -- Verify it parsed correctly
+      case toolCall of
+        ToolCall _ name params -> do
+          name `shouldBe` "test_func"
+          -- The params should have parsed "count" as a number, not a string
+          case Aeson.fromJSON params of
+            Aeson.Success (obj :: Object) -> do
+              case KM.lookup "count" obj of
+                Just (Aeson.Number n) -> floor n `shouldBe` (42 :: Int)
+                Just other -> expectationFailure $ "Expected Number but got: " <> show other
+                Nothing -> expectationFailure "Missing 'count' field"
+            Aeson.Error err -> expectationFailure $ "Failed to parse params: " <> err
+        InvalidToolCall _ _ _ err -> expectationFailure $ "Tool call should be valid: " <> T.unpack err
+
+    it "fails to parse tool call with string where number expected" $ do
+      -- Simulate what Claude is doing wrong - sending "42" instead of 42
+      let openAICall = OpenAI.OpenAIToolCall
+            { OpenAI.callId = "call-124"
+            , OpenAI.toolCallType = "function"
+            , OpenAI.toolFunction = OpenAI.OpenAIToolFunction
+                { OpenAI.toolFunctionName = "test_func"
+                -- Arguments with quoted number (wrong!)
+                , OpenAI.toolFunctionArguments = "{\"count\":\"42\"}"
+                }
+            }
+
+      -- Convert to ToolCall - this should still parse as valid JSON
+      let toolCall = OpenAI.convertToolCall openAICall
+
+      -- Verify it parsed as JSON, but count is a string
+      case toolCall of
+        ToolCall _ name params -> do
+          name `shouldBe` "test_func"
+          -- The params should have "count" as a STRING
+          case Aeson.fromJSON params of
+            Aeson.Success (obj :: Object) -> do
+              case KM.lookup "count" obj of
+                Just (Aeson.String s) -> s `shouldBe` "42"
+                Just other -> expectationFailure $ "Expected String but got: " <> show other
+                Nothing -> expectationFailure "Missing 'count' field"
+            Aeson.Error err -> expectationFailure $ "Failed to parse params: " <> err
+        InvalidToolCall _ _ _ err -> expectationFailure $ "Tool call should be valid JSON: " <> T.unpack err
+
+  describe "Tool Schema Generation with Text Parameters" $ do
     it "mkToolWithMeta generates valid JSON schema with Text parameters" $ do
       -- This test mirrors the chatbot logging tool to verify schema generation
       let logFunc :: Text -> Text -> IO LogResult
