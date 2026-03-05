@@ -109,7 +109,8 @@ testsAlibabaCloud provider = do
       systemMessageAtStart provider "MiniMax-M2.5"
       systemMessageMidConversation provider "MiniMax-M2.5"
       multipleSystemMessages provider "MiniMax-M2.5"
+      reasoning provider "MiniMax-M2.5"
 
     describe "Standard Tests" $
       testModel route (MinimaxM25 `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]

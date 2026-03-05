@@ -110,7 +110,8 @@ testsQwen35PlusAlibabaCloud provider = do
       systemMessageAtStart provider "qwen3.5-plus"
       systemMessageMidConversation provider "qwen3.5-plus"
       multipleSystemMessages provider "qwen3.5-plus"
+      reasoning provider "qwen3.5-plus"
 
     describe "Standard Tests" $
       testModel route (Qwen35Plus `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]

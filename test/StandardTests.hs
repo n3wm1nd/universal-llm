@@ -21,6 +21,7 @@ module StandardTests
   , tools
   , toolWithName
   , reasoning
+  , hiddenReasoning
   , reasoningWithTools
   , reasoningWithToolsModifiedReasoning
   , openAIReasoningDetailsPreservation
@@ -422,6 +423,48 @@ reasoning = StandardTest $ \cp model initialState getResponse -> do
       resp2 <- getResponse req2
       let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
 
+      length parsedMsgs2 `shouldSatisfy` (> 0)
+
+-- | Test reasoning config acceptance (works with or without exposed reasoning)
+--
+-- This test verifies that reasoning config is accepted and responses work,
+-- without requiring reasoning to be exposed in responses. This makes it safe
+-- to use for any model with HasReasoning, including:
+-- - Models that expose reasoning (AssistantReasoning messages)
+-- - Models with hidden reasoning (internal use only, no exposed messages)
+--
+-- Unlike the `reasoning` test which requires AssistantReasoning messages,
+-- this test only checks that:
+-- - Reasoning config is accepted (no errors)
+-- - Responses work correctly with reasoning enabled
+-- - Conversation history with reasoning config can be sent back
+hiddenReasoning :: ( Monoid (ProviderRequest m)
+                   , SupportsMaxTokens (ProviderOf m)
+                   , HasReasoning m
+                   )
+                => StandardTest m state
+hiddenReasoning = StandardTest $ \cp model initialState getResponse -> do
+  describe "Reasoning Config Acceptance" $ do
+    it "accepts reasoning config and works correctly (with or without exposed reasoning)" $ do
+      let configs = [MaxTokens 4096, Reasoning True]
+          msgs = [UserText "Think step by step: What is 15 * 23?"]
+          (state1, req) = toProviderRequest cp model configs initialState msgs
+
+      resp <- getResponse req
+
+      let (state2, parsedMsgs) = either (error . show) id $ fromProviderResponse cp model configs state1 resp
+
+      -- Should get back at least one message (reasoning and/or text)
+      length parsedMsgs `shouldSatisfy` (> 0)
+
+      -- Should handle conversation history with reasoning config
+      let msgs2 = msgs ++ parsedMsgs ++ [UserText "Now what is 20 * 30?"]
+          (_, req2) = toProviderRequest cp model configs state2 msgs2
+
+      resp2 <- getResponse req2
+      let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
+
+      -- Should get a response (reasoning and/or text)
       length parsedMsgs2 `shouldSatisfy` (> 0)
 
 -- ============================================================================

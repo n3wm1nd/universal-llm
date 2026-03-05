@@ -181,10 +181,11 @@ testsGLM47AlibabaCloud provider = do
       systemMessageAtStart provider "glm-4.7"
       systemMessageMidConversation provider "glm-4.7"
       multipleSystemMessages provider "glm-4.7"
+      reasoning provider "glm-4.7"
 
     describe "Standard Tests" $
       testModel route (GLM47 `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 5 via AlibabaCloud
 testsGLM5AlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
@@ -203,7 +204,8 @@ testsGLM5AlibabaCloud provider = do
       systemMessageAtStart provider "glm-5"
       systemMessageMidConversation provider "glm-5"
       multipleSystemMessages provider "glm-5"
+      reasoning provider "glm-5"
 
     describe "Standard Tests" $
       testModel route (GLM5 `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]

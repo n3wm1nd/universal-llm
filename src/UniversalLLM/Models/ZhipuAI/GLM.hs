@@ -358,9 +358,12 @@ instance HasTools (Model GLM47 AlibabaCloud) where
 instance HasJSON (Model GLM47 AlibabaCloud) where
   withJSON = OpenAI.openAIJSON
 
+instance HasReasoning (Model GLM47 AlibabaCloud) where
+  withReasoning = OpenAI.openAIReasoning
+
 instance Routing (Model GLM47 AlibabaCloud) where
-  type RoutingState (Model GLM47 AlibabaCloud) = ((), ((), ()))
-  route = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47 AlibabaCloud)
+  type RoutingState (Model GLM47 AlibabaCloud) = ((), ((), ((), ())))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47 AlibabaCloud)
 
 --------------------------------------------------------------------------------
 -- GLM-5 via AlibabaCloud
@@ -375,6 +378,9 @@ instance HasTools (Model GLM5 AlibabaCloud) where
 instance HasJSON (Model GLM5 AlibabaCloud) where
   withJSON = OpenAI.openAIJSON
 
+instance HasReasoning (Model GLM5 AlibabaCloud) where
+  withReasoning = OpenAI.openAIReasoning
+
 instance Routing (Model GLM5 AlibabaCloud) where
-  type RoutingState (Model GLM5 AlibabaCloud) = ((), ((), ()))
-  route = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM5 AlibabaCloud)
+  type RoutingState (Model GLM5 AlibabaCloud) = ((), ((), ((), ())))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM5 AlibabaCloud)

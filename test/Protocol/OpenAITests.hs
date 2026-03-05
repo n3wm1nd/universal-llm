@@ -156,6 +156,33 @@ reasoningViaDetails makeRequest modelName = do
     resp <- makeRequest req
     assertHasReasoningDetails resp
 
+-- | Probe: Hidden reasoning (accepts config, no response fields)
+--
+-- __Tests:__ Does the model accept reasoning config but not expose reasoning?
+--
+-- __Checks:__ Request with reasoning succeeds, but response has neither
+-- reasoning_content nor reasoning_details
+--
+-- __Expected to pass:__ Models with internal/hidden reasoning (e.g., Kimi K2.5
+-- via AlibabaCloud)
+--
+-- __Expected to fail:__ Models that expose reasoning in responses
+--
+-- __Model behavior:__ Some models accept reasoning parameters and use them
+-- internally to improve response quality, but don't expose the reasoning
+-- process in the API response. This is "hidden reasoning" - the model thinks
+-- but doesn't show its work.
+acceptsHiddenReasoning :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsHiddenReasoning makeRequest modelName = do
+  it "accepts reasoning config without returning reasoning data" $ do
+    let req = enableReasoning (simpleUserRequest "Think step by step: What is 15 * 23?")
+          { model = modelName }
+    resp <- makeRequest req
+    -- Should succeed (not error)
+    assertHasAssistantText resp
+    -- Should NOT have reasoning_content or reasoning_details
+    assertNoReasoningData resp
+
 -- | Probe: Tool calling via XML in content (model quirk)
 --
 -- __Tests:__ Does the model return tool calls as XML in content field?

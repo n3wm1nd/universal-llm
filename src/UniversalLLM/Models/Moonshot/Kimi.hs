@@ -82,6 +82,13 @@ instance ModelName (Model KimiK25 AlibabaCloud) where
 instance HasTools (Model KimiK25 AlibabaCloud) where
   withTools = OpenAI.openAITools
 
+-- Note: Kimi K2.5 via AlibabaCloud supports "Deep Thinking" but the reasoning
+-- is completely hidden - it accepts the reasoning parameter and performs internal
+-- reasoning to improve response quality, but does not expose reasoning_content
+-- or reasoning_details in API responses.
+instance HasReasoning (Model KimiK25 AlibabaCloud) where
+  withReasoning = OpenAI.openAIReasoning
+
 instance Routing (Model KimiK25 AlibabaCloud) where
-  type RoutingState (Model KimiK25 AlibabaCloud) = ((), ())
-  route = withTools `chainProviders` OpenAI.baseComposableProvider @(Model KimiK25 AlibabaCloud)
+  type RoutingState (Model KimiK25 AlibabaCloud) = ((), ((), ()))
+  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model KimiK25 AlibabaCloud)

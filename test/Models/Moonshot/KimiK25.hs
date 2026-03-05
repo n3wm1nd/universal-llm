@@ -79,7 +79,9 @@ testsAlibabaCloud provider = do
       systemMessageAtStart provider "kimi-k2.5"
       systemMessageMidConversation provider "kimi-k2.5"
       multipleSystemMessages provider "kimi-k2.5"
+      -- Kimi K2.5 supports "Deep Thinking" but with hidden reasoning
+      acceptsHiddenReasoning provider "kimi-k2.5"
 
     describe "Standard Tests" $
       testModel route (KimiK25 `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.hiddenReasoning ]

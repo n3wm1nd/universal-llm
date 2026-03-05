@@ -105,6 +105,9 @@ instance ModelName (Model MinimaxM25 AlibabaCloud) where
 instance HasTools (Model MinimaxM25 AlibabaCloud) where
   withTools = OpenAI.openAITools
 
+instance HasReasoning (Model MinimaxM25 AlibabaCloud) where
+  withReasoning = OpenAI.openAIReasoning
+
 instance Routing (Model MinimaxM25 AlibabaCloud) where
-  type RoutingState (Model MinimaxM25 AlibabaCloud) = ((), ())
-  route = withTools `chainProviders` OpenAI.baseComposableProvider @(Model MinimaxM25 AlibabaCloud)
+  type RoutingState (Model MinimaxM25 AlibabaCloud) = ((), ((), ()))
+  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model MinimaxM25 AlibabaCloud)

@@ -178,6 +178,7 @@ instance Routing (Model Qwen3Coder30bInstruct LlamaCpp) where
 -- Capabilities:
 -- - Tool calling
 -- - JSON mode
+-- - Reasoning (Deep Thinking)
 data Qwen35Plus = Qwen35Plus deriving (Show, Eq)
 
 instance ModelName (Model Qwen35Plus AlibabaCloud) where
@@ -189,9 +190,12 @@ instance HasTools (Model Qwen35Plus AlibabaCloud) where
 instance HasJSON (Model Qwen35Plus AlibabaCloud) where
   withJSON = OpenAI.openAIJSON
 
+instance HasReasoning (Model Qwen35Plus AlibabaCloud) where
+  withReasoning = OpenAI.openAIReasoning
+
 instance Routing (Model Qwen35Plus AlibabaCloud) where
-  type RoutingState (Model Qwen35Plus AlibabaCloud) = ((), ((), ()))
-  route = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen35Plus AlibabaCloud)
+  type RoutingState (Model Qwen35Plus AlibabaCloud) = ((), ((), ((), ())))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen35Plus AlibabaCloud)
 
 --------------------------------------------------------------------------------
 -- Qwen 3 Coder Next via AlibabaCloud

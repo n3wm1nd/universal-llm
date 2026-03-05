@@ -466,6 +466,22 @@ assertHasReasoningDetails resp = do
     Just _ -> return ()  -- It's a Value, just check it exists
     Nothing -> error "Message has no reasoning_details field"
 
+-- | Assert that response has NO reasoning data (neither reasoning_content nor reasoning_details)
+--
+-- Used for testing "hidden reasoning" models that accept reasoning config but
+-- don't expose reasoning in responses.
+assertNoReasoningData :: HasCallStack => OpenAIResponse -> Expectation
+assertNoReasoningData resp = do
+  let msg = getFirstMessage . expectSuccess $ resp
+  case (msg.reasoning_content, msg.reasoning_details) of
+    (Nothing, Nothing) -> return ()
+    (Just txt, _) | T.length txt == 0 ->
+      case msg.reasoning_details of
+        Nothing -> return ()
+        Just _ -> error "Message has reasoning_details (expected hidden reasoning)"
+    (Just _, _) -> error "Message has reasoning_content (expected hidden reasoning)"
+    (Nothing, Just _) -> error "Message has reasoning_details (expected hidden reasoning)"
+
 -- | Assert that response contains an XML-style tool call in the content
 --
 -- Some models (like GLM-4.5 via llama.cpp) return tool calls as XML in the content field
