@@ -147,7 +147,7 @@ testsGLM47ZAI provider = do
 -- Includes standard tests via the official ZAI API.
 testsGLM5ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM5ZAI provider = do
-  xdescribe "GLM 5 via ZAI (requires higher-tier ZAI subscription)" $ do
+  describe "GLM 5 via ZAI (requires higher-tier ZAI subscription)" $ do
     describe "Protocol" $ do
       basicText provider "glm-5"
       toolCalling provider "glm-5"

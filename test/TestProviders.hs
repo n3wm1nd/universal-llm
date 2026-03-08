@@ -16,6 +16,7 @@ import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse)
 import qualified UniversalLLM.Providers.Anthropic as AnthropicProvider
 import qualified TestCache
 import qualified TestHTTP
+import qualified ErrorClassifier
 import GGUFNames (queryLlamaCppModel)
 
 -- | All providers needed by the test suite
@@ -120,11 +121,11 @@ buildOpenRouter :: Maybe String -> Maybe String -> TestCache.CachePath
 buildOpenRouter mode openrouterApiKey cachePath = case mode of
   Just "record" | Just apiKey <- openrouterApiKey ->
     let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.recordMode cachePath $
+    in TestCache.recordModeWithErrorCheck cachePath ErrorClassifier.classifyOpenAIError $
       TestHTTP.httpCall "https://openrouter.ai/api/v1/chat/completions" headers
   Just "update" | Just apiKey <- openrouterApiKey ->
     let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.updateMode cachePath $
+    in TestCache.updateModeWithErrorCheck cachePath (Just ErrorClassifier.classifyOpenAIError) $
       TestHTTP.httpCall "https://openrouter.ai/api/v1/chat/completions" headers
   Just "live" | Just apiKey <- openrouterApiKey ->
     let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]

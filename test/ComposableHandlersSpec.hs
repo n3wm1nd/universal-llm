@@ -123,13 +123,12 @@ spec = do
           req1 = cpToRequest composedHandlers reasoningMsg mempty
           req2 = cpToRequest composedHandlers textMsg req1
 
-      length (messages req2) `shouldBe` 2
-      let [msg1, msg2] = messages req2
-      role msg1 `shouldBe` "assistant"
-      content msg1 `shouldBe` Just ""
-      reasoning_content msg1 `shouldBe` Just "let me think..."
-      role msg2 `shouldBe` "assistant"
-      content msg2 `shouldBe` Just "Here's my answer"
+      -- Reasoning and text now merge into a single message
+      length (messages req2) `shouldBe` 1
+      let msg = head (messages req2)
+      role msg `shouldBe` "assistant"
+      content msg `shouldBe` Just "Here's my answer"
+      reasoning_content msg `shouldBe` Just "let me think..."
 
     it "composable providers chain (BasicModel)" $ do
       let model = Model BasicModel OpenAIProvider.OpenAI
@@ -160,7 +159,12 @@ spec = do
           req1 = cpToRequest composedHandlers reasoningMsg mempty
           req2 = cpToRequest composedHandlers textMsg req1
 
-      length (messages req2) `shouldBe` 2
+      -- Reasoning and text now merge into a single message
+      length (messages req2) `shouldBe` 1
+      let msg = head (messages req2)
+      role msg `shouldBe` "assistant"
+      content msg `shouldBe` Just "answer"
+      reasoning_content msg `shouldBe` Just "thinking..."
 
   describe "Composable Providers (bidirectional)" $ do
 

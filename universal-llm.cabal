@@ -111,6 +111,7 @@ test-suite universal-llm-tests
     TestHTTP
     TestHelpers
     TestProviders
+    ErrorClassifier
     GGUFNames
     CachedIntegrationSpec
     StandardTests

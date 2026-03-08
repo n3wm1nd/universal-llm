@@ -7,10 +7,13 @@ module TestCache
   , recordResponse
   , lookupResponse
   , cachedRequest
+  , cachedRequestWithErrorCheck
   , recordMode
+  , recordModeWithErrorCheck
   , recordModeWithFilter
   , recordModeWithFilterMsg
   , updateMode
+  , updateModeWithErrorCheck
   , updateModeWithFilter
   , updateModeWithFilterMsg
   , playbackMode
@@ -100,17 +103,34 @@ cachedRequest :: (HasCodec req, HasCodec resp)
               -> req
               -> IO (Int, resp)  -- Request returns (status code, response)
               -> IO resp
-cachedRequest cachePath req makeRequest = do
+cachedRequest cachePath req makeRequest =
+  cachedRequestWithErrorCheck cachePath Nothing req makeRequest
+
+-- Cached request with optional error classifier
+-- If error classifier returns True, the response is NOT cached and test is marked pending
+cachedRequestWithErrorCheck :: (HasCodec req, HasCodec resp)
+                            => CachePath
+                            -> Maybe (Int -> resp -> Maybe String)  -- ^ Error classifier: returns Just msg if transient error
+                            -> req
+                            -> IO (Int, resp)  -- Request returns (status code, response)
+                            -> IO resp
+cachedRequestWithErrorCheck cachePath errorCheck req makeRequest = do
   cached <- lookupResponse cachePath req
   case cached of
     Just response -> return response
     Nothing -> do
       (statusCode, response) <- makeRequest
-      -- Only cache successful responses (HTTP 200)
-      if statusCode == 200
-        then recordResponse cachePath req response
-        else return ()  -- Don't cache non-200 responses
-      return response
+      -- Check if this is a transient error that shouldn't be cached
+      case errorCheck of
+        Just checkFn | Just errMsg <- checkFn statusCode response -> do
+          pendingWith errMsg
+          error "unreachable"  -- pendingWith throws
+        _ -> do
+          -- Only cache successful responses (HTTP 200)
+          if statusCode == 200
+            then recordResponse cachePath req response
+            else return ()  -- Don't cache non-200 responses
+          return response
 
 -- Record mode: check cache first, fall back to live API and record response (only caches new responses)
 recordMode :: (HasCodec req, HasCodec resp)
@@ -119,19 +139,43 @@ recordMode :: (HasCodec req, HasCodec resp)
            -> ResponseProvider req resp
 recordMode cachePath apiCall req = cachedRequest cachePath req (apiCall req)
 
+-- Record mode with error classification - transient errors are not cached and marked as pending
+recordModeWithErrorCheck :: (HasCodec req, HasCodec resp)
+                         => CachePath
+                         -> (Int -> resp -> Maybe String)  -- ^ Error classifier: returns Just msg if transient error
+                         -> (req -> IO (Int, resp))  -- API call returns (status code, response)
+                         -> ResponseProvider req resp
+recordModeWithErrorCheck cachePath errorCheck apiCall req =
+  cachedRequestWithErrorCheck cachePath (Just errorCheck) req (apiCall req)
+
 -- Update mode: always make live API call and overwrite cache (updates existing responses)
 -- Only caches responses with status code 200
 updateMode :: (HasCodec req, HasCodec resp)
            => CachePath
            -> (req -> IO (Int, resp))  -- API call returns (status code, response)
            -> ResponseProvider req resp
-updateMode cachePath apiCall req = do
+updateMode cachePath apiCall req =
+  updateModeWithErrorCheck cachePath Nothing apiCall req
+
+-- Update mode with error classification - transient errors are not cached and marked as pending
+updateModeWithErrorCheck :: (HasCodec req, HasCodec resp)
+                         => CachePath
+                         -> Maybe (Int -> resp -> Maybe String)  -- ^ Error classifier: returns Just msg if transient error
+                         -> (req -> IO (Int, resp))  -- API call returns (status code, response)
+                         -> ResponseProvider req resp
+updateModeWithErrorCheck cachePath errorCheck apiCall req = do
   (statusCode, response) <- apiCall req
-  -- Only cache successful responses (HTTP 200)
-  if statusCode == 200
-    then recordResponse cachePath req response
-    else return ()  -- Don't cache non-200 responses
-  return response
+  -- Check if this is a transient error that shouldn't be cached
+  case errorCheck of
+    Just checkFn | Just errMsg <- checkFn statusCode response -> do
+      pendingWith errMsg
+      error "unreachable"  -- pendingWith throws
+    _ -> do
+      -- Only cache successful responses (HTTP 200)
+      if statusCode == 200
+        then recordResponse cachePath req response
+        else return ()  -- Don't cache non-200 responses
+      return response
 
 -- Playback mode: only use cache, mark test as pending if not found (ensures no unexpected API calls)
 -- Cache misses are treated as pending tests rather than failures, since tests may run without cached responses
