@@ -94,35 +94,43 @@ lookupResponse cachePath req = do
     else return Nothing
 
 -- Cached request: check cache first, fall back to real request and cache the result
+-- Only caches responses with status code 200
 cachedRequest :: (HasCodec req, HasCodec resp)
               => CachePath
               -> req
-              -> IO resp
+              -> IO (Int, resp)  -- Request returns (status code, response)
               -> IO resp
 cachedRequest cachePath req makeRequest = do
   cached <- lookupResponse cachePath req
   case cached of
     Just response -> return response
     Nothing -> do
-      response <- makeRequest
-      recordResponse cachePath req response
+      (statusCode, response) <- makeRequest
+      -- Only cache successful responses (HTTP 200)
+      if statusCode == 200
+        then recordResponse cachePath req response
+        else return ()  -- Don't cache non-200 responses
       return response
 
 -- Record mode: check cache first, fall back to live API and record response (only caches new responses)
 recordMode :: (HasCodec req, HasCodec resp)
            => CachePath
-           -> (req -> IO resp)
+           -> (req -> IO (Int, resp))  -- API call returns (status code, response)
            -> ResponseProvider req resp
 recordMode cachePath apiCall req = cachedRequest cachePath req (apiCall req)
 
 -- Update mode: always make live API call and overwrite cache (updates existing responses)
+-- Only caches responses with status code 200
 updateMode :: (HasCodec req, HasCodec resp)
            => CachePath
-           -> (req -> IO resp)
+           -> (req -> IO (Int, resp))  -- API call returns (status code, response)
            -> ResponseProvider req resp
 updateMode cachePath apiCall req = do
-  response <- apiCall req
-  recordResponse cachePath req response
+  (statusCode, response) <- apiCall req
+  -- Only cache successful responses (HTTP 200)
+  if statusCode == 200
+    then recordResponse cachePath req response
+    else return ()  -- Don't cache non-200 responses
   return response
 
 -- Playback mode: only use cache, mark test as pending if not found (ensures no unexpected API calls)
@@ -139,14 +147,15 @@ playbackMode cachePath req = do
       error "unreachable"  -- pendingWith throws, but GHC doesn't know that
 
 -- Live mode: always make real request, ignore cache
-liveMode :: (req -> IO resp) -> ResponseProvider req resp
-liveMode apiCall req = apiCall req
+-- Returns just the response (discards status code)
+liveMode :: (req -> IO (Int, resp)) -> ResponseProvider req resp
+liveMode apiCall req = snd <$> apiCall req
 
 -- Record mode with filter: skip request if filter returns False (mark as pending)
 recordModeWithFilter :: (HasCodec req, HasCodec resp)
                      => CachePath
                      -> (req -> Bool)  -- ^ Filter: returns True if request should proceed
-                     -> (req -> IO resp)
+                     -> (req -> IO (Int, resp))  -- API call returns (status code, response)
                      -> ResponseProvider req resp
 recordModeWithFilter cachePath filterFn apiCall req =
   if filterFn req
@@ -157,10 +166,11 @@ recordModeWithFilter cachePath filterFn apiCall req =
 
 -- Record mode with filter and custom message
 -- Note: Checks cache FIRST before applying filter (record = use cache if available, otherwise make request)
+-- Only caches responses with status code 200
 recordModeWithFilterMsg :: (HasCodec req, HasCodec resp)
                         => CachePath
                         -> (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
-                        -> (req -> IO resp)
+                        -> (req -> IO (Int, resp))  -- API call returns (status code, response)
                         -> ResponseProvider req resp
 recordModeWithFilterMsg cachePath filterFn apiCall req = do
   -- Check cache first
@@ -170,8 +180,11 @@ recordModeWithFilterMsg cachePath filterFn apiCall req = do
     Nothing ->  -- Cache miss, check filter
       case filterFn req of
         (True, _) -> do
-          response <- apiCall req
-          recordResponse cachePath req response
+          (statusCode, response) <- apiCall req
+          -- Only cache successful responses (HTTP 200)
+          if statusCode == 200
+            then recordResponse cachePath req response
+            else return ()  -- Don't cache non-200 responses
           return response
         (False, msg) -> do
           pendingWith msg
@@ -181,7 +194,7 @@ recordModeWithFilterMsg cachePath filterFn apiCall req = do
 updateModeWithFilter :: (HasCodec req, HasCodec resp)
                      => CachePath
                      -> (req -> Bool)  -- ^ Filter: returns True if request should proceed
-                     -> (req -> IO resp)
+                     -> (req -> IO (Int, resp))  -- API call returns (status code, response)
                      -> ResponseProvider req resp
 updateModeWithFilter cachePath filterFn apiCall req =
   if filterFn req
@@ -191,10 +204,11 @@ updateModeWithFilter cachePath filterFn apiCall req =
       error "unreachable"
 
 -- Update mode with filter and custom message
+-- Only caches responses with status code 200
 updateModeWithFilterMsg :: (HasCodec req, HasCodec resp)
                         => CachePath
                         -> (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
-                        -> (req -> IO resp)
+                        -> (req -> IO (Int, resp))  -- API call returns (status code, response)
                         -> ResponseProvider req resp
 updateModeWithFilterMsg cachePath filterFn apiCall req =
   case filterFn req of
@@ -205,22 +219,22 @@ updateModeWithFilterMsg cachePath filterFn apiCall req =
 
 -- Live mode with filter: skip request if filter returns False (mark as pending)
 liveModeWithFilter :: (req -> Bool)  -- ^ Filter: returns True if request should proceed
-                   -> (req -> IO resp)
+                   -> (req -> IO (Int, resp))  -- API call returns (status code, response)
                    -> ResponseProvider req resp
 liveModeWithFilter filterFn apiCall req =
   if filterFn req
-    then apiCall req
+    then snd <$> apiCall req
     else do
       pendingWith $ "Skipped: Request filter returned False"
       error "unreachable"
 
 -- Live mode with filter and custom message
 liveModeWithFilterMsg :: (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
-                      -> (req -> IO resp)
+                      -> (req -> IO (Int, resp))  -- API call returns (status code, response)
                       -> ResponseProvider req resp
 liveModeWithFilterMsg filterFn apiCall req =
   case filterFn req of
-    (True, _) -> apiCall req
+    (True, _) -> snd <$> apiCall req
     (False, msg) -> do
       pendingWith msg
       error "unreachable"
@@ -250,35 +264,43 @@ lookupRawResponse cachePath req = do
     else return Nothing
 
 -- Cached raw request: check cache first, fall back to real request and cache the result
+-- Only caches responses with status code 200
 cachedRawRequest :: HasCodec req
                  => CachePath
                  -> req
-                 -> IO BSL.ByteString
+                 -> IO (Int, BSL.ByteString)  -- Request returns (status code, response)
                  -> IO BSL.ByteString
 cachedRawRequest cachePath req makeRequest = do
   cached <- lookupRawResponse cachePath req
   case cached of
     Just response -> return response
     Nothing -> do
-      response <- makeRequest
-      recordRawResponse cachePath req response
+      (statusCode, response) <- makeRequest
+      -- Only cache successful responses (HTTP 200)
+      if statusCode == 200
+        then recordRawResponse cachePath req response
+        else return ()  -- Don't cache non-200 responses
       return response
 
 -- Raw record mode: check cache first, fall back to live API and record response
 recordModeRaw :: HasCodec req
               => CachePath
-              -> (req -> IO BSL.ByteString)
+              -> (req -> IO (Int, BSL.ByteString))  -- API call returns (status code, response)
               -> ResponseProvider req BSL.ByteString
 recordModeRaw cachePath apiCall req = cachedRawRequest cachePath req (apiCall req)
 
 -- Raw update mode: always make live API call and overwrite cache
+-- Only caches responses with status code 200
 updateModeRaw :: HasCodec req
               => CachePath
-              -> (req -> IO BSL.ByteString)
+              -> (req -> IO (Int, BSL.ByteString))  -- API call returns (status code, response)
               -> ResponseProvider req BSL.ByteString
 updateModeRaw cachePath apiCall req = do
-  response <- apiCall req
-  recordRawResponse cachePath req response
+  (statusCode, response) <- apiCall req
+  -- Only cache successful responses (HTTP 200)
+  if statusCode == 200
+    then recordRawResponse cachePath req response
+    else return ()  -- Don't cache non-200 responses
   return response
 
 -- Raw playback mode: only use cache, mark test as pending if not found
@@ -296,10 +318,11 @@ playbackModeRaw cachePath req = do
 
 -- Raw record mode with filter and custom message
 -- Note: Checks cache FIRST before applying filter (record = use cache if available, otherwise make request)
+-- Only caches responses with status code 200
 recordModeRawWithFilterMsg :: HasCodec req
                            => CachePath
                            -> (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
-                           -> (req -> IO BSL.ByteString)
+                           -> (req -> IO (Int, BSL.ByteString))  -- API call returns (status code, response)
                            -> ResponseProvider req BSL.ByteString
 recordModeRawWithFilterMsg cachePath filterFn apiCall req = do
   -- Check cache first
@@ -309,18 +332,22 @@ recordModeRawWithFilterMsg cachePath filterFn apiCall req = do
     Nothing ->  -- Cache miss, check filter
       case filterFn req of
         (True, _) -> do
-          response <- apiCall req
-          recordRawResponse cachePath req response
+          (statusCode, response) <- apiCall req
+          -- Only cache successful responses (HTTP 200)
+          if statusCode == 200
+            then recordRawResponse cachePath req response
+            else return ()  -- Don't cache non-200 responses
           return response
         (False, msg) -> do
           pendingWith msg
           error "unreachable"
 
 -- Raw update mode with filter and custom message
+-- Only caches responses with status code 200
 updateModeRawWithFilterMsg :: HasCodec req
                            => CachePath
                            -> (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
-                           -> (req -> IO BSL.ByteString)
+                           -> (req -> IO (Int, BSL.ByteString))  -- API call returns (status code, response)
                            -> ResponseProvider req BSL.ByteString
 updateModeRawWithFilterMsg cachePath filterFn apiCall req =
   case filterFn req of

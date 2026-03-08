@@ -17,11 +17,12 @@ import Network.HTTP.Client.Conduit (responseTimeoutMicro)
 import qualified Data.CaseInsensitive as CI
 
 -- Generic HTTP POST call that encodes request and decodes response via autodocodec
+-- Returns (status code, decoded response)
 httpCall :: (HasCodec req, HasCodec resp)
          => String              -- ^ Endpoint URL
          -> [(T.Text, T.Text)]  -- ^ Headers
          -> req
-         -> IO resp
+         -> IO (Int, resp)
 httpCall endpoint headers request = do
   req <- parseRequest $ "POST " ++ endpoint
 
@@ -33,17 +34,19 @@ httpCall endpoint headers request = do
 
   response <- httpLBS req'
   let responseBody = getResponseBody response
+      statusCode = getResponseStatusCode response
   case eitherDecodeJSONViaCodec responseBody of
-    Right resp -> return resp
+    Right resp -> return (statusCode, resp)
     Left err -> error $ "Failed to parse response: " ++ err ++ "\nResponse body: " ++ show responseBody
 
 -- HTTP POST call for streaming responses that returns raw response body as ByteString
 -- Used for SSE (Server-Sent Events) responses which can't be parsed as JSON
+-- Returns (status code, response body)
 httpCallStreaming :: (HasCodec req)
                   => String              -- ^ Endpoint URL
                   -> [(T.Text, T.Text)]  -- ^ Headers
                   -> req
-                  -> IO BSL.ByteString
+                  -> IO (Int, BSL.ByteString)
 httpCallStreaming endpoint headers request = do
   req <- parseRequest $ "POST " ++ endpoint
 
@@ -54,7 +57,9 @@ httpCallStreaming endpoint headers request = do
            $ req
 
   response <- httpLBS req'
-  return $ getResponseBody response
+  let statusCode = getResponseStatusCode response
+      responseBody = getResponseBody response
+  return (statusCode, responseBody)
 
 -- HTTP GET call for raw JSON responses
 httpGet :: String -> IO BSL.ByteString

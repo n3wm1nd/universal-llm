@@ -170,15 +170,24 @@ buildAlibabaCloud :: Maybe String -> Maybe String -> TestCache.CachePath
                   -> TestCache.ResponseProvider OpenAIRequest OpenAIResponse
 buildAlibabaCloud mode alibabaCloudApiKey cachePath = case mode of
   Just "record" | Just apiKey <- alibabaCloudApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+    let headers = [ ("Content-Type", "application/json")
+                  , ("Authorization", T.pack ("Bearer " ++ apiKey))
+                  , ("User-Agent", "universal-llm/testharness")
+                  ]
     in TestCache.recordMode cachePath $
       TestHTTP.httpCall "https://coding-intl.dashscope.aliyuncs.com/v1/chat/completions" headers
   Just "update" | Just apiKey <- alibabaCloudApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+    let headers = [ ("Content-Type", "application/json")
+                  , ("Authorization", T.pack ("Bearer " ++ apiKey))
+                  , ("User-Agent", "universal-llm/testharness")
+                  ]
     in TestCache.updateMode cachePath $
       TestHTTP.httpCall "https://coding-intl.dashscope.aliyuncs.com/v1/chat/completions" headers
   Just "live" | Just apiKey <- alibabaCloudApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+    let headers = [ ("Content-Type", "application/json")
+                  , ("Authorization", T.pack ("Bearer " ++ apiKey))
+                  , ("User-Agent", "universal-llm/testharness")
+                  ]
     in TestCache.liveMode $
       TestHTTP.httpCall "https://coding-intl.dashscope.aliyuncs.com/v1/chat/completions" headers
   _ -> TestCache.playbackMode cachePath
