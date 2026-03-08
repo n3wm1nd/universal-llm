@@ -489,6 +489,7 @@ data DeltaContent
     = ContentDelta Text
     | ReasoningContentDelta Text
     | ToolCallsDelta [(Int, OpenAIToolCall)]  -- List of (index, toolCall) pairs
+    | InitContentDelta  -- Represents content: null in first delta (initializes content to empty string)
     | EmptyDelta
 
 -- | Merge OpenAI streaming delta into accumulated response
@@ -506,6 +507,9 @@ mergeOpenAIDelta acc chunk =
                     OpenAISuccess $ OpenAISuccessResponse $ mergeReasoningContentDelta successChoices txt
                 Just (ToolCallsDelta toolCallDeltas) ->
                     OpenAISuccess $ OpenAISuccessResponse $ mergeToolCallsDelta successChoices toolCallDeltas
+                Just InitContentDelta ->
+                    -- Initialize content to empty string (from content: null in first delta)
+                    OpenAISuccess $ OpenAISuccessResponse $ initContentField successChoices
                 Just EmptyDelta ->
                     -- Empty delta (e.g., role only, or finish_reason), keep accumulator
                     acc
@@ -524,6 +528,7 @@ mergeOpenAIDelta acc chunk =
         -- Try different delta fields using Alternative (<|>)
         let contentDelta = KM.lookup "content" delta >>= \case
                 Aeson.String txt -> Just $ ContentDelta txt
+                Aeson.Null -> Just InitContentDelta  -- content: null means initialize to empty
                 _ -> Nothing
             reasoningContentDelta = KM.lookup "reasoning_content" delta >>= \case
                 Aeson.String txt -> Just $ ReasoningContentDelta txt
@@ -569,6 +574,13 @@ mergeOpenAIDelta acc chunk =
                 _ -> ""
 
         return (index, OpenAIToolCall tcId tcType (OpenAIToolFunction funcName funcArgs))
+
+    initContentField :: [OpenAIChoice] -> [OpenAIChoice]
+    initContentField [] =
+        [OpenAIChoice (defaultOpenAIMessage { role = "assistant", content = Just "" })]
+    initContentField [OpenAIChoice msg] =
+        [OpenAIChoice (msg { content = Just "" })]
+    initContentField xs = xs
 
     mergeContentDelta :: [OpenAIChoice] -> Text -> [OpenAIChoice]
     mergeContentDelta [] txt =

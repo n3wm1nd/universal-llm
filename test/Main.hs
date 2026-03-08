@@ -7,6 +7,7 @@ import qualified CachedIntegrationSpec
 import qualified ComposableHandlersSpec
 import qualified OpenAIComposableSpec
 import qualified OpenAIStreamingSpec
+import qualified StreamingReconstructionSpec
 import qualified AnthropicComposableSpec
 import qualified AnthropicStreamingSpec
 import qualified AnthropicStreamingThinkingSpec
@@ -88,6 +89,7 @@ main = do
     -- Composable provider integration tests
     describe "OpenAI Composable Provider (cached)" $ OpenAIComposableSpec.spec (openrouterProvider p)
     describe "OpenAI Streaming Provider (cached)" $ OpenAIStreamingSpec.spec (openrouterStreamingProvider p)
+    describe "Streaming Reconstruction Tests (llamacpp)" $ StreamingReconstructionSpec.spec (llamacppLoadedModel p) (llamacppProvider p) (llamacppStreamingProvider p)
     describe "Anthropic Composable Provider (cached)" $ AnthropicComposableSpec.spec (anthropicProvider p)
     describe "Anthropic Streaming Provider (cached)" $ AnthropicStreamingSpec.spec (anthropicStreamingProvider p)
 

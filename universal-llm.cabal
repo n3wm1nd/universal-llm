@@ -95,6 +95,7 @@ test-suite universal-llm-tests
     ComposableHandlersSpec
     OpenAIComposableSpec
     OpenAIStreamingSpec
+    StreamingReconstructionSpec
     AnthropicComposableSpec
     AnthropicStreamingSpec
     AnthropicStreamingThinkingSpec

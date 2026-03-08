@@ -26,6 +26,7 @@ data Providers = Providers
   , zaiProvider                :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
   , alibabaCloudProvider       :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
   , llamacppProvider           :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
+  , llamacppStreamingProvider  :: TestCache.ResponseProvider OpenAIRequest BSL.ByteString
   , openaiCompatProvider       :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
   , anthropicProvider          :: TestCache.ResponseProvider AnthropicRequest AnthropicResponse
   , anthropicStreamingProvider :: TestCache.ResponseProvider AnthropicRequest BSL.ByteString
@@ -86,6 +87,7 @@ buildProviders = do
     , zaiProvider = buildZAI mode zaiApiKey cachePath
     , alibabaCloudProvider = buildAlibabaCloud mode alibabaCloudApiKey cachePath
     , llamacppProvider = buildLlamaCpp mode llamacppUrl modelMatches cachePath
+    , llamacppStreamingProvider = buildLlamaCppStreaming mode llamacppUrl modelMatches cachePath
     , openaiCompatProvider = buildOpenAICompat mode openaiCompatUrl cachePath
     , anthropicProvider = buildAnthropic mode anthropicToken cachePath
     , anthropicStreamingProvider = buildAnthropicStreaming mode anthropicToken cachePath
@@ -258,6 +260,20 @@ buildOpenAIStreaming mode openaiApiKey cachePath = case mode of
     let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
     in TestCache.liveMode $
       TestHTTP.httpCallStreaming "https://api.openai.com/v1/chat/completions" headers
+  _ -> TestCache.playbackModeRaw cachePath
+
+buildLlamaCppStreaming :: Maybe String -> Maybe String -> (OpenAIRequest -> (Bool, String)) -> TestCache.CachePath
+                      -> TestCache.ResponseProvider OpenAIRequest BSL.ByteString
+buildLlamaCppStreaming mode llamacppUrl modelMatches cachePath = case mode of
+  Just "record" | Just url <- llamacppUrl ->
+    TestCache.recordModeRawWithFilterMsg cachePath modelMatches $
+      TestHTTP.httpCallStreaming (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
+  Just "update" | Just url <- llamacppUrl ->
+    TestCache.updateModeRawWithFilterMsg cachePath modelMatches $
+      TestHTTP.httpCallStreaming (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
+  Just "live" | Just url <- llamacppUrl ->
+    TestCache.liveModeWithFilterMsg modelMatches $
+      TestHTTP.httpCallStreaming (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
   _ -> TestCache.playbackModeRaw cachePath
 
 buildCompletion :: Maybe String -> Maybe String -> TestCache.CachePath

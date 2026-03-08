@@ -21,7 +21,9 @@ module TestCache
   , lookupRawResponse
   , cachedRawRequest
   , recordModeRaw
+  , recordModeRawWithFilterMsg
   , updateModeRaw
+  , updateModeRawWithFilterMsg
   , playbackModeRaw
   , CacheMissException(..)
   ) where
@@ -291,3 +293,38 @@ playbackModeRaw cachePath req = do
     Nothing -> do
       pendingWith $ "Cache miss: No cached response for request hash: " ++ hashRequest req
       error "unreachable"  -- pendingWith throws, but GHC doesn't know that
+
+-- Raw record mode with filter and custom message
+-- Note: Checks cache FIRST before applying filter (record = use cache if available, otherwise make request)
+recordModeRawWithFilterMsg :: HasCodec req
+                           => CachePath
+                           -> (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
+                           -> (req -> IO BSL.ByteString)
+                           -> ResponseProvider req BSL.ByteString
+recordModeRawWithFilterMsg cachePath filterFn apiCall req = do
+  -- Check cache first
+  cached <- lookupRawResponse cachePath req
+  case cached of
+    Just response -> return response  -- Cache hit, use it
+    Nothing ->  -- Cache miss, check filter
+      case filterFn req of
+        (True, _) -> do
+          response <- apiCall req
+          recordRawResponse cachePath req response
+          return response
+        (False, msg) -> do
+          pendingWith msg
+          error "unreachable"
+
+-- Raw update mode with filter and custom message
+updateModeRawWithFilterMsg :: HasCodec req
+                           => CachePath
+                           -> (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
+                           -> (req -> IO BSL.ByteString)
+                           -> ResponseProvider req BSL.ByteString
+updateModeRawWithFilterMsg cachePath filterFn apiCall req =
+  case filterFn req of
+    (True, _) -> updateModeRaw cachePath apiCall req
+    (False, msg) -> do
+      pendingWith msg
+      error "unreachable"
