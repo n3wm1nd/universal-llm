@@ -101,204 +101,237 @@ buildProviders = do
 
 buildOpenAI :: Maybe String -> Maybe String -> TestCache.CachePath
             -> TestCache.ResponseProvider OpenAIRequest OpenAIResponse
-buildOpenAI mode openaiApiKey cachePath = case mode of
-  Just "record" | Just apiKey <- openaiApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.recordMode cachePath $
-      TestHTTP.httpCall "https://api.openai.com/v1/chat/completions" headers
-  Just "update" | Just apiKey <- openaiApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.updateMode cachePath $
-      TestHTTP.httpCall "https://api.openai.com/v1/chat/completions" headers
-  Just "live" | Just apiKey <- openaiApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.liveMode $
-      TestHTTP.httpCall "https://api.openai.com/v1/chat/completions" headers
-  _ -> TestCache.playbackMode cachePath
+buildOpenAI mode openaiApiKey cachePath =
+  let endpoint = "https://api.openai.com/v1/chat/completions"
+  in case mode of
+    Just "record" | Just apiKey <- openaiApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.recordMode cachePath endpoint $
+        TestHTTP.httpCall endpoint headers
+    Just "update" | Just apiKey <- openaiApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.updateMode cachePath endpoint $
+        TestHTTP.httpCall endpoint headers
+    Just "live" | Just apiKey <- openaiApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.liveMode $
+        TestHTTP.httpCall endpoint headers
+    _ -> TestCache.playbackMode cachePath endpoint
 
 buildOpenRouter :: Maybe String -> Maybe String -> TestCache.CachePath
                 -> TestCache.ResponseProvider OpenAIRequest OpenAIResponse
-buildOpenRouter mode openrouterApiKey cachePath = case mode of
-  Just "record" | Just apiKey <- openrouterApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.recordModeWithErrorCheck cachePath ErrorClassifier.classifyOpenAIError $
-      TestHTTP.httpCall "https://openrouter.ai/api/v1/chat/completions" headers
-  Just "update" | Just apiKey <- openrouterApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.updateModeWithErrorCheck cachePath (Just ErrorClassifier.classifyOpenAIError) $
-      TestHTTP.httpCall "https://openrouter.ai/api/v1/chat/completions" headers
-  Just "live" | Just apiKey <- openrouterApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.liveMode $
-      TestHTTP.httpCall "https://openrouter.ai/api/v1/chat/completions" headers
-  _ -> TestCache.playbackMode cachePath
+buildOpenRouter mode openrouterApiKey cachePath =
+  let endpoint = "https://openrouter.ai/api/v1/chat/completions"
+  in case mode of
+    Just "record" | Just apiKey <- openrouterApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.recordModeWithErrorCheck cachePath endpoint ErrorClassifier.classifyOpenAIError $
+        TestHTTP.httpCall endpoint headers
+    Just "update" | Just apiKey <- openrouterApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.updateModeWithErrorCheck cachePath endpoint (Just ErrorClassifier.classifyOpenAIError) $
+        TestHTTP.httpCall endpoint headers
+    Just "live" | Just apiKey <- openrouterApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.liveMode $
+        TestHTTP.httpCall endpoint headers
+    _ -> TestCache.playbackMode cachePath endpoint
 
 buildOpenRouterStreaming :: Maybe String -> Maybe String -> TestCache.CachePath
                         -> TestCache.ResponseProvider OpenAIRequest BSL.ByteString
-buildOpenRouterStreaming mode openrouterApiKey cachePath = case mode of
-  Just "record" | Just apiKey <- openrouterApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.recordModeRaw cachePath $
-      TestHTTP.httpCallStreaming "https://openrouter.ai/api/v1/chat/completions" headers
-  Just "update" | Just apiKey <- openrouterApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.updateModeRaw cachePath $
-      TestHTTP.httpCallStreaming "https://openrouter.ai/api/v1/chat/completions" headers
-  Just "live" | Just apiKey <- openrouterApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.liveMode $
-      TestHTTP.httpCallStreaming "https://openrouter.ai/api/v1/chat/completions" headers
-  _ -> TestCache.playbackModeRaw cachePath
+buildOpenRouterStreaming mode openrouterApiKey cachePath =
+  let endpoint = "https://openrouter.ai/api/v1/chat/completions"
+  in case mode of
+    Just "record" | Just apiKey <- openrouterApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.recordModeRaw cachePath endpoint $
+        TestHTTP.httpCallStreaming endpoint headers
+    Just "update" | Just apiKey <- openrouterApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.updateModeRaw cachePath endpoint $
+        TestHTTP.httpCallStreaming endpoint headers
+    Just "live" | Just apiKey <- openrouterApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.liveMode $
+        TestHTTP.httpCallStreaming endpoint headers
+    _ -> TestCache.playbackModeRaw cachePath endpoint
 
 buildZAI :: Maybe String -> Maybe String -> TestCache.CachePath
          -> TestCache.ResponseProvider OpenAIRequest OpenAIResponse
-buildZAI mode zaiApiKey cachePath = case mode of
-  Just "record" | Just apiKey <- zaiApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.recordMode cachePath $
-      TestHTTP.httpCall "https://api.z.ai/api/coding/paas/v4/chat/completions" headers
-  Just "update" | Just apiKey <- zaiApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.updateMode cachePath $
-      TestHTTP.httpCall "https://api.z.ai/api/coding/paas/v4/chat/completions" headers
-  Just "live" | Just apiKey <- zaiApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.liveMode $
-      TestHTTP.httpCall "https://api.z.ai/api/coding/paas/v4/chat/completions" headers
-  _ -> TestCache.playbackMode cachePath
+buildZAI mode zaiApiKey cachePath =
+  let endpoint = "https://api.z.ai/api/coding/paas/v4/chat/completions"
+  in case mode of
+    Just "record" | Just apiKey <- zaiApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.recordModeWithErrorCheck cachePath endpoint ErrorClassifier.classifyOpenAIError $
+        TestHTTP.httpCall endpoint headers
+    Just "update" | Just apiKey <- zaiApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.updateModeWithErrorCheck cachePath endpoint (Just ErrorClassifier.classifyOpenAIError) $
+        TestHTTP.httpCall endpoint headers
+    Just "live" | Just apiKey <- zaiApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.liveMode $
+        TestHTTP.httpCall endpoint headers
+    _ -> TestCache.playbackMode cachePath endpoint
 
 buildAlibabaCloud :: Maybe String -> Maybe String -> TestCache.CachePath
                   -> TestCache.ResponseProvider OpenAIRequest OpenAIResponse
-buildAlibabaCloud mode alibabaCloudApiKey cachePath = case mode of
-  Just "record" | Just apiKey <- alibabaCloudApiKey ->
-    let headers = [ ("Content-Type", "application/json")
-                  , ("Authorization", T.pack ("Bearer " ++ apiKey))
-                  , ("User-Agent", "universal-llm/testharness")
-                  ]
-    in TestCache.recordMode cachePath $
-      TestHTTP.httpCall "https://coding-intl.dashscope.aliyuncs.com/v1/chat/completions" headers
-  Just "update" | Just apiKey <- alibabaCloudApiKey ->
-    let headers = [ ("Content-Type", "application/json")
-                  , ("Authorization", T.pack ("Bearer " ++ apiKey))
-                  , ("User-Agent", "universal-llm/testharness")
-                  ]
-    in TestCache.updateMode cachePath $
-      TestHTTP.httpCall "https://coding-intl.dashscope.aliyuncs.com/v1/chat/completions" headers
-  Just "live" | Just apiKey <- alibabaCloudApiKey ->
-    let headers = [ ("Content-Type", "application/json")
-                  , ("Authorization", T.pack ("Bearer " ++ apiKey))
-                  , ("User-Agent", "universal-llm/testharness")
-                  ]
-    in TestCache.liveMode $
-      TestHTTP.httpCall "https://coding-intl.dashscope.aliyuncs.com/v1/chat/completions" headers
-  _ -> TestCache.playbackMode cachePath
+buildAlibabaCloud mode alibabaCloudApiKey cachePath =
+  let endpoint = "https://coding-intl.dashscope.aliyuncs.com/v1/chat/completions"
+  in case mode of
+    Just "record" | Just apiKey <- alibabaCloudApiKey ->
+      let headers = [ ("Content-Type", "application/json")
+                    , ("Authorization", T.pack ("Bearer " ++ apiKey))
+                    , ("User-Agent", "universal-llm/testharness")
+                    ]
+      in TestCache.recordMode cachePath endpoint $
+        TestHTTP.httpCall endpoint headers
+    Just "update" | Just apiKey <- alibabaCloudApiKey ->
+      let headers = [ ("Content-Type", "application/json")
+                    , ("Authorization", T.pack ("Bearer " ++ apiKey))
+                    , ("User-Agent", "universal-llm/testharness")
+                    ]
+      in TestCache.updateMode cachePath endpoint $
+        TestHTTP.httpCall endpoint headers
+    Just "live" | Just apiKey <- alibabaCloudApiKey ->
+      let headers = [ ("Content-Type", "application/json")
+                    , ("Authorization", T.pack ("Bearer " ++ apiKey))
+                    , ("User-Agent", "universal-llm/testharness")
+                    ]
+      in TestCache.liveMode $
+        TestHTTP.httpCall endpoint headers
+    _ -> TestCache.playbackMode cachePath endpoint
 
 buildLlamaCpp :: Maybe String -> Maybe String -> (OpenAIRequest -> (Bool, String)) -> TestCache.CachePath
               -> TestCache.ResponseProvider OpenAIRequest OpenAIResponse
 buildLlamaCpp mode llamacppUrl modelMatches cachePath = case mode of
   Just "record" | Just url <- llamacppUrl ->
-    TestCache.recordModeWithFilterMsg cachePath modelMatches $
-      TestHTTP.httpCall (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
+    let endpoint = url ++ "/v1/chat/completions"
+    in TestCache.recordModeWithFilterMsg cachePath endpoint modelMatches $
+      TestHTTP.httpCall endpoint [("Content-Type", "application/json")]
   Just "update" | Just url <- llamacppUrl ->
-    TestCache.updateModeWithFilterMsg cachePath modelMatches $
-      TestHTTP.httpCall (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
+    let endpoint = url ++ "/v1/chat/completions"
+    in TestCache.updateModeWithFilterMsg cachePath endpoint modelMatches $
+      TestHTTP.httpCall endpoint [("Content-Type", "application/json")]
   Just "live" | Just url <- llamacppUrl ->
-    TestCache.liveModeWithFilterMsg modelMatches $
-      TestHTTP.httpCall (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
-  _ -> TestCache.playbackMode cachePath
+    let endpoint = url ++ "/v1/chat/completions"
+    in TestCache.liveModeWithFilterMsg modelMatches $
+      TestHTTP.httpCall endpoint [("Content-Type", "application/json")]
+  _ -> case llamacppUrl of
+        Just url -> TestCache.playbackMode cachePath (url ++ "/v1/chat/completions")
+        Nothing -> TestCache.playbackMode cachePath ""  -- Fallback for playback without URL
 
 buildOpenAICompat :: Maybe String -> Maybe String -> TestCache.CachePath
                   -> TestCache.ResponseProvider OpenAIRequest OpenAIResponse
 buildOpenAICompat mode openaiCompatUrl cachePath = case mode of
   Just "record" | Just url <- openaiCompatUrl ->
-    TestCache.recordMode cachePath $
-      TestHTTP.httpCall (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
+    let endpoint = url ++ "/v1/chat/completions"
+    in TestCache.recordMode cachePath endpoint $
+      TestHTTP.httpCall endpoint [("Content-Type", "application/json")]
   Just "update" | Just url <- openaiCompatUrl ->
-    TestCache.updateMode cachePath $
-      TestHTTP.httpCall (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
+    let endpoint = url ++ "/v1/chat/completions"
+    in TestCache.updateMode cachePath endpoint $
+      TestHTTP.httpCall endpoint [("Content-Type", "application/json")]
   Just "live" | Just url <- openaiCompatUrl ->
-    TestCache.liveMode $
-      TestHTTP.httpCall (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
-  _ -> TestCache.playbackMode cachePath
+    let endpoint = url ++ "/v1/chat/completions"
+    in TestCache.liveMode $
+      TestHTTP.httpCall endpoint [("Content-Type", "application/json")]
+  _ -> case openaiCompatUrl of
+        Just url -> TestCache.playbackMode cachePath (url ++ "/v1/chat/completions")
+        Nothing -> TestCache.playbackMode cachePath ""  -- Fallback for playback without URL
 
 buildAnthropic :: Maybe String -> Maybe T.Text -> TestCache.CachePath
                -> TestCache.ResponseProvider AnthropicRequest AnthropicResponse
-buildAnthropic mode anthropicToken cachePath = case mode of
-  Just "record" | Just token <- anthropicToken ->
-    let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
-        baseCall req = TestHTTP.httpCall "https://api.anthropic.com/v1/messages" headers req
-    in TestCache.recordMode cachePath baseCall
-  Just "update" | Just token <- anthropicToken ->
-    let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
-        baseCall req = TestHTTP.httpCall "https://api.anthropic.com/v1/messages" headers req
-    in TestCache.updateMode cachePath baseCall
-  Just "live" | Just token <- anthropicToken ->
-    let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
-        baseCall req = TestHTTP.httpCall "https://api.anthropic.com/v1/messages" headers req
-    in TestCache.liveMode baseCall
-  _ -> TestCache.playbackMode cachePath
+buildAnthropic mode anthropicToken cachePath =
+  let endpoint = "https://api.anthropic.com/v1/messages"
+  in case mode of
+    Just "record" | Just token <- anthropicToken ->
+      let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
+          baseCall req = TestHTTP.httpCall endpoint headers req
+      in TestCache.recordMode cachePath endpoint baseCall
+    Just "update" | Just token <- anthropicToken ->
+      let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
+          baseCall req = TestHTTP.httpCall endpoint headers req
+      in TestCache.updateMode cachePath endpoint baseCall
+    Just "live" | Just token <- anthropicToken ->
+      let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
+          baseCall req = TestHTTP.httpCall endpoint headers req
+      in TestCache.liveMode baseCall
+    _ -> TestCache.playbackMode cachePath endpoint
 
 buildAnthropicStreaming :: Maybe String -> Maybe T.Text -> TestCache.CachePath
                        -> TestCache.ResponseProvider AnthropicRequest BSL.ByteString
-buildAnthropicStreaming mode anthropicToken cachePath = case mode of
-  Just "record" | Just token <- anthropicToken ->
-    let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
-        baseCall req = TestHTTP.httpCallStreaming "https://api.anthropic.com/v1/messages" headers req
-    in TestCache.recordModeRaw cachePath baseCall
-  Just "update" | Just token <- anthropicToken ->
-    let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
-        baseCall req = TestHTTP.httpCallStreaming "https://api.anthropic.com/v1/messages" headers req
-    in TestCache.updateModeRaw cachePath baseCall
-  Just "live" | Just token <- anthropicToken ->
-    let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
-        baseCall req = TestHTTP.httpCallStreaming "https://api.anthropic.com/v1/messages" headers req
-    in TestCache.liveMode baseCall
-  _ -> TestCache.playbackModeRaw cachePath
+buildAnthropicStreaming mode anthropicToken cachePath =
+  let endpoint = "https://api.anthropic.com/v1/messages"
+  in case mode of
+    Just "record" | Just token <- anthropicToken ->
+      let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
+          baseCall req = TestHTTP.httpCallStreaming endpoint headers req
+      in TestCache.recordModeRaw cachePath endpoint baseCall
+    Just "update" | Just token <- anthropicToken ->
+      let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
+          baseCall req = TestHTTP.httpCallStreaming endpoint headers req
+      in TestCache.updateModeRaw cachePath endpoint baseCall
+    Just "live" | Just token <- anthropicToken ->
+      let headers = ("Content-Type", "application/json") : AnthropicProvider.oauthHeaders token
+          baseCall req = TestHTTP.httpCallStreaming endpoint headers req
+      in TestCache.liveMode baseCall
+    _ -> TestCache.playbackModeRaw cachePath endpoint
 
 buildOpenAIStreaming :: Maybe String -> Maybe String -> TestCache.CachePath
                     -> TestCache.ResponseProvider OpenAIRequest BSL.ByteString
-buildOpenAIStreaming mode openaiApiKey cachePath = case mode of
-  Just "record" | Just apiKey <- openaiApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.recordModeRaw cachePath $
-      TestHTTP.httpCallStreaming "https://api.openai.com/v1/chat/completions" headers
-  Just "update" | Just apiKey <- openaiApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.updateModeRaw cachePath $
-      TestHTTP.httpCallStreaming "https://api.openai.com/v1/chat/completions" headers
-  Just "live" | Just apiKey <- openaiApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.liveMode $
-      TestHTTP.httpCallStreaming "https://api.openai.com/v1/chat/completions" headers
-  _ -> TestCache.playbackModeRaw cachePath
+buildOpenAIStreaming mode openaiApiKey cachePath =
+  let endpoint = "https://api.openai.com/v1/chat/completions"
+  in case mode of
+    Just "record" | Just apiKey <- openaiApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.recordModeRaw cachePath endpoint $
+        TestHTTP.httpCallStreaming endpoint headers
+    Just "update" | Just apiKey <- openaiApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.updateModeRaw cachePath endpoint $
+        TestHTTP.httpCallStreaming endpoint headers
+    Just "live" | Just apiKey <- openaiApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.liveMode $
+        TestHTTP.httpCallStreaming endpoint headers
+    _ -> TestCache.playbackModeRaw cachePath endpoint
 
 buildLlamaCppStreaming :: Maybe String -> Maybe String -> (OpenAIRequest -> (Bool, String)) -> TestCache.CachePath
                       -> TestCache.ResponseProvider OpenAIRequest BSL.ByteString
 buildLlamaCppStreaming mode llamacppUrl modelMatches cachePath = case mode of
   Just "record" | Just url <- llamacppUrl ->
-    TestCache.recordModeRawWithFilterMsg cachePath modelMatches $
-      TestHTTP.httpCallStreaming (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
+    let endpoint = url ++ "/v1/chat/completions"
+    in TestCache.recordModeRawWithFilterMsg cachePath endpoint modelMatches $
+      TestHTTP.httpCallStreaming endpoint [("Content-Type", "application/json")]
   Just "update" | Just url <- llamacppUrl ->
-    TestCache.updateModeRawWithFilterMsg cachePath modelMatches $
-      TestHTTP.httpCallStreaming (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
+    let endpoint = url ++ "/v1/chat/completions"
+    in TestCache.updateModeRawWithFilterMsg cachePath endpoint modelMatches $
+      TestHTTP.httpCallStreaming endpoint [("Content-Type", "application/json")]
   Just "live" | Just url <- llamacppUrl ->
-    TestCache.liveModeWithFilterMsg modelMatches $
-      TestHTTP.httpCallStreaming (url ++ "/v1/chat/completions") [("Content-Type", "application/json")]
-  _ -> TestCache.playbackModeRaw cachePath
+    let endpoint = url ++ "/v1/chat/completions"
+    in TestCache.liveModeWithFilterMsg modelMatches $
+      TestHTTP.httpCallStreaming endpoint [("Content-Type", "application/json")]
+  _ -> case llamacppUrl of
+        Just url -> TestCache.playbackModeRaw cachePath (url ++ "/v1/chat/completions")
+        Nothing -> TestCache.playbackModeRaw cachePath ""  -- Fallback for playback without URL
 
 buildCompletion :: Maybe String -> Maybe String -> TestCache.CachePath
                -> TestCache.ResponseProvider OpenAICompletionRequest OpenAICompletionResponse
-buildCompletion mode openaiApiKey cachePath = case mode of
-  Just "record" | Just apiKey <- openaiApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.recordMode cachePath $
-      TestHTTP.httpCall "https://api.openai.com/v1/completions" headers
-  Just "update" | Just apiKey <- openaiApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.updateMode cachePath $
-      TestHTTP.httpCall "https://api.openai.com/v1/completions" headers
-  Just "live" | Just apiKey <- openaiApiKey ->
-    let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
-    in TestCache.liveMode $
-      TestHTTP.httpCall "https://api.openai.com/v1/completions" headers
-  _ -> TestCache.playbackMode cachePath
+buildCompletion mode openaiApiKey cachePath =
+  let endpoint = "https://api.openai.com/v1/completions"
+  in case mode of
+    Just "record" | Just apiKey <- openaiApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.recordMode cachePath endpoint $
+        TestHTTP.httpCall endpoint headers
+    Just "update" | Just apiKey <- openaiApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.updateMode cachePath endpoint $
+        TestHTTP.httpCall endpoint headers
+    Just "live" | Just apiKey <- openaiApiKey ->
+      let headers = [("Content-Type", "application/json"), ("Authorization", T.pack ("Bearer " ++ apiKey))]
+      in TestCache.liveMode $
+        TestHTTP.httpCall endpoint headers
+    _ -> TestCache.playbackMode cachePath endpoint

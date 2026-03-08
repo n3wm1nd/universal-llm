@@ -35,15 +35,17 @@ spec = do
               }
 
         -- Record the response
-        recordResponse cachePath request response
+        let endpoint = "https://test.example.com/v1/test"
+        recordResponse cachePath endpoint request response
 
         -- Look it up
-        (cached :: Maybe OpenAIResponse) <- lookupResponse cachePath request
+        (cached :: Maybe OpenAIResponse) <- lookupResponse cachePath endpoint request
         cached `shouldBe` Just response
 
     it "returns Nothing for cache miss" $
       withSystemTempDirectory "test-cache" $ \cachePath -> do
-        let request = defaultOpenAIRequest
+        let endpoint = "https://test.example.com/v1/test"
+            request = defaultOpenAIRequest
               { model = "nonexistent-model"
               , messages = [defaultOpenAIMessage
                   { role = "user"
@@ -51,12 +53,13 @@ spec = do
                   }]
               }
 
-        (result :: Maybe OpenAIResponse) <- lookupResponse cachePath request
+        (result :: Maybe OpenAIResponse) <- lookupResponse cachePath endpoint request
         result `shouldBe` Nothing
 
     it "errors when cache directory does not exist" $ do
       let cachePath = "/nonexistent/cache/path"
+          endpoint = "https://test.example.com/v1/test"
           request = defaultOpenAIRequest { model = "test" }
           response = OpenAISuccess $ defaultOpenAISuccessResponse
 
-      recordResponse cachePath request response `shouldThrow` anyException
+      recordResponse cachePath endpoint request response `shouldThrow` anyException

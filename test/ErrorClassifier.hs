@@ -35,21 +35,21 @@ classifyAnthropicError statusCode response = case response of
 classifyByHTTPStatus :: Int -> T.Text -> Maybe String
 classifyByHTTPStatus statusCode msg
   -- 429 - Rate limit (definitely transient)
-  | statusCode == 429 = Just "Transient error: Rate limit (429)"
+  | statusCode == 429 = Just $ "Transient error (429): " ++ T.unpack (T.take 150 msg)
 
   -- 5xx - Server errors (don't cache - could be transient)
   | statusCode >= 500 && statusCode < 600 =
-      Just $ "Transient error: Server error (" ++ show statusCode ++ ")"
+      Just $ "Transient error (" ++ show statusCode ++ "): " ++ T.unpack (T.take 150 msg)
 
   -- 401/403 - Auth errors (user's wrong API key, don't cache)
-  | statusCode == 401 = Just "Transient error: Authentication failed (401)"
-  | statusCode == 403 = Just "Transient error: Forbidden (403)"
+  | statusCode == 401 = Just $ "Transient error (401): " ++ T.unpack (T.take 150 msg)
+  | statusCode == 403 = Just $ "Transient error (403): " ++ T.unpack (T.take 150 msg)
 
   -- 400 - Bad request (our fault, cache it)
   | statusCode == 400 = Nothing
 
   -- For any other status code, don't cache (conservative)
-  | statusCode /= 200 = Just $ "Transient error: HTTP " ++ show statusCode
+  | statusCode /= 200 = Just $ "Transient error (" ++ show statusCode ++ "): " ++ T.unpack (T.take 150 msg)
 
   -- HTTP 200 with error response - be conservative, don't cache unless we add specific rules
-  | otherwise = Just $ "Transient error: Unclassified error (200): " ++ T.unpack (T.take 100 msg)
+  | otherwise = Just $ "Transient error (200): " ++ T.unpack (T.take 150 msg)

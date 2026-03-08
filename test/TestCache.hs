@@ -57,22 +57,25 @@ type CachePath = FilePath
 -- Parameterized by request and response types
 type ResponseProvider req resp = req -> IO resp
 
--- Hash a request to get cache key
-hashRequest :: HasCodec req => req -> String
-hashRequest req =
-  let jsonBytes = BSL.toStrict $ Aeson.encode $ toJSONViaCodec req
-      hash = SHA256.hash jsonBytes
+-- Hash a request with endpoint URL to get cache key
+-- Includes endpoint to distinguish between different providers serving same model
+hashRequest :: HasCodec req => String -> req -> String
+hashRequest endpoint req =
+  let endpointBytes = BS8.pack endpoint
+      jsonBytes = BSL.toStrict $ Aeson.encode $ toJSONViaCodec req
+      combined = endpointBytes <> jsonBytes
+      hash = SHA256.hash combined
       hashHex = Base16.encode hash
   in BS8.unpack hashHex
 
 -- Record a response for a given request
 -- Requires cache directory to already exist
 -- Also saves the request for debugging purposes
-recordResponse :: (HasCodec req, HasCodec resp) => CachePath -> req -> resp -> IO ()
-recordResponse cachePath req resp = do
+recordResponse :: (HasCodec req, HasCodec resp) => CachePath -> String -> req -> resp -> IO ()
+recordResponse cachePath endpoint req resp = do
   dirExists <- doesDirectoryExist cachePath
   unless dirExists $ error $ "Cache directory does not exist: " ++ cachePath
-  let cacheKey = hashRequest req
+  let cacheKey = hashRequest endpoint req
       responsePath = cachePath </> cacheKey <> ".json"
       requestPath = cachePath </> cacheKey <> "-request.json"
       responseJson = Aeson.encode $ toJSONViaCodec resp
@@ -81,14 +84,15 @@ recordResponse cachePath req resp = do
   BSL.writeFile requestPath requestJson
 
 -- Look up a cached response for a request
-lookupResponse :: (HasCodec req, HasCodec resp) => CachePath -> req -> IO (Maybe resp)
-lookupResponse cachePath req = do
-  let cacheKey = hashRequest req
-      cachePath' = cachePath </> cacheKey <> ".json"
-  exists <- doesFileExist cachePath'
+lookupResponse :: (HasCodec req, HasCodec resp) => CachePath -> String -> req -> IO (Maybe resp)
+lookupResponse cachePath endpoint req = do
+  let cacheKey = hashRequest endpoint req
+      responsePath = cachePath </> cacheKey <> ".json"
+
+  exists <- doesFileExist responsePath
   if exists
     then do
-      contents <- BSL.readFile cachePath'
+      contents <- BSL.readFile responsePath
       case Aeson.decode contents of
         Just val -> case parseEither parseJSONViaCodec val of
           Right resp -> return $ Just resp
@@ -100,22 +104,24 @@ lookupResponse cachePath req = do
 -- Only caches responses with status code 200
 cachedRequest :: (HasCodec req, HasCodec resp)
               => CachePath
+              -> String  -- ^ Endpoint URL (for cache key)
               -> req
               -> IO (Int, resp)  -- Request returns (status code, response)
               -> IO resp
-cachedRequest cachePath req makeRequest =
-  cachedRequestWithErrorCheck cachePath Nothing req makeRequest
+cachedRequest cachePath endpoint req makeRequest =
+  cachedRequestWithErrorCheck cachePath endpoint Nothing req makeRequest
 
 -- Cached request with optional error classifier
 -- If error classifier returns True, the response is NOT cached and test is marked pending
 cachedRequestWithErrorCheck :: (HasCodec req, HasCodec resp)
                             => CachePath
+                            -> String  -- ^ Endpoint URL (for cache key)
                             -> Maybe (Int -> resp -> Maybe String)  -- ^ Error classifier: returns Just msg if transient error
                             -> req
                             -> IO (Int, resp)  -- Request returns (status code, response)
                             -> IO resp
-cachedRequestWithErrorCheck cachePath errorCheck req makeRequest = do
-  cached <- lookupResponse cachePath req
+cachedRequestWithErrorCheck cachePath endpoint errorCheck req makeRequest = do
+  cached <- lookupResponse cachePath endpoint req
   case cached of
     Just response -> return response
     Nothing -> do
@@ -128,42 +134,46 @@ cachedRequestWithErrorCheck cachePath errorCheck req makeRequest = do
         _ -> do
           -- Only cache successful responses (HTTP 200)
           if statusCode == 200
-            then recordResponse cachePath req response
+            then recordResponse cachePath endpoint req response
             else return ()  -- Don't cache non-200 responses
           return response
 
 -- Record mode: check cache first, fall back to live API and record response (only caches new responses)
 recordMode :: (HasCodec req, HasCodec resp)
            => CachePath
+           -> String  -- ^ Endpoint URL (for cache key)
            -> (req -> IO (Int, resp))  -- API call returns (status code, response)
            -> ResponseProvider req resp
-recordMode cachePath apiCall req = cachedRequest cachePath req (apiCall req)
+recordMode cachePath endpoint apiCall req = cachedRequest cachePath endpoint req (apiCall req)
 
 -- Record mode with error classification - transient errors are not cached and marked as pending
 recordModeWithErrorCheck :: (HasCodec req, HasCodec resp)
                          => CachePath
+                         -> String  -- ^ Endpoint URL (for cache key)
                          -> (Int -> resp -> Maybe String)  -- ^ Error classifier: returns Just msg if transient error
                          -> (req -> IO (Int, resp))  -- API call returns (status code, response)
                          -> ResponseProvider req resp
-recordModeWithErrorCheck cachePath errorCheck apiCall req =
-  cachedRequestWithErrorCheck cachePath (Just errorCheck) req (apiCall req)
+recordModeWithErrorCheck cachePath endpoint errorCheck apiCall req =
+  cachedRequestWithErrorCheck cachePath endpoint (Just errorCheck) req (apiCall req)
 
 -- Update mode: always make live API call and overwrite cache (updates existing responses)
 -- Only caches responses with status code 200
 updateMode :: (HasCodec req, HasCodec resp)
            => CachePath
+           -> String  -- ^ Endpoint URL (for cache key)
            -> (req -> IO (Int, resp))  -- API call returns (status code, response)
            -> ResponseProvider req resp
-updateMode cachePath apiCall req =
-  updateModeWithErrorCheck cachePath Nothing apiCall req
+updateMode cachePath endpoint apiCall req =
+  updateModeWithErrorCheck cachePath endpoint Nothing apiCall req
 
 -- Update mode with error classification - transient errors are not cached and marked as pending
 updateModeWithErrorCheck :: (HasCodec req, HasCodec resp)
                          => CachePath
+                         -> String  -- ^ Endpoint URL (for cache key)
                          -> Maybe (Int -> resp -> Maybe String)  -- ^ Error classifier: returns Just msg if transient error
                          -> (req -> IO (Int, resp))  -- API call returns (status code, response)
                          -> ResponseProvider req resp
-updateModeWithErrorCheck cachePath errorCheck apiCall req = do
+updateModeWithErrorCheck cachePath endpoint errorCheck apiCall req = do
   (statusCode, response) <- apiCall req
   -- Check if this is a transient error that shouldn't be cached
   case errorCheck of
@@ -173,7 +183,7 @@ updateModeWithErrorCheck cachePath errorCheck apiCall req = do
     _ -> do
       -- Only cache successful responses (HTTP 200)
       if statusCode == 200
-        then recordResponse cachePath req response
+        then recordResponse cachePath endpoint req response
         else return ()  -- Don't cache non-200 responses
       return response
 
@@ -181,13 +191,14 @@ updateModeWithErrorCheck cachePath errorCheck apiCall req = do
 -- Cache misses are treated as pending tests rather than failures, since tests may run without cached responses
 playbackMode :: (HasCodec req, HasCodec resp)
              => CachePath
+             -> String  -- ^ Endpoint URL (for cache key)
              -> ResponseProvider req resp
-playbackMode cachePath req = do
-  cached <- lookupResponse cachePath req
+playbackMode cachePath endpoint req = do
+  cached <- lookupResponse cachePath endpoint req
   case cached of
     Just response -> return response
     Nothing -> do
-      pendingWith $ "Cache miss: No cached response for request hash: " ++ hashRequest req
+      pendingWith $ "Cache miss: No cached response for request hash: " ++ hashRequest endpoint req
       error "unreachable"  -- pendingWith throws, but GHC doesn't know that
 
 -- Live mode: always make real request, ignore cache
@@ -198,14 +209,15 @@ liveMode apiCall req = snd <$> apiCall req
 -- Record mode with filter: skip request if filter returns False (mark as pending)
 recordModeWithFilter :: (HasCodec req, HasCodec resp)
                      => CachePath
+                     -> String  -- ^ Endpoint URL (for cache key)
                      -> (req -> Bool)  -- ^ Filter: returns True if request should proceed
                      -> (req -> IO (Int, resp))  -- API call returns (status code, response)
                      -> ResponseProvider req resp
-recordModeWithFilter cachePath filterFn apiCall req =
+recordModeWithFilter cachePath endpoint filterFn apiCall req =
   if filterFn req
-    then recordMode cachePath apiCall req
+    then recordMode cachePath endpoint apiCall req
     else do
-      pendingWith $ "Skipped: Request filter returned False for hash: " ++ hashRequest req
+      pendingWith $ "Skipped: Request filter returned False for hash: " ++ hashRequest endpoint req
       error "unreachable"
 
 -- Record mode with filter and custom message
@@ -213,12 +225,13 @@ recordModeWithFilter cachePath filterFn apiCall req =
 -- Only caches responses with status code 200
 recordModeWithFilterMsg :: (HasCodec req, HasCodec resp)
                         => CachePath
+                        -> String  -- ^ Endpoint URL (for cache key)
                         -> (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
                         -> (req -> IO (Int, resp))  -- API call returns (status code, response)
                         -> ResponseProvider req resp
-recordModeWithFilterMsg cachePath filterFn apiCall req = do
+recordModeWithFilterMsg cachePath endpoint filterFn apiCall req = do
   -- Check cache first
-  cached <- lookupResponse cachePath req
+  cached <- lookupResponse cachePath endpoint req
   case cached of
     Just response -> return response  -- Cache hit, use it
     Nothing ->  -- Cache miss, check filter
@@ -227,7 +240,7 @@ recordModeWithFilterMsg cachePath filterFn apiCall req = do
           (statusCode, response) <- apiCall req
           -- Only cache successful responses (HTTP 200)
           if statusCode == 200
-            then recordResponse cachePath req response
+            then recordResponse cachePath endpoint req response
             else return ()  -- Don't cache non-200 responses
           return response
         (False, msg) -> do
@@ -237,26 +250,28 @@ recordModeWithFilterMsg cachePath filterFn apiCall req = do
 -- Update mode with filter: skip request if filter returns False (mark as pending)
 updateModeWithFilter :: (HasCodec req, HasCodec resp)
                      => CachePath
+                     -> String  -- ^ Endpoint URL (for cache key)
                      -> (req -> Bool)  -- ^ Filter: returns True if request should proceed
                      -> (req -> IO (Int, resp))  -- API call returns (status code, response)
                      -> ResponseProvider req resp
-updateModeWithFilter cachePath filterFn apiCall req =
+updateModeWithFilter cachePath endpoint filterFn apiCall req =
   if filterFn req
-    then updateMode cachePath apiCall req
+    then updateMode cachePath endpoint apiCall req
     else do
-      pendingWith $ "Skipped: Request filter returned False for hash: " ++ hashRequest req
+      pendingWith $ "Skipped: Request filter returned False for hash: " ++ hashRequest endpoint req
       error "unreachable"
 
 -- Update mode with filter and custom message
 -- Only caches responses with status code 200
 updateModeWithFilterMsg :: (HasCodec req, HasCodec resp)
                         => CachePath
+                        -> String  -- ^ Endpoint URL (for cache key)
                         -> (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
                         -> (req -> IO (Int, resp))  -- API call returns (status code, response)
                         -> ResponseProvider req resp
-updateModeWithFilterMsg cachePath filterFn apiCall req =
+updateModeWithFilterMsg cachePath endpoint filterFn apiCall req =
   case filterFn req of
-    (True, _) -> updateMode cachePath apiCall req
+    (True, _) -> updateMode cachePath endpoint apiCall req
     (False, msg) -> do
       pendingWith msg
       error "unreachable"
@@ -286,11 +301,11 @@ liveModeWithFilterMsg filterFn apiCall req =
 -- Cache raw ByteString responses (e.g., SSE streams) without JSON encoding
 -- Stores as .sse file instead of .json
 -- Also saves the request for debugging purposes
-recordRawResponse :: HasCodec req => CachePath -> req -> BSL.ByteString -> IO ()
-recordRawResponse cachePath req responseBody = do
+recordRawResponse :: HasCodec req => CachePath -> String -> req -> BSL.ByteString -> IO ()
+recordRawResponse cachePath endpoint req responseBody = do
   dirExists <- doesDirectoryExist cachePath
   unless dirExists $ error $ "Cache directory does not exist: " ++ cachePath
-  let cacheKey = hashRequest req
+  let cacheKey = hashRequest endpoint req
       responsePath = cachePath </> cacheKey <> ".sse"
       requestPath = cachePath </> cacheKey <> "-request.json"
       requestJson = Aeson.encode $ toJSONViaCodec req
@@ -298,52 +313,56 @@ recordRawResponse cachePath req responseBody = do
   BSL.writeFile requestPath requestJson
 
 -- Look up a cached raw ByteString response
-lookupRawResponse :: HasCodec req => CachePath -> req -> IO (Maybe BSL.ByteString)
-lookupRawResponse cachePath req = do
-  let cacheKey = hashRequest req
-      cachePath' = cachePath </> cacheKey <> ".sse"
-  exists <- doesFileExist cachePath'
+lookupRawResponse :: HasCodec req => CachePath -> String -> req -> IO (Maybe BSL.ByteString)
+lookupRawResponse cachePath endpoint req = do
+  let cacheKey = hashRequest endpoint req
+      responsePath = cachePath </> cacheKey <> ".sse"
+
+  exists <- doesFileExist responsePath
   if exists
-    then Just <$> BSL.readFile cachePath'
+    then Just <$> BSL.readFile responsePath
     else return Nothing
 
 -- Cached raw request: check cache first, fall back to real request and cache the result
 -- Only caches responses with status code 200
 cachedRawRequest :: HasCodec req
                  => CachePath
+                 -> String  -- ^ Endpoint URL (for cache key)
                  -> req
                  -> IO (Int, BSL.ByteString)  -- Request returns (status code, response)
                  -> IO BSL.ByteString
-cachedRawRequest cachePath req makeRequest = do
-  cached <- lookupRawResponse cachePath req
+cachedRawRequest cachePath endpoint req makeRequest = do
+  cached <- lookupRawResponse cachePath endpoint req
   case cached of
     Just response -> return response
     Nothing -> do
       (statusCode, response) <- makeRequest
       -- Only cache successful responses (HTTP 200)
       if statusCode == 200
-        then recordRawResponse cachePath req response
+        then recordRawResponse cachePath endpoint req response
         else return ()  -- Don't cache non-200 responses
       return response
 
 -- Raw record mode: check cache first, fall back to live API and record response
 recordModeRaw :: HasCodec req
               => CachePath
+              -> String  -- ^ Endpoint URL (for cache key)
               -> (req -> IO (Int, BSL.ByteString))  -- API call returns (status code, response)
               -> ResponseProvider req BSL.ByteString
-recordModeRaw cachePath apiCall req = cachedRawRequest cachePath req (apiCall req)
+recordModeRaw cachePath endpoint apiCall req = cachedRawRequest cachePath endpoint req (apiCall req)
 
 -- Raw update mode: always make live API call and overwrite cache
 -- Only caches responses with status code 200
 updateModeRaw :: HasCodec req
               => CachePath
+              -> String  -- ^ Endpoint URL (for cache key)
               -> (req -> IO (Int, BSL.ByteString))  -- API call returns (status code, response)
               -> ResponseProvider req BSL.ByteString
-updateModeRaw cachePath apiCall req = do
+updateModeRaw cachePath endpoint apiCall req = do
   (statusCode, response) <- apiCall req
   -- Only cache successful responses (HTTP 200)
   if statusCode == 200
-    then recordRawResponse cachePath req response
+    then recordRawResponse cachePath endpoint req response
     else return ()  -- Don't cache non-200 responses
   return response
 
@@ -351,13 +370,14 @@ updateModeRaw cachePath apiCall req = do
 -- Cache misses are treated as pending tests rather than failures, since tests may run without cached responses
 playbackModeRaw :: HasCodec req
                 => CachePath
+                -> String  -- ^ Endpoint URL (for cache key)
                 -> ResponseProvider req BSL.ByteString
-playbackModeRaw cachePath req = do
-  cached <- lookupRawResponse cachePath req
+playbackModeRaw cachePath endpoint req = do
+  cached <- lookupRawResponse cachePath endpoint req
   case cached of
     Just response -> return response
     Nothing -> do
-      pendingWith $ "Cache miss: No cached response for request hash: " ++ hashRequest req
+      pendingWith $ "Cache miss: No cached response for request hash: " ++ hashRequest endpoint req
       error "unreachable"  -- pendingWith throws, but GHC doesn't know that
 
 -- Raw record mode with filter and custom message
@@ -365,12 +385,13 @@ playbackModeRaw cachePath req = do
 -- Only caches responses with status code 200
 recordModeRawWithFilterMsg :: HasCodec req
                            => CachePath
+                           -> String  -- ^ Endpoint URL (for cache key)
                            -> (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
                            -> (req -> IO (Int, BSL.ByteString))  -- API call returns (status code, response)
                            -> ResponseProvider req BSL.ByteString
-recordModeRawWithFilterMsg cachePath filterFn apiCall req = do
+recordModeRawWithFilterMsg cachePath endpoint filterFn apiCall req = do
   -- Check cache first
-  cached <- lookupRawResponse cachePath req
+  cached <- lookupRawResponse cachePath endpoint req
   case cached of
     Just response -> return response  -- Cache hit, use it
     Nothing ->  -- Cache miss, check filter
@@ -379,7 +400,7 @@ recordModeRawWithFilterMsg cachePath filterFn apiCall req = do
           (statusCode, response) <- apiCall req
           -- Only cache successful responses (HTTP 200)
           if statusCode == 200
-            then recordRawResponse cachePath req response
+            then recordRawResponse cachePath endpoint req response
             else return ()  -- Don't cache non-200 responses
           return response
         (False, msg) -> do
@@ -390,12 +411,13 @@ recordModeRawWithFilterMsg cachePath filterFn apiCall req = do
 -- Only caches responses with status code 200
 updateModeRawWithFilterMsg :: HasCodec req
                            => CachePath
+                           -> String  -- ^ Endpoint URL (for cache key)
                            -> (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
                            -> (req -> IO (Int, BSL.ByteString))  -- API call returns (status code, response)
                            -> ResponseProvider req BSL.ByteString
-updateModeRawWithFilterMsg cachePath filterFn apiCall req =
+updateModeRawWithFilterMsg cachePath endpoint filterFn apiCall req =
   case filterFn req of
-    (True, _) -> updateModeRaw cachePath apiCall req
+    (True, _) -> updateModeRaw cachePath endpoint apiCall req
     (False, msg) -> do
       pendingWith msg
       error "unreachable"

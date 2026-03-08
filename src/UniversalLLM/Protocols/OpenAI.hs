@@ -226,9 +226,15 @@ instance HasCodec OpenAIErrorResponse where
 instance HasCodec OpenAIErrorDetail where
   codec = object "OpenAIErrorDetail" $
     OpenAIErrorDetail
-      <$> requiredField "code" "Error code" .= code
+      <$> requiredFieldWith "code" errorCodeCodec "Error code (int or string)" .= code
       <*> requiredField "message" "Error message" .= errorMessage
       <*> optionalField "type" "Error type (not included by all providers)" .= errorType
+    where
+      -- Some providers (like ZAI) return error code as string, others as int
+      errorCodeCodec = dimapCodec parseCode showCode (eitherCodec codec codec)
+      parseCode (Left i) = i  -- Int
+      parseCode (Right s) = read (Text.unpack s)  -- String -> Int
+      showCode i = Left i  -- Always encode as Int
 
 -- Helper: Convert ToolDefinition to OpenAI wire format
 toOpenAIToolDef :: ToolDefinition -> OpenAIToolDefinition
