@@ -129,14 +129,16 @@ toolResultMessage tcId contentTxt = defaultOpenAIMessage
   }
 
 -- | Append text to a message's content (only if roles match)
--- Allows merging text with messages that have tool_calls (for combined responses)
+-- Allows merging text with messages that have tool_calls or reasoning_content (for combined responses)
+-- Only merges if existing content is empty (Nothing or Just "")
 appendToMessageIfSameRole :: Text -> Text -> OpenAIMessage -> Maybe OpenAIMessage
-appendToMessageIfSameRole targetRole txt msg@OpenAIMessage{ role = msgRole, content = existingContent, reasoning_content = Nothing, tool_call_id = Nothing }
+appendToMessageIfSameRole targetRole txt msg@OpenAIMessage{ role = msgRole, content = existingContent, tool_call_id = Nothing }
   | msgRole == targetRole =
-      let newContent = case existingContent of
-            Just existing -> Just (existing <> "\n" <> txt)
-            Nothing -> Just txt
-      in Just $ msg { content = newContent }
+      case existingContent of
+        Nothing -> Just $ msg { content = Just txt }
+        Just "" -> Just $ msg { content = Just txt }
+        Just existing -> Just $ msg { content = Just (existing <> "\n" <> txt) }  -- Existing behavior for providers that need it
+  | otherwise = Nothing
 appendToMessageIfSameRole _ _ _ = Nothing
 
 -- | Append a tool call to a message's tool calls
