@@ -101,8 +101,65 @@ class HasReasoning m where
 -- This is just a type alias constraint, not a separate class
 type HasStreaming m = SupportsStreaming (ProviderOf m)
 
--- ModelConfig GADT - configuration values with model constraints
--- Only constructible if the provider supports the parameter and/or model
+-- ============================================================================
+-- ModelConfig GADT - Type-safe configuration
+-- ============================================================================
+
+-- | Configuration values with model constraints.
+-- Only constructible if the provider supports the parameter and/or model.
+--
+-- = List Representation and Composition Semantics
+--
+-- Configurations are passed as @[ModelConfig m]@ lists with cons-list semantics:
+--
+-- * __Construction__: New configs prepend to the front (@newConfig : oldConfigs@)
+-- * __Internal representation__: Newest-first (optimized for construction)
+-- * __Provider extraction__: Converts to chronological order (oldest-first) for LLM
+--
+-- This is analogous to endianness: the internal representation (newest-first)
+-- is optimized for manipulation, while the wire format (chronological) is the
+-- display order sent to the LLM.
+--
+-- == Singleton values (first/newest wins)
+--
+-- When multiple values appear, the first (most recently added) is used:
+--
+-- * 'Temperature' - newest value overrides older values
+-- * 'MaxTokens' - newest value overrides older values
+-- * 'Seed' - newest value overrides older values
+-- * 'Reasoning' - newest value overrides older values
+-- * 'ReasoningEffort' - newest value overrides older values
+-- * 'Stop' - newest value overrides older values
+--
+-- == Accumulating values (all collected in chronological order)
+--
+-- All values are collected and sent to the LLM in chronological order:
+--
+-- * 'SystemPrompt' - all prompts collected, sent oldest-first
+-- * 'Tools' - all tool definitions collected, sent oldest-first
+--
+-- == Examples
+--
+-- __Progressive layering (typical usage):__
+--
+-- @
+-- let base = [SystemPrompt "You are helpful"]
+-- let extended = SystemPrompt "Be concise" : Temperature 0.7 : base
+-- -- Internal: ["Be concise", 0.7, "helpful"] (newest first)
+-- -- Sent to LLM: ["helpful", "Be concise"] (chronological)
+-- -- Temperature: 0.7 (newest wins)
+-- @
+--
+-- __Literal lists (must follow newest-first convention):__
+--
+-- @
+-- -- When writing literal lists, newest items go first (matching cons semantics)
+-- let configs = [ SystemPrompt "Be concise"      -- newest (added last conceptually)
+--               , SystemPrompt "You are helpful"  -- oldest (base prompt)
+--               , Temperature 0.7
+--               ]
+-- -- Sent to LLM: ["helpful", "concise"] (chronological after reverse)
+-- @
 data ModelConfig m where
   Temperature :: SupportsTemperature (ProviderOf m) => Double -> ModelConfig m
   MaxTokens :: SupportsMaxTokens (ProviderOf m) => Int -> ModelConfig m

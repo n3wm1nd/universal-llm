@@ -195,7 +195,8 @@ baseComposableProvider model configs _s = noopHandler
                      }
       in handleTextMessage msg req'
   , cpConfigHandler = \req ->
-      let systemPrompts = [sp | SystemPrompt sp <- configs]
+      -- Extract system prompts: configs are newest-first (cons list), reverse to get chronological order
+      let systemPrompts = reverse [sp | SystemPrompt sp <- configs]
           -- Create system blocks with cache control on the last block
           sysBlocks = case systemPrompts of
             [] -> []
@@ -233,7 +234,8 @@ anthropicTools :: forall m s . (HasTools m, ProviderRequest m ~ AnthropicRequest
 anthropicTools _m configs _s = noopHandler
   { cpToRequest = handleToolMessage
   , cpConfigHandler = \req ->
-      let toolDefs = [defs | Tools defs <- configs]
+      -- Extract tools: configs are newest-first (cons list), reverse to get chronological order
+      let toolDefs = reverse [defs | Tools defs <- configs]
           -- Add cache control to the last tool definition
           anthropicToolDefs = withToolCacheControl (map toAnthropicToolDef (concat toolDefs))
       in if null toolDefs then req else setToolDefinitions anthropicToolDefs req
@@ -595,7 +597,8 @@ prefixRequestMessages req =
 anthropicOAuthBlacklistedTools :: forall m. (HasTools m, ProviderRequest m ~ AnthropicRequest, ProviderResponse m ~ AnthropicResponse) => ComposableProvider m OAuthToolsState
 anthropicOAuthBlacklistedTools _m configs state = noopHandler
   { cpConfigHandler = \req ->
-      let toolDefs = [defs | Tools defs <- configs]
+      -- Extract tools: configs are newest-first (cons list), reverse to get chronological order
+      let toolDefs = reverse [defs | Tools defs <- configs]
           -- Convert to Anthropic format
           anthropicToolDefs = map toAnthropicToolDef (concat toolDefs)
           -- Prefix blacklisted tool names
@@ -604,8 +607,8 @@ anthropicOAuthBlacklistedTools _m configs state = noopHandler
           finalDefs = withToolCacheControl prefixedDefs
       in if null toolDefs then req else setToolDefinitions finalDefs req
   , cpPreRequest = \req state ->
-      -- Extract mappings for unprefixing
-      let toolDefs = [defs | Tools defs <- configs]
+      -- Extract mappings for unprefixing (same order as cpConfigHandler)
+      let toolDefs = reverse [defs | Tools defs <- configs]
           anthropicToolDefs = map toAnthropicToolDef (concat toolDefs)
           (_prefixedDefs, mappings) = prefixToolDefinitions anthropicToolDefs
       in state { prefixedToOriginal = Map.union mappings (prefixedToOriginal state) }

@@ -109,7 +109,9 @@ spec getResponse = do
               -- Verify request has conversation history (exact count depends on reasoning extraction)
               length (messages req2) `shouldSatisfy` (>= 3)
 
-            Left err -> expectationFailure $ "parseResponse failed: " ++ show err
+            Left err -> expectationFailure $ "Second parseResponse failed: " ++ show err
+
+        Left err -> expectationFailure $ "First parseResponse failed: " ++ show err
 
     it "merges consecutive user messages" $ do
       let model = Model GLM45Air OpenRouter

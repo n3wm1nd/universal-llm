@@ -330,7 +330,8 @@ baseComposableProvider modelProxy configs _s = noopHandler
                      }
       in handleTextMessage msg reqWithModel
   , cpConfigHandler = \req ->
-      let systemPrompts = [sp | SystemPrompt sp <- configs]
+      -- Extract system prompts: configs are newest-first (cons list), reverse to get chronological order
+      let systemPrompts = reverse [sp | SystemPrompt sp <- configs]
           sysMessages = map systemMessage systemPrompts
           reqWithSysMessages = modifyMessages (sysMessages <>) req
       in reqWithSysMessages
@@ -742,7 +743,8 @@ openAITools :: forall m . (HasTools m, ProviderRequest m ~ OpenAIRequest, Provid
 openAITools _m configs _s = noopHandler
   { cpToRequest = \msg req ->
       let req' = handleToolMessage msg req
-          toolDefs = [defs | Tools defs <- configs]
+          -- Extract tools: configs are newest-first (cons list), reverse to get chronological order
+          toolDefs = reverse [defs | Tools defs <- configs]
       in if null toolDefs then req' else setToolDefinitions (map toOpenAIToolDef (concat toolDefs)) req'
   , cpFromResponse = parseToolResponse
   , cpSerializeMessage = serializeToolMessages

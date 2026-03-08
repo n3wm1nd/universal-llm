@@ -144,7 +144,8 @@ withFullXMLToolSupport = chainProviders xmlFullSupport
     -- Inject tool definitions into system prompt
     injectToolDefinitions :: [ModelConfig m] -> ConfigEncoder m
     injectToolDefinitions cfgs req =
-      let toolDefs = concat [defs | Tools defs <- cfgs]
+      -- Extract tools: configs are newest-first (cons list), reverse to get chronological order
+      let toolDefs = concat (reverse [defs | Tools defs <- cfgs])
       in if null toolDefs
            then req
            else

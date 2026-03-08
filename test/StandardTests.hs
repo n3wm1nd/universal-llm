@@ -159,10 +159,12 @@ multipleSystemPrompts :: ( Monoid (ProviderRequest m)
 multipleSystemPrompts = StandardTest $ \cp model initialState getResponse -> do
   describe "Multiple System Prompts" $ do
     it "handles multiple SystemPrompt configs" $ do
+      -- System prompts in reverse chronological order (newest first in list)
+      -- After extraction+reverse: "helpful" (oldest) → "concise" → "plain" (newest)
       let configs = [ MaxTokens 2048
-                    , SystemPrompt "You are a helpful assistant."
-                    , SystemPrompt "Always respond concisely."
                     , SystemPrompt "Use plain language."
+                    , SystemPrompt "Always respond concisely."
+                    , SystemPrompt "You are a helpful assistant."
                     ]
           msgs = [UserText "What is 2+2?"]
           (_, req) = toProviderRequest cp model configs initialState msgs
