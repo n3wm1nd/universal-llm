@@ -205,41 +205,41 @@ buildAlibabaCloud mode alibabaCloudApiKey cachePath =
 
 buildLlamaCpp :: Maybe String -> Maybe String -> (OpenAIRequest -> (Bool, String)) -> TestCache.CachePath
               -> TestCache.ResponseProvider OpenAIRequest OpenAIResponse
-buildLlamaCpp mode llamacppUrl modelMatches cachePath = case mode of
-  Just "record" | Just url <- llamacppUrl ->
-    let endpoint = url ++ "/v1/chat/completions"
-    in TestCache.recordModeWithFilterMsg cachePath endpoint modelMatches $
-      TestHTTP.httpCall endpoint [("Content-Type", "application/json")]
-  Just "update" | Just url <- llamacppUrl ->
-    let endpoint = url ++ "/v1/chat/completions"
-    in TestCache.updateModeWithFilterMsg cachePath endpoint modelMatches $
-      TestHTTP.httpCall endpoint [("Content-Type", "application/json")]
-  Just "live" | Just url <- llamacppUrl ->
-    let endpoint = url ++ "/v1/chat/completions"
-    in TestCache.liveModeWithFilterMsg modelMatches $
-      TestHTTP.httpCall endpoint [("Content-Type", "application/json")]
-  _ -> case llamacppUrl of
-        Just url -> TestCache.playbackMode cachePath (url ++ "/v1/chat/completions")
-        Nothing -> TestCache.playbackMode cachePath ""  -- Fallback for playback without URL
+buildLlamaCpp mode llamacppUrl modelMatches cachePath =
+  let canonicalEndpoint = "llamacpp://v1/chat/completions"  -- Fixed endpoint for cache keys
+  in case mode of
+    Just "record" | Just url <- llamacppUrl ->
+      let actualEndpoint = url ++ "/v1/chat/completions"
+      in TestCache.recordModeWithFilterMsg cachePath canonicalEndpoint modelMatches $
+        TestHTTP.httpCall actualEndpoint [("Content-Type", "application/json")]
+    Just "update" | Just url <- llamacppUrl ->
+      let actualEndpoint = url ++ "/v1/chat/completions"
+      in TestCache.updateModeWithFilterMsg cachePath canonicalEndpoint modelMatches $
+        TestHTTP.httpCall actualEndpoint [("Content-Type", "application/json")]
+    Just "live" | Just url <- llamacppUrl ->
+      let actualEndpoint = url ++ "/v1/chat/completions"
+      in TestCache.liveModeWithFilterMsg modelMatches $
+        TestHTTP.httpCall actualEndpoint [("Content-Type", "application/json")]
+    _ -> TestCache.playbackMode cachePath canonicalEndpoint
 
 buildOpenAICompat :: Maybe String -> Maybe String -> TestCache.CachePath
                   -> TestCache.ResponseProvider OpenAIRequest OpenAIResponse
-buildOpenAICompat mode openaiCompatUrl cachePath = case mode of
-  Just "record" | Just url <- openaiCompatUrl ->
-    let endpoint = url ++ "/v1/chat/completions"
-    in TestCache.recordMode cachePath endpoint $
-      TestHTTP.httpCall endpoint [("Content-Type", "application/json")]
-  Just "update" | Just url <- openaiCompatUrl ->
-    let endpoint = url ++ "/v1/chat/completions"
-    in TestCache.updateMode cachePath endpoint $
-      TestHTTP.httpCall endpoint [("Content-Type", "application/json")]
-  Just "live" | Just url <- openaiCompatUrl ->
-    let endpoint = url ++ "/v1/chat/completions"
-    in TestCache.liveMode $
-      TestHTTP.httpCall endpoint [("Content-Type", "application/json")]
-  _ -> case openaiCompatUrl of
-        Just url -> TestCache.playbackMode cachePath (url ++ "/v1/chat/completions")
-        Nothing -> TestCache.playbackMode cachePath ""  -- Fallback for playback without URL
+buildOpenAICompat mode openaiCompatUrl cachePath =
+  let canonicalEndpoint = "openai-compat://v1/chat/completions"  -- Fixed endpoint for cache keys
+  in case mode of
+    Just "record" | Just url <- openaiCompatUrl ->
+      let actualEndpoint = url ++ "/v1/chat/completions"
+      in TestCache.recordMode cachePath canonicalEndpoint $
+        TestHTTP.httpCall actualEndpoint [("Content-Type", "application/json")]
+    Just "update" | Just url <- openaiCompatUrl ->
+      let actualEndpoint = url ++ "/v1/chat/completions"
+      in TestCache.updateMode cachePath canonicalEndpoint $
+        TestHTTP.httpCall actualEndpoint [("Content-Type", "application/json")]
+    Just "live" | Just url <- openaiCompatUrl ->
+      let actualEndpoint = url ++ "/v1/chat/completions"
+      in TestCache.liveMode $
+        TestHTTP.httpCall actualEndpoint [("Content-Type", "application/json")]
+    _ -> TestCache.playbackMode cachePath canonicalEndpoint
 
 buildAnthropic :: Maybe String -> Maybe T.Text -> TestCache.CachePath
                -> TestCache.ResponseProvider AnthropicRequest AnthropicResponse
@@ -300,22 +300,22 @@ buildOpenAIStreaming mode openaiApiKey cachePath =
 
 buildLlamaCppStreaming :: Maybe String -> Maybe String -> (OpenAIRequest -> (Bool, String)) -> TestCache.CachePath
                       -> TestCache.ResponseProvider OpenAIRequest BSL.ByteString
-buildLlamaCppStreaming mode llamacppUrl modelMatches cachePath = case mode of
-  Just "record" | Just url <- llamacppUrl ->
-    let endpoint = url ++ "/v1/chat/completions"
-    in TestCache.recordModeRawWithFilterMsg cachePath endpoint modelMatches $
-      TestHTTP.httpCallStreaming endpoint [("Content-Type", "application/json")]
-  Just "update" | Just url <- llamacppUrl ->
-    let endpoint = url ++ "/v1/chat/completions"
-    in TestCache.updateModeRawWithFilterMsg cachePath endpoint modelMatches $
-      TestHTTP.httpCallStreaming endpoint [("Content-Type", "application/json")]
-  Just "live" | Just url <- llamacppUrl ->
-    let endpoint = url ++ "/v1/chat/completions"
-    in TestCache.liveModeWithFilterMsg modelMatches $
-      TestHTTP.httpCallStreaming endpoint [("Content-Type", "application/json")]
-  _ -> case llamacppUrl of
-        Just url -> TestCache.playbackModeRaw cachePath (url ++ "/v1/chat/completions")
-        Nothing -> TestCache.playbackModeRaw cachePath ""  -- Fallback for playback without URL
+buildLlamaCppStreaming mode llamacppUrl modelMatches cachePath =
+  let canonicalEndpoint = "llamacpp://v1/chat/completions"  -- Fixed endpoint for cache keys
+  in case mode of
+    Just "record" | Just url <- llamacppUrl ->
+      let actualEndpoint = url ++ "/v1/chat/completions"
+      in TestCache.recordModeRawWithFilterMsg cachePath canonicalEndpoint modelMatches $
+        TestHTTP.httpCallStreaming actualEndpoint [("Content-Type", "application/json")]
+    Just "update" | Just url <- llamacppUrl ->
+      let actualEndpoint = url ++ "/v1/chat/completions"
+      in TestCache.updateModeRawWithFilterMsg cachePath canonicalEndpoint modelMatches $
+        TestHTTP.httpCallStreaming actualEndpoint [("Content-Type", "application/json")]
+    Just "live" | Just url <- llamacppUrl ->
+      let actualEndpoint = url ++ "/v1/chat/completions"
+      in TestCache.liveModeWithFilterMsg modelMatches $
+        TestHTTP.httpCallStreaming actualEndpoint [("Content-Type", "application/json")]
+    _ -> TestCache.playbackModeRaw cachePath canonicalEndpoint
 
 buildCompletion :: Maybe String -> Maybe String -> TestCache.CachePath
                -> TestCache.ResponseProvider OpenAICompletionRequest OpenAICompletionResponse

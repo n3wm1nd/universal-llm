@@ -18,9 +18,9 @@ classifyOpenAIError :: Int -> OpenAIResponse -> Maybe String
 classifyOpenAIError statusCode response = case response of
   OpenAISuccess _ -> Nothing  -- Not an error
   OpenAIError (OpenAIErrorResponse errDetail) ->
-    let code = OpenAI.code errDetail
+    let errorType = OpenAI.errorType errDetail
         msg = OpenAI.errorMessage errDetail
-    in classifyByHTTPStatus statusCode msg
+    in classifyByErrorType errorType statusCode msg
 
 -- | Classify Anthropic-format errors
 classifyAnthropicError :: Int -> AnthropicResponse -> Maybe String
@@ -30,7 +30,38 @@ classifyAnthropicError statusCode response = case response of
     let msg = Anthropic.errorMessage errResp
     in classifyByHTTPStatus statusCode msg
 
--- | Conservative error classification based on HTTP status codes
+-- | Error classification based on error type and HTTP status
+-- Returns Just msg if error is transient (should not be cached, mark test as pending)
+-- Returns Nothing if error should be cached (permanent error from our code)
+classifyByErrorType :: Maybe T.Text -> Int -> T.Text -> Maybe String
+classifyByErrorType errorType statusCode msg =
+  case errorType of
+    -- Check error type first (more specific than HTTP status)
+    Just errType
+      -- Rate limiting errors (transient)
+      | "rate_limit" `T.isInfixOf` T.toLower errType -> transient errType
+      | "insufficient_quota" `T.isInfixOf` T.toLower errType -> transient errType
+      | "quota_exceeded" `T.isInfixOf` T.toLower errType -> transient errType
+
+      -- Server/availability errors (transient)
+      | "server_error" `T.isInfixOf` T.toLower errType -> transient errType
+      | "service_unavailable" `T.isInfixOf` T.toLower errType -> transient errType
+      | "timeout" `T.isInfixOf` T.toLower errType -> transient errType
+
+      -- Auth errors (transient - user's environment)
+      | "authentication" `T.isInfixOf` T.toLower errType -> transient errType
+      | "unauthorized" `T.isInfixOf` T.toLower errType -> transient errType
+      | "permission" `T.isInfixOf` T.toLower errType -> transient errType
+
+      -- All other error types are permanent (invalid_request, model_not_found, etc.)
+      | otherwise -> Nothing
+
+    -- No error type, fall back to HTTP status
+    Nothing -> classifyByHTTPStatus statusCode msg
+  where
+    transient errType = Just $ "Transient error (" ++ show statusCode ++ ", " ++ T.unpack errType ++ "): " ++ T.unpack (T.take 150 msg)
+
+-- | Conservative error classification based on HTTP status codes only
 -- When in doubt: DON'T CACHE (return Just with pending message)
 classifyByHTTPStatus :: Int -> T.Text -> Maybe String
 classifyByHTTPStatus statusCode msg
@@ -51,5 +82,6 @@ classifyByHTTPStatus statusCode msg
   -- For any other status code, don't cache (conservative)
   | statusCode /= 200 = Just $ "Transient error (" ++ show statusCode ++ "): " ++ T.unpack (T.take 150 msg)
 
-  -- HTTP 200 with error response - be conservative, don't cache unless we add specific rules
-  | otherwise = Just $ "Transient error (200): " ++ T.unpack (T.take 150 msg)
+  -- HTTP 200 with error response - if we got here, it's a permanent error (cache it)
+  -- This handles cases like invalid parameters, unsupported features, etc.
+  | otherwise = Nothing

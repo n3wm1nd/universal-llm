@@ -129,13 +129,18 @@ cachedRequestWithErrorCheck cachePath endpoint errorCheck req makeRequest = do
       -- Check if this is a transient error that shouldn't be cached
       case errorCheck of
         Just checkFn | Just errMsg <- checkFn statusCode response -> do
+          -- Transient error - don't cache, mark as pending
           pendingWith errMsg
           error "unreachable"  -- pendingWith throws
         _ -> do
-          -- Only cache successful responses (HTTP 200)
-          if statusCode == 200
+          -- Either successful response or permanent error - cache it
+          -- If no error classifier provided, only cache HTTP 200
+          let shouldCache = case errorCheck of
+                Just _ -> True  -- ErrorClassifier said to cache (returned Nothing)
+                Nothing -> statusCode == 200  -- No classifier, only cache 200s
+          if shouldCache
             then recordResponse cachePath endpoint req response
-            else return ()  -- Don't cache non-200 responses
+            else return ()
           return response
 
 -- Record mode: check cache first, fall back to live API and record response (only caches new responses)
@@ -178,13 +183,18 @@ updateModeWithErrorCheck cachePath endpoint errorCheck apiCall req = do
   -- Check if this is a transient error that shouldn't be cached
   case errorCheck of
     Just checkFn | Just errMsg <- checkFn statusCode response -> do
+      -- Transient error - don't cache, mark as pending
       pendingWith errMsg
       error "unreachable"  -- pendingWith throws
     _ -> do
-      -- Only cache successful responses (HTTP 200)
-      if statusCode == 200
+      -- Either successful response or permanent error - cache it
+      -- If no error classifier provided, only cache HTTP 200
+      let shouldCache = case errorCheck of
+            Just _ -> True  -- ErrorClassifier said to cache (returned Nothing)
+            Nothing -> statusCode == 200  -- No classifier, only cache 200s
+      if shouldCache
         then recordResponse cachePath endpoint req response
-        else return ()  -- Don't cache non-200 responses
+        else return ()
       return response
 
 -- Playback mode: only use cache, mark test as pending if not found (ensures no unexpected API calls)
