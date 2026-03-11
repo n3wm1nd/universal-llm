@@ -183,6 +183,32 @@ acceptsHiddenReasoning makeRequest modelName = do
     -- Should NOT have reasoning_content or reasoning_details
     assertNoReasoningData resp
 
+-- | Probe: Encrypted reasoning (reasoning_details with encrypted data)
+--
+-- __Tests:__ Does the model return encrypted reasoning in reasoning_details?
+--
+-- __Checks:__ Request with reasoning succeeds, response has reasoning_details
+-- with encrypted data (type: "reasoning.encrypted")
+--
+-- __Expected to pass:__ Models with encrypted reasoning (e.g., GPT models via
+-- OpenRouter, which return reasoning.encrypted type)
+--
+-- __Expected to fail:__ Models with readable reasoning or no reasoning
+--
+-- __Model behavior:__ Some models return reasoning_details but the content
+-- is encrypted/signed by the provider. The field is present for round-tripping
+-- in conversation history but not readable as tokens.
+encryptedReasoning :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+encryptedReasoning makeRequest modelName = do
+  it "returns encrypted reasoning in reasoning_details field" $ do
+    let req = enableReasoning (simpleUserRequest "Think step by step: What is 15 * 23?")
+          { model = modelName }
+    resp <- makeRequest req
+    -- Should succeed with assistant text
+    assertHasAssistantText resp
+    -- Should have reasoning_details with encrypted data
+    assertHasEncryptedReasoning resp
+
 -- | Probe: Tool calling via XML in content (model quirk)
 --
 -- __Tests:__ Does the model return tool calls as XML in content field?

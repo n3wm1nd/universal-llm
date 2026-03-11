@@ -49,6 +49,8 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
+import qualified Data.Aeson.KeyMap as KM
+import qualified Data.Vector as V
 import Test.Hspec (Spec, it, shouldSatisfy, Expectation, HasCallStack)
 
 -- ============================================================================
@@ -481,6 +483,32 @@ assertNoReasoningData resp = do
         Just _ -> error "Message has reasoning_details (expected hidden reasoning)"
     (Just _, _) -> error "Message has reasoning_content (expected hidden reasoning)"
     (Nothing, Just _) -> error "Message has reasoning_details (expected hidden reasoning)"
+
+-- | Assert that response has encrypted reasoning in reasoning_details
+--
+-- Used for testing models that return reasoning_details with encrypted data
+-- (type: "reasoning.encrypted"). This is common for models via OpenRouter
+-- where reasoning is signed/encrypted by the provider.
+assertHasEncryptedReasoning :: HasCallStack => OpenAIResponse -> Expectation
+assertHasEncryptedReasoning resp = do
+  let msg = getFirstMessage . expectSuccess $ resp
+  case msg.reasoning_details of
+    Nothing -> error "Message has no reasoning_details field"
+    Just val -> do
+      -- Check if it's an array containing encrypted reasoning entries
+      case val of
+        Aeson.Array arr -> do
+          let hasEncrypted = any isEncryptedReasoning (V.toList arr)
+          if hasEncrypted
+            then return ()
+            else error "reasoning_details exists but contains no encrypted reasoning entries"
+        _ -> error "reasoning_details is not an array"
+  where
+    isEncryptedReasoning (Aeson.Object obj) =
+      case KM.lookup (Key.fromString "type") obj of
+        Just (Aeson.String t) -> "reasoning.encrypted" `T.isInfixOf` t
+        _ -> False
+    isEncryptedReasoning _ = False
 
 -- | Assert that response contains an XML-style tool call in the content
 --

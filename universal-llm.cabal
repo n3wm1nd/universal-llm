@@ -130,6 +130,8 @@ test-suite universal-llm-tests
     Models.Moonshot.KimiK25
     Models.Minimax.MinimaxM25
     Models.OpenAI.GPTOSS
+    Models.OpenAI.GPT53
+    Models.OpenAI.GPT54
   hs-source-dirs: test
 
   build-depends:
@@ -149,6 +151,7 @@ test-suite universal-llm-tests
     http-conduit,
     case-insensitive,
     vector,
+    unordered-containers,
     data-default,
     containers,
     exceptions
