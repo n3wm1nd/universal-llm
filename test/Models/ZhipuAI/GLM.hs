@@ -23,9 +23,8 @@ __OpenRouter:__
 
 __llama.cpp:__
   Uses standard reasoning_content field
-  Returns tool calls as XML in content field (not tool_calls)
+  Tool calls are properly extracted to tool_calls field (llama.cpp handles this)
   Model name is dynamically determined from loaded GGUF file
-  Requires withXMLResponseParsing handler for tool calls
 
 -}
 
@@ -94,7 +93,7 @@ testsGLM45AirLlamaCpp provider modelName = do
   describe ("GLM 4.5 Air via llama.cpp with " <> T.unpack modelName) $ do
     describe "Protocol" $ do
       basicText provider modelName
-      toolCallingViaXML provider modelName  -- GLM-4.5 returns XML tool calls in content
+      toolCalling provider modelName  -- llama.cpp now extracts tool calls properly
       acceptsToolResults provider modelName
       acceptsToolResultNoTools provider modelName
       acceptsToolResultToolGone provider modelName

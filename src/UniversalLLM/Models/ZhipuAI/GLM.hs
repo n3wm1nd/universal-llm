@@ -24,9 +24,10 @@ These models can be accessed through multiple providers (llama.cpp, OpenRouter, 
 
 GLM models are available through multiple providers:
 
-- __llama.cpp__: Local inference with hybrid tool handling (OpenAI request, XML response)
+- __llama.cpp__: Local inference (llama.cpp handles tool call extraction)
 - __OpenRouter__: Cloud inference via z-ai/glm-4.5-air:free
 - __ZAI__: Official Zhipu AI API (api.z.ai)
+- __AlibabaCloud__: Via Alibaba's model marketplace
 
 = GLM-Specific Quirks
 
@@ -34,9 +35,8 @@ GLM models have some unique requirements:
 
 1. __Null content handling__: GLM's Jinja2 template crashes on null content in messages
 2. __Minimum tokens__: Need sufficient max_tokens when reasoning to avoid mid-block cutoff
-3. __XML tool calls__ (llama.cpp only): Model outputs XML, requires special parsing
 
-These quirks are handled automatically by the composable providers.
+These quirks are handled automatically by the composable providers when needed.
 
 = Usage
 
@@ -75,8 +75,7 @@ module UniversalLLM.Models.ZhipuAI.GLM
 
 import UniversalLLM
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
-import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), OpenAICompatible(..), AlibabaCloud(..))
-import UniversalLLM.Providers.XMLToolCalls (xmlResponseParser)
+import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest(..), OpenAIMessage(..), OpenAIResponse)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -192,7 +191,7 @@ instance Routing (Model GLM45 ZAI) where
 -- | GLM-4.5-Air - Fast and capable model with tools and reasoning
 --
 -- Capabilities:
--- - Tool calling (native or via XML depending on provider)
+-- - Tool calling (standard OpenAI format)
 -- - Extended thinking/reasoning
 -- - High-quality code generation
 -- - Streaming responses
