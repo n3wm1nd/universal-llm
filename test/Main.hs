@@ -28,9 +28,7 @@ import qualified Models.Amazon.Nova2Lite
 import qualified Models.Anthropic.Claude
 import qualified Models.Moonshot.KimiK25
 import qualified Models.Minimax.MinimaxM25
-import qualified Models.OpenAI.GPTOSS
-import qualified Models.OpenAI.GPT53
-import qualified Models.OpenAI.GPT54
+import qualified Models.OpenAI.GPT
 import GGUFNames (canonicalizationTests)
 import TestProviders (Providers(..), buildProviders)
 
@@ -66,15 +64,15 @@ main = do
       Models.Anthropic.Claude.testsOpus46 (anthropicProvider p)
       Models.Moonshot.KimiK25.testsOpenRouter (openrouterProvider p)
       Models.Moonshot.KimiK25.testsAlibabaCloud (alibabaCloudProvider p)
+      Models.Minimax.MinimaxM25.testsOpenRouter (openrouterProvider p)
       Models.Minimax.MinimaxM25.testsLlamaCpp (llamacppProvider p) "MiniMax-M2.5"
       Models.Minimax.MinimaxM25.testsAlibabaCloud (alibabaCloudProvider p)
-      Models.OpenAI.GPTOSS.testsLlamaCpp (llamacppProvider p) "gpt-oss-120b"
-      Models.OpenAI.GPTOSS.testsOpenRouter (openrouterProvider p)
-      Models.OpenAI.GPT53.testsGPT53CodexOpenRouter (openrouterProvider p)
-      Models.OpenAI.GPT53.testsGPT53ChatOpenRouter (openrouterProvider p)
-      Models.OpenAI.GPT54.testsGPT54ProOpenRouter (openrouterProvider p)
-      Models.OpenAI.GPT54.testsGPT54OpenRouter (openrouterProvider p)
-      Models.Minimax.MinimaxM25.testsOpenRouter (openrouterProvider p)
+      Models.OpenAI.GPT.testsGPTOSSOpenRouter (openrouterProvider p)
+      Models.OpenAI.GPT.testsGPTOSSLlamaCpp (llamacppProvider p) "gpt-oss-120b"
+      Models.OpenAI.GPT.testsGPT53CodexOpenRouter (openrouterProvider p)
+      Models.OpenAI.GPT.testsGPT53ChatOpenRouter (openrouterProvider p)
+      Models.OpenAI.GPT.testsGPT54ProOpenRouter (openrouterProvider p)
+      Models.OpenAI.GPT.testsGPT54OpenRouter (openrouterProvider p)
 
     describe "Composable Handlers" ComposableHandlersSpec.spec
 

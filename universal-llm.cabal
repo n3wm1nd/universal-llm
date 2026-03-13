@@ -129,9 +129,7 @@ test-suite universal-llm-tests
     Models.Alibaba.Qwen35
     Models.Moonshot.KimiK25
     Models.Minimax.MinimaxM25
-    Models.OpenAI.GPTOSS
-    Models.OpenAI.GPT53
-    Models.OpenAI.GPT54
+    Models.OpenAI.GPT
   hs-source-dirs: test
 
   build-depends:
