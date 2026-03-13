@@ -83,10 +83,10 @@ import UniversalLLM
 -- This allows functions to become tools just by having the right return type
 class ToolParameter a => ToolFunction a where
   -- | Get tool name from result type
-  toolFunctionName :: Proxy a -> Text
+  toolFunctionName :: Text
 
   -- | Get tool description from result type
-  toolFunctionDescription :: Proxy a -> Text
+  toolFunctionDescription :: Text
 
 -- | Type class for tool parameters
 -- Provides parameter naming and description for JSON schema generation
@@ -94,38 +94,38 @@ class ToolParameter a => ToolFunction a where
 class HasCodec a => ToolParameter a where
   -- | Get parameter name, given its position (0-indexed)
   -- Default implementation generates "param_N" names
-  paramName :: Proxy a -> Int -> Text
-  paramName _ n = "param_" <> T.pack (show n)
+  paramName :: Text
+  paramName = "param"
 
   -- | Get parameter description for schema
   -- Default implementation provides a generic description
-  paramDescription :: Proxy a -> Text
-  paramDescription _ = "a parameter"
+  paramDescription :: Text
+  paramDescription = "a parameter"
 
 -- Default instances for common types
 instance ToolParameter Text where
-  paramName _ n = "text_" <> T.pack (show n)
-  paramDescription _ = "a text string"
+  paramName = "text"
+  paramDescription = "a text string"
 
 instance ToolParameter Int where
-  paramName _ n = "number_" <> T.pack (show n)
-  paramDescription _ = "an integer number"
+  paramName = "number"
+  paramDescription = "an integer number"
 
 instance ToolParameter Integer where
-  paramName _ n = "number_" <> T.pack (show n)
-  paramDescription _ = "an integer number"
+  paramName = "number"
+  paramDescription = "an integer number"
 
 instance ToolParameter Bool where
-  paramName _ n = "bool_" <> T.pack (show n)
-  paramDescription _ = "a boolean value (true or false)"
+  paramName = "bool"
+  paramDescription = "a boolean value (true or false)"
 
 instance ToolParameter a => ToolParameter [a] where
-  paramName _ n = "list_" <> T.pack (show n)
-  paramDescription _p = "a list of " <> paramDescription (Proxy @a)
+  paramName = "list"
+  paramDescription = "a list of " <> paramDescription @a
 
 instance ToolParameter a => ToolParameter (Maybe a) where
-  paramName p n = paramName (Proxy @a) n
-  paramDescription _p = paramDescription (Proxy @a)
+  paramName = paramName @a
+  paramDescription = paramDescription @a
 
 -- | Type family to detect if a type is Maybe
 type family IsOptional a :: Bool where
@@ -315,27 +315,31 @@ data ToolWrapped f params = ToolWrapped
 
 -- | Helper to generate default parameter metadata from ToolParameter instances
 class DefaultParamMeta params where
-  -- Build metadata list, threading position forward
-  defaultParamMetaFrom :: Proxy params -> Int -> [(Text, Text)]
+  -- Build metadata list of (baseName, desc) without suffixes
+  defaultParamMetaFrom :: Proxy params -> [(Text, Text)]
 
   -- Count the number of parameters
   paramCount :: Proxy params -> Int
 
--- | Get default metadata starting from position 0
+-- | Get default metadata, appending _N suffixes only for duplicate base names.
+-- The first occurrence of a name is unsuffixed; subsequent ones get _1, _2, etc.
 defaultParamMeta :: DefaultParamMeta params => Proxy params -> [(Text, Text)]
-defaultParamMeta p = defaultParamMetaFrom p 0
+defaultParamMeta p = assignSuffixes (defaultParamMetaFrom p)
+
+assignSuffixes :: [(Text, Text)] -> [(Text, Text)]
+assignSuffixes = reverse . snd . foldl' step ([], [])
+  where
+    step (seen, acc) (name, desc) =
+      let n         = length (filter (== name) seen)
+          finalName = if n == 0 then name else name <> "_" <> T.pack (show n)
+      in (name : seen, (finalName, desc) : acc)
 
 instance DefaultParamMeta () where
-  defaultParamMetaFrom _ _ = []
+  defaultParamMetaFrom _ = []
   paramCount _ = 0
 
 instance (ToolParameter a, DefaultParamMeta rest) => DefaultParamMeta (a, rest) where
-  defaultParamMetaFrom _ pos =
-    let name = paramName (Proxy @a) pos
-        desc = paramDescription (Proxy @a)
-        restMetas = defaultParamMetaFrom (Proxy @rest) (pos + 1)
-    in (name, desc) : restMetas
-
+  defaultParamMetaFrom _ = (paramName @a, paramDescription @a) : defaultParamMetaFrom (Proxy @rest)
   paramCount _ = 1 + paramCount (Proxy @rest)
 
 -- | Check that metadata list length matches parameter count
@@ -444,8 +448,8 @@ instance Callable (IO a) IO () a where
 -- | Tool instance for IO actions with ToolFunction result
 -- Allows 0-arity IO actions to be tools directly (no ToolWrapped needed)
 instance ToolFunction a => Tool (IO a) IO () a where
-  toolName _ = toolFunctionName (Proxy @a)
-  toolDescription _ = toolFunctionDescription (Proxy @a)
+  toolName _ = toolFunctionName @a
+  toolDescription _ = toolFunctionDescription @a
 
 -- | Base case instance for Identity monad
 -- Allows 0-arity Identity actions to be used as tools
@@ -454,8 +458,8 @@ instance Callable (Identity a) Identity () a where
 
 -- | Tool instance for Identity actions with ToolFunction result
 instance ToolFunction a => Tool (Identity a) Identity () a where
-  toolName _ = toolFunctionName (Proxy @a)
-  toolDescription _ = toolFunctionDescription (Proxy @a)
+  toolName _ = toolFunctionName @a
+  toolDescription _ = toolFunctionDescription @a
 
 -- Note: Users can add Callable instances for their own monads following the same pattern.
 -- The key is to use a concrete monad type (not a type variable) to avoid conflicts.
@@ -465,16 +469,16 @@ instance ToolFunction a => Tool (Identity a) Identity () a where
 --     call action () = action
 --
 --   instance ToolFunction a => Tool (Sem r a) (Sem r) () a where
---     toolName _ = toolFunctionName (Proxy @a)
---     toolDescription _ = toolFunctionDescription (Proxy @a)
+--     toolName _ = toolFunctionName @a
+--     toolDescription _ = toolFunctionDescription @a
 --
 -- For custom monads:
 --   instance ToolParameter a => Callable (MyMonad a) MyMonad () a where
 --     call action () = action
 --
 --   instance ToolFunction a => Tool (MyMonad a) MyMonad () a where
---     toolName _ = toolFunctionName (Proxy @a)
---     toolDescription _ = toolFunctionDescription (Proxy @a)
+--     toolName _ = toolFunctionName @a
+--     toolDescription _ = toolFunctionDescription @a
 
 -- ============================================================================
 -- Helper Functions

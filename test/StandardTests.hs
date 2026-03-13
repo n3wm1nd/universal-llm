@@ -200,8 +200,8 @@ newtype Location = Location Text
   deriving (HasCodec) via Text
 
 instance ToolParameter Location where
-  paramName _ _ = "location"
-  paramDescription _ = "City name"
+  paramName = "location"
+  paramDescription = "City name"
 
 -- Result types
 data WeatherResult = WeatherResult
@@ -216,12 +216,12 @@ instance HasCodec WeatherResult where
       <*> Autodocodec.requiredField "condition" "Weather condition" Autodocodec..= weatherCondition
 
 instance ToolParameter WeatherResult where
-  paramName _ _ = "weather_result"
-  paramDescription _ = "weather information"
+  paramName = "weather_result"
+  paramDescription = "weather information"
 
 instance ToolFunction WeatherResult where
-  toolFunctionName _ = "get_weather"
-  toolFunctionDescription _ = "Get current weather for a location"
+  toolFunctionName = "get_weather"
+  toolFunctionDescription = "Get current weather for a location"
 
 -- Success tool - returns weather data
 getWeatherSuccess :: Location -> IO WeatherResult
@@ -234,12 +234,12 @@ newtype FailingToolResult = FailingToolResult Text
   deriving (HasCodec) via Text
 
 instance ToolParameter FailingToolResult where
-  paramName _ _ = "result"
-  paramDescription _ = "tool result (will always fail)"
+  paramName = "result"
+  paramDescription = "tool result (will always fail)"
 
 instance ToolFunction FailingToolResult where
-  toolFunctionName _ = "always_fail"
-  toolFunctionDescription _ = "A tool that always fails for testing error handling"
+  toolFunctionName = "always_fail"
+  toolFunctionDescription = "A tool that always fails for testing error handling"
 
 -- Failure tool - always fails using monadic fail
 alwaysFail :: Location -> IO FailingToolResult

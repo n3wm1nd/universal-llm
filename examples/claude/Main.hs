@@ -62,13 +62,13 @@ instance Autodocodec.HasCodec TimeResponse where
     TimeResponse <$> Autodocodec.requiredField "current_time" "Current time" .= currentTime
 
 instance ToolParameter TimeResponse where
-  paramName _ n = "time_response_" <> T.pack (show n)
-  paramDescription _ = "time response"
+  paramName = "time_response"
+  paramDescription = "time response"
 
 -- Make TimeResponse a ToolFunction so functions returning it become tools automatically
 instance ToolFunction TimeResponse where
-  toolFunctionName _ = "get_time"
-  toolFunctionDescription _ = "Get the current time"
+  toolFunctionName = "get_time"
+  toolFunctionDescription = "Get the current time"
 
 -- Tool implementation as a bare 0-arity function - no wrapper needed!
 getTimeTool :: IO TimeResponse

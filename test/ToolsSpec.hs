@@ -44,13 +44,13 @@ instance Aeson.ToJSON SearchResult where
   toJSON = Autodocodec.toJSONViaCodec
 
 instance ToolParameter SearchResult where
-  paramName _ n = "search_result_" <> T.pack (show n)
-  paramDescription _ = "a search result"
+  paramName = "search_result"
+  paramDescription = "a search result"
 
 -- Make [SearchResult] a ToolFunction so functions returning it can be tools
 instance ToolFunction [SearchResult] where
-  toolFunctionName _ = "web_search"
-  toolFunctionDescription _ = "Search the web and return a list of results"
+  toolFunctionName = "web_search"
+  toolFunctionDescription = "Search the web and return a list of results"
 
 -- LogResult for testing Text parameter schema generation
 data LogResult = LogResult { logSuccess :: Bool } deriving (Show, Eq, Generic)
@@ -66,12 +66,12 @@ instance Aeson.ToJSON LogResult where
   toJSON = Autodocodec.toJSONViaCodec
 
 instance ToolParameter LogResult where
-  paramName _ n = "log_result_" <> T.pack (show n)
-  paramDescription _ = "log result"
+  paramName = "log_result"
+  paramDescription = "log result"
 
 instance ToolFunction LogResult where
-  toolFunctionName _ = "log_message"
-  toolFunctionDescription _ = "Log a message"
+  toolFunctionName = "log_message"
+  toolFunctionDescription = "Log a message"
 
 -- Test the TupleSchema instances
 spec :: Spec
@@ -98,16 +98,16 @@ spec = describe "Tools" $ do
           case KM.lookup "properties" obj of
             Just (Aeson.Object props) -> do
               KM.size props `shouldBe` 2
-              KM.member "text_0" props `shouldBe` True
-              -- Maybe Int uses Int's parameter name: "number_1"
-              KM.member "number_1" props `shouldBe` True
+              KM.member "text" props `shouldBe` True
+              -- Maybe Int uses Int's parameter name: "number"
+              KM.member "number" props `shouldBe` True
             _ -> expectationFailure "properties should have two fields"
           case KM.lookup "required" obj of
             Just (Aeson.Array arr) -> do
-              -- Only text_0 should be required, not the Maybe Int
+              -- Only text should be required, not the Maybe Int
               V.length arr `shouldBe` 1
               case V.toList arr of
-                [Aeson.String name] -> name `shouldBe` "text_0"
+                [Aeson.String name] -> name `shouldBe` "text"
                 _ -> expectationFailure "required should contain only text_0"
             _ -> expectationFailure "required should be an array with one element"
         _ -> expectationFailure "Schema should decode to Object"
@@ -120,7 +120,7 @@ spec = describe "Tools" $ do
           case KM.lookup "properties" obj of
             Just (Aeson.Object props) -> do
               KM.size props `shouldBe` 1
-              KM.member "text_0" props `shouldBe` True
+              KM.member "text" props `shouldBe` True
             _ -> expectationFailure "properties should be an object with one field"
           case KM.lookup "required" obj of
             Just (Aeson.Array arr) -> length arr `shouldBe` 1
@@ -134,8 +134,8 @@ spec = describe "Tools" $ do
           case KM.lookup "properties" obj of
             Just (Aeson.Object props) -> do
               KM.size props `shouldBe` 2
-              KM.member "text_0" props `shouldBe` True
-              KM.member "number_1" props `shouldBe` True
+              KM.member "text" props `shouldBe` True
+              KM.member "number" props `shouldBe` True
             _ -> expectationFailure "properties should have two fields"
           case KM.lookup "required" obj of
             Just (Aeson.Array arr) -> length arr `shouldBe` 2
@@ -149,9 +149,9 @@ spec = describe "Tools" $ do
           case KM.lookup "properties" obj of
             Just (Aeson.Object props) -> do
               KM.size props `shouldBe` 3
-              KM.member "text_0" props `shouldBe` True
-              KM.member "number_1" props `shouldBe` True
-              KM.member "bool_2" props `shouldBe` True
+              KM.member "text" props `shouldBe` True
+              KM.member "number" props `shouldBe` True
+              KM.member "bool" props `shouldBe` True
             _ -> expectationFailure "properties should have three fields"
           case KM.lookup "required" obj of
             Just (Aeson.Array arr) -> length arr `shouldBe` 3
@@ -225,52 +225,50 @@ spec = describe "Tools" $ do
       result `shouldBe` Right ()
 
     it "parses single parameter from JSON object" $ do
-      let obj = KM.fromList [("text_0", Aeson.String "hello")]
+      let obj = KM.fromList [("text", Aeson.String "hello")]
           result = parseJsonToDefaultTuple (Proxy @(Text, ())) obj
       result `shouldBe` Right ("hello", ())
 
     it "parses two parameters from JSON object" $ do
-      let obj = KM.fromList [("text_0", Aeson.String "hello"), ("number_1", Aeson.Number 42)]
+      let obj = KM.fromList [("text", Aeson.String "hello"), ("number", Aeson.Number 42)]
           result = parseJsonToDefaultTuple (Proxy @(Text, (Int, ()))) obj
       result `shouldBe` Right ("hello", (42, ()))
 
     it "parses three parameters from JSON object" $ do
       let obj = KM.fromList
-            [ ("text_0", Aeson.String "hello")
-            , ("number_1", Aeson.Number 42)
-            , ("bool_2", Aeson.Bool True)
+            [ ("text", Aeson.String "hello")
+            , ("number", Aeson.Number 42)
+            , ("bool", Aeson.Bool True)
             ]
           result = parseJsonToDefaultTuple (Proxy @(Text, (Int, (Bool, ())))) obj
       result `shouldBe` Right ("hello", (42, (True, ())))
 
     it "fails when parameter is missing" $ do
-      let obj = KM.fromList [("text_0", Aeson.String "hello")]
+      let obj = KM.fromList [("text", Aeson.String "hello")]
           result = parseJsonToDefaultTuple (Proxy @(Text, (Int, ()))) obj
       case result of
         Left err -> T.unpack err `shouldContain` "Missing parameter"
         Right _ -> expectationFailure "Should have failed with missing parameter"
 
     it "fails when parameter has wrong type" $ do
-      let obj = KM.fromList [("text_0", Aeson.Number 42)]  -- Number instead of String
+      let obj = KM.fromList [("text", Aeson.Number 42)]  -- Number instead of String
           result = parseJsonToDefaultTuple (Proxy @(Text, ())) obj
       case result of
         Left err -> T.unpack err `shouldContain` "Failed to parse parameter"
         Right _ -> expectationFailure "Should have failed with type error"
 
     it "parses Maybe parameter when present" $ do
-      -- Maybe Int uses Int's parameter name: "number_1"
-      let obj = KM.fromList [("text_0", Aeson.String "hello"), ("number_1", Aeson.Number 42)]
+      let obj = KM.fromList [("text", Aeson.String "hello"), ("number", Aeson.Number 42)]
           result = parseJsonToDefaultTuple (Proxy @(Text, (Maybe Int, ()))) obj
       result `shouldBe` Right ("hello", (Just 42, ()))
 
     it "parses Maybe parameter when missing (as Nothing)" $ do
-      let obj = KM.fromList [("text_0", Aeson.String "hello")]
+      let obj = KM.fromList [("text", Aeson.String "hello")]
           result = parseJsonToDefaultTuple (Proxy @(Text, (Maybe Int, ()))) obj
       result `shouldBe` Right ("hello", (Nothing, ()))
 
     it "parses Maybe parameter when explicitly null (as Nothing)" $ do
-      -- Maybe Int uses Int's parameter name: "number_1"
-      let obj = KM.fromList [("text_0", Aeson.String "hello"), ("number_1", Aeson.Null)]
+      let obj = KM.fromList [("text", Aeson.String "hello"), ("number", Aeson.Null)]
           result = parseJsonToDefaultTuple (Proxy @(Text, (Maybe Int, ()))) obj
       result `shouldBe` Right ("hello", (Nothing, ()))
 
@@ -310,13 +308,13 @@ spec = describe "Tools" $ do
         Aeson.Success (obj :: Object) -> do
           case KM.lookup "properties" obj of
             Just (Aeson.Object props) -> do
-              KM.member "text_0" props `shouldBe` True
+              KM.member "text" props `shouldBe` True
             _ -> expectationFailure "properties should be an object"
         _ -> expectationFailure "Schema should decode to Object"
 
       -- Create a tool call with parameters
       let toolCall = ToolCall "call-2" "greet"
-                       (Aeson.object [("text_0", Aeson.String "Alice")])
+                       (Aeson.object [("text", Aeson.String "Alice")])
 
       -- Execute the tool call
       result <- executeToolCall tool toolCall
@@ -339,7 +337,7 @@ spec = describe "Tools" $ do
           case KM.lookup "properties" obj of
             Just (Aeson.Object props) -> do
               KM.size props `shouldBe` 2
-              KM.member "number_0" props `shouldBe` True
+              KM.member "number" props `shouldBe` True
               KM.member "number_1" props `shouldBe` True
             _ -> expectationFailure "properties should be an object with two fields"
         _ -> expectationFailure "Schema should decode to Object"
@@ -347,7 +345,7 @@ spec = describe "Tools" $ do
       -- Create a tool call with parameters
       let toolCall = ToolCall "call-3" "add"
                        (Aeson.object
-                         [ ("number_0", Aeson.Number 10)
+                         [ ("number", Aeson.Number 10)
                          , ("number_1", Aeson.Number 32)
                          ])
 
@@ -375,9 +373,9 @@ spec = describe "Tools" $ do
           case KM.lookup "properties" obj of
             Just (Aeson.Object props) -> do
               KM.size props `shouldBe` 3
-              KM.member "text_0" props `shouldBe` True
-              KM.member "number_1" props `shouldBe` True
-              KM.member "bool_2" props `shouldBe` True
+              KM.member "text" props `shouldBe` True
+              KM.member "number" props `shouldBe` True
+              KM.member "bool" props `shouldBe` True
             _ -> expectationFailure "properties should have three fields"
           case KM.lookup "required" obj of
             Just (Aeson.Array arr) -> length arr `shouldBe` 3
@@ -387,9 +385,9 @@ spec = describe "Tools" $ do
       -- Create a tool call with all parameters
       let toolCall = ToolCall "call-4" "format_info"
                        (Aeson.object
-                         [ ("text_0", Aeson.String "Alice")
-                         , ("number_1", Aeson.Number 25)
-                         , ("bool_2", Aeson.Bool True)
+                         [ ("text", Aeson.String "Alice")
+                         , ("number", Aeson.Number 25)
+                         , ("bool", Aeson.Bool True)
                          ])
 
       -- Execute the tool call
@@ -417,7 +415,7 @@ spec = describe "Tools" $ do
           tool = mkTool "add" "adds two numbers" add
           -- Create a tool call with only one parameter (missing number_1)
           toolCall = ToolCall "call-6" "add"
-                       (Aeson.object [("number_0", Aeson.Number 10)])
+                       (Aeson.object [("number", Aeson.Number 10)])
 
       result <- executeToolCall tool toolCall
 
@@ -432,7 +430,7 @@ spec = describe "Tools" $ do
           -- Create a tool call with wrong types (strings instead of numbers)
           toolCall = ToolCall "call-7" "add"
                        (Aeson.object
-                         [ ("number_0", Aeson.String "not a number")
+                         [ ("number", Aeson.String "not a number")
                          , ("number_1", Aeson.Number 32)
                          ])
 
@@ -549,13 +547,13 @@ spec = describe "Tools" $ do
           case KM.lookup "properties" obj of
             Just (Aeson.Object props) -> do
               KM.size props `shouldBe` 1
-              KM.member "text_0" props `shouldBe` True
+              KM.member "text" props `shouldBe` True
             _ -> expectationFailure "properties should have one field"
         _ -> expectationFailure "Schema should decode to Object"
 
       -- Execute the tool
       let toolCall = ToolCall "call-1" "web_search"
-                       (Aeson.object [("text_0", Aeson.String "Haskell")])
+                       (Aeson.object [("text", Aeson.String "Haskell")])
 
       result <- executeToolCall partialSearch toolCall
 

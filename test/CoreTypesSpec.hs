@@ -48,8 +48,8 @@ instance HasCodec SimpleOutput where
       <$> requiredField' "result" AC..= outputResult
 
 instance ToolParameter SimpleOutput where
-  paramName _ n = "output_" <> T.pack (show n)
-  paramDescription _ = "an output value"
+  paramName = "output"
+  paramDescription = "an output value"
 
 -- Tool function for echo
 echoTool :: Text -> Int -> Identity SimpleOutput

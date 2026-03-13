@@ -52,8 +52,8 @@ instance HasCodec CalculatorOutput where
       <$> requiredField' "result" AC..= result
 
 instance ToolParameter CalculatorOutput where
-  paramName _ n = "calc_result_" <> T.pack (show n)
-  paramDescription _ = "a calculation result"
+  paramName = "calc_result"
+  paramDescription = "a calculation result"
 
 -- Calculator tool as a function
 calculatorTool :: Text -> Int -> Int -> IO CalculatorOutput
