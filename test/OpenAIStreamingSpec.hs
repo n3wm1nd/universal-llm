@@ -11,14 +11,30 @@ import qualified Data.ByteString.Lazy.Char8 as BSLC
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Aeson (object, (.=))
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Key as AesonKey
+import qualified Data.Aeson.KeyMap as KM
 import Data.Default (def)
 import Control.Monad (when)
+import Network.SSE (parseSSEComplete, sseEventData)
 import TestCache (ResponseProvider)
 import TestModels
 import UniversalLLM
 import UniversalLLM.Protocols.OpenAI
 import qualified UniversalLLM.Protocols.OpenAI as Proto
 import qualified UniversalLLM.Providers.OpenAI as Provider
+
+-- | Check that any event's decoded JSON data contains a given key anywhere in the object tree.
+hasDataKey :: BSL.ByteString -> Text -> Bool
+hasDataKey body key =
+    any (containsKey . Aeson.decodeStrict . sseEventData) $
+        parseSSEComplete (BSL.toStrict body)
+  where
+    containsKey Nothing                  = False
+    containsKey (Just (Aeson.Object km)) = KM.member (AesonKey.fromText key) km
+                                        || any (containsKey . Just) (KM.elems km)
+    containsKey (Just (Aeson.Array  vs)) = any (containsKey . Just) vs
+    containsKey (Just _)                 = False
 
 -- Type aliases for easier provider/model switching
 type TestModel = Model GLM45Air Provider.OpenRouter
@@ -64,7 +80,7 @@ spec getResponse = do
       let bodyStr = BSLC.unpack sseBody
 
       -- Check if response is an error
-      if T.isInfixOf "\"error\"" (T.pack bodyStr)
+      if hasDataKey sseBody "error"
         then expectationFailure $ "Provider returned error: " ++ take 200 bodyStr
         else do
           -- Check that it contains SSE event markers
@@ -105,7 +121,7 @@ spec getResponse = do
       let bodyStr = BSLC.unpack sseBody
 
       -- Check if response is an error
-      if T.isInfixOf "\"error\"" (T.pack bodyStr)
+      if hasDataKey sseBody "error"
         then expectationFailure $ "Provider returned error: " ++ take 200 bodyStr
         else do
           -- Check for SSE data markers
@@ -128,20 +144,19 @@ spec getResponse = do
       BSL.null sseBody `shouldBe` False
 
       let bodyStr = BSLC.unpack sseBody
-          bodyText = T.pack bodyStr
 
       -- Check if response is an error
-      if T.isInfixOf "\"error\"" bodyText
+      if hasDataKey sseBody "error"
         then expectationFailure $ "Provider returned error: " ++ take 200 bodyStr
         else do
           -- Check for SSE data markers
-          T.isInfixOf "data:" bodyText `shouldBe` True
+          T.isInfixOf "data:" (T.pack bodyStr) `shouldBe` True
 
           -- Check for reasoning in streaming response - OpenRouter may use either:
           -- 1. reasoning_content (OpenAI native format)
           -- 2. reasoning_details (OpenRouter format with array of {text: "..."})
-          let hasReasoningContent = T.isInfixOf "\"reasoning_content\"" bodyText
-              hasReasoningDetails = T.isInfixOf "\"reasoning_details\"" bodyText
+          let hasReasoningContent = hasDataKey sseBody "reasoning_content"
+              hasReasoningDetails = hasDataKey sseBody "reasoning_details"
 
           -- At least one reasoning format should be present
           when (not hasReasoningContent && not hasReasoningDetails) $
@@ -182,7 +197,7 @@ spec getResponse = do
       let bodyStr = BSLC.unpack sseBody
 
       -- Check if response is an error
-      if T.isInfixOf "\"error\"" (T.pack bodyStr)
+      if hasDataKey sseBody "error"
         then expectationFailure $ "Provider returned error: " ++ take 200 bodyStr
         else do
           -- Check for SSE data markers

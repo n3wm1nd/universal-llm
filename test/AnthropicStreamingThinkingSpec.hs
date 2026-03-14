@@ -7,7 +7,7 @@ import Test.Hspec
 import qualified Data.ByteString.Lazy as BSL
 import Data.Aeson (object, (.=))
 import qualified Data.Aeson as Aeson
-import qualified Data.Aeson.KeyMap as KeyMap
+import Network.SSE (parseSSEComplete, sseEventData)
 import UniversalLLM
 import UniversalLLM.Protocols.Anthropic
 import qualified UniversalLLM.Protocols.Anthropic as Proto
@@ -57,7 +57,10 @@ spec = describe "Anthropic Streaming Thinking Signatures" $ do
 
     -- Reassemble the SSE into an AnthropicResponse
     let emptyResp = AnthropicSuccessResponse "" "" "assistant" [] Nothing (AnthropicUsage 0 0)
-        chunks = parseSSE sseResponse
+        chunks = [ v
+                 | ev <- parseSSEComplete (BSL.toStrict sseResponse)
+                 , Just v <- [Aeson.decodeStrict (sseEventData ev)]
+                 ]
         finalResp = foldl mergeAnthropicDelta (AnthropicSuccess emptyResp) chunks
 
     case finalResp of
@@ -116,11 +119,3 @@ spec = describe "Anthropic Streaming Thinking Signatures" $ do
 
           _ -> expectationFailure $ "Unexpected blocks: " ++ show blocks
 
--- Import parseSSE helper
-parseSSE :: BSL.ByteString -> [Aeson.Value]
-parseSSE body =
-    let lines = BSL.split (fromIntegral $ fromEnum '\n') body
-        dataLines = [l | l <- lines, BSL.isPrefixOf "data: " l]
-        jsonStrings = [BSL.drop 6 line | line <- dataLines]
-        values = [v | json <- jsonStrings, Just v <- [Aeson.decode json]]
-    in values

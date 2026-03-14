@@ -137,6 +137,7 @@ test-suite universal-llm-tests
   build-depends:
     base,
     universal-llm,
+    sse-parser,
     hspec >= 2.7 && < 3,
     QuickCheck >= 2.14 && < 3,
     aeson,

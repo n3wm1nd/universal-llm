@@ -11,6 +11,9 @@ import qualified Data.ByteString.Lazy.Char8 as BSLC
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Aeson (object, (.=))
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KM
+import Network.SSE (parseSSEComplete, sseEventType, sseEventData)
 import TestCache (ResponseProvider)
 import TestModels
 import UniversalLLM
@@ -44,6 +47,24 @@ buildStreamingRequestGeneric composableProvider modelValue s configs msgs =
   let req = snd $ toProviderRequest composableProvider modelValue configs s msgs
   in Proto.enableAnthropicStreaming req
 
+-- | Check that a parsed SSE body contains an event with the given SSE event type.
+hasEventType :: BSL.ByteString -> Text -> Bool
+hasEventType body evType =
+    any (\ev -> sseEventType ev == Just evType) $
+        parseSSEComplete (BSL.toStrict body)
+
+-- | Check that any event's JSON data contains the string value anywhere in the object tree.
+hasDataValue :: BSL.ByteString -> Text -> Bool
+hasDataValue body value =
+    any (containsValue . Aeson.decodeStrict . sseEventData) $
+        parseSSEComplete (BSL.toStrict body)
+  where
+    containsValue Nothing                  = False
+    containsValue (Just (Aeson.String s))  = s == value
+    containsValue (Just (Aeson.Object km)) = any (containsValue . Just) (KM.elems km)
+    containsValue (Just (Aeson.Array  vs)) = any (containsValue . Just) vs
+    containsValue (Just _)                 = False
+
 spec :: ResponseProvider AnthropicRequest BSL.ByteString -> Spec
 spec getResponse = do
   describe "Anthropic Streaming Responses (SSE Format)" $ do
@@ -69,7 +90,7 @@ spec getResponse = do
       T.isInfixOf "event:" (T.pack bodyStr) `shouldBe` True
 
       -- Check for message_stop event (indicates complete response)
-      T.isInfixOf "message_stop" (T.pack bodyStr) `shouldBe` True
+      sseBody `shouldSatisfy` (`hasEventType` "message_stop")
 
     it "sends streaming request with tools and receives SSE response with tool_use event" $ do
       let model = Model ClaudeSonnet45 Provider.Anthropic
@@ -110,7 +131,7 @@ spec getResponse = do
       T.isInfixOf "event:" (T.pack bodyStr) `shouldBe` True
 
       -- Check for message_stop event (indicates complete response)
-      T.isInfixOf "message_stop" (T.pack bodyStr) `shouldBe` True
+      sseBody `shouldSatisfy` (`hasEventType` "message_stop")
 
     it "sends streaming request with extended thinking and receives SSE response with thinking_delta events" $ do
       -- Use ClaudeSonnet45 for this test since reasoning requires HasReasoning instance
@@ -136,10 +157,10 @@ spec getResponse = do
       T.isInfixOf "event:" (T.pack bodyStr) `shouldBe` True
 
       -- Check for thinking_delta events (indicates thinking content is streaming)
-      T.isInfixOf "thinking_delta" (T.pack bodyStr) `shouldBe` True
+      sseBody `shouldSatisfy` (`hasDataValue` "thinking_delta")
 
       -- Check for message_stop event (indicates complete response)
-      T.isInfixOf "message_stop" (T.pack bodyStr) `shouldBe` True
+      sseBody `shouldSatisfy` (`hasEventType` "message_stop")
 
     it "sends streaming request with thinking and tools, receives SSE response with thinking and tool_use events" $ do
       let model = Model ClaudeSonnet45 Provider.Anthropic
@@ -181,13 +202,13 @@ spec getResponse = do
       T.isInfixOf "event:" (T.pack bodyStr) `shouldBe` True
 
       -- Check for thinking_delta events
-      T.isInfixOf "thinking_delta" (T.pack bodyStr) `shouldBe` True
+      sseBody `shouldSatisfy` (`hasDataValue` "thinking_delta")
 
-      -- Check for tool_use event
-      T.isInfixOf "tool_use" (T.pack bodyStr) `shouldBe` True
+      -- Check for tool_use content block
+      sseBody `shouldSatisfy` (`hasDataValue` "tool_use")
 
       -- Check for message_stop event (indicates complete response)
-      T.isInfixOf "message_stop" (T.pack bodyStr) `shouldBe` True
+      sseBody `shouldSatisfy` (`hasEventType` "message_stop")
 
     it "handles multiple content blocks in order (thinking and tool_use)" $ do
       let model = Model ClaudeSonnet45 Provider.Anthropic
@@ -211,7 +232,6 @@ spec getResponse = do
       sseBody <- getResponse req
       BSL.null sseBody `shouldBe` False
 
-      -- Response should have thinking and tool_use blocks
-      let bodyStr = BSLC.unpack sseBody
-      T.isInfixOf "thinking_delta" (T.pack bodyStr) `shouldBe` True
-      T.isInfixOf "tool_use" (T.pack bodyStr) `shouldBe` True
+      -- Response should have thinking_delta and tool_use content blocks
+      sseBody `shouldSatisfy` (`hasDataValue` "thinking_delta")
+      sseBody `shouldSatisfy` (`hasDataValue` "tool_use")

@@ -7,7 +7,6 @@ module StreamingReconstructionSpec (spec) where
 
 import Test.Hspec
 import qualified Data.ByteString.Lazy as BSL
-import qualified Data.ByteString.Lazy.Char8 as BSLC
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -18,6 +17,7 @@ import Control.Monad (when)
 import Data.Maybe (listToMaybe)
 import qualified Data.Vector as V
 import qualified Data.Aeson.KeyMap as KM
+import Network.SSE (parseSSEComplete, sseEventData)
 import TestCache (ResponseProvider)
 import TestModels
 import UniversalLLM
@@ -25,24 +25,20 @@ import UniversalLLM.Providers.OpenAI (LlamaCpp(..))
 import UniversalLLM.Protocols.OpenAI
 import qualified UniversalLLM.Protocols.OpenAI as Proto
 
--- | Reconstruct a response from SSE streaming deltas
--- This follows the same logic as the actual streaming parser
+-- | Reconstruct a response from SSE streaming deltas.
+-- Uses the same SSE parser as the actual streaming interpreter.
 reconstructFromSSE :: BSL.ByteString -> Either String OpenAIResponse
 reconstructFromSSE sseBody =
-  let bodyStr = BSLC.unpack sseBody
-      -- Split into SSE events (lines starting with "data: ")
-      dataLines = filter (T.isPrefixOf "data: ") $ T.lines (T.pack bodyStr)
-      -- Extract JSON from each data line
-      jsonTexts = [T.drop 6 line | line <- dataLines, not (T.isSuffixOf "[DONE]" line)]
-      -- Parse each JSON chunk
-      chunks = [case Aeson.eitherDecodeStrict (TE.encodeUtf8 jsonText) of
-                  Right val -> Right val
-                  Left err -> Left ("Failed to parse chunk: " ++ err ++ "\nChunk: " ++ T.unpack jsonText)
-                | jsonText <- jsonTexts]
+  let events = parseSSEComplete (BSL.toStrict sseBody)
+      chunks  = [ case Aeson.eitherDecodeStrict (sseEventData ev) of
+                    Right val -> Right val
+                    Left err  -> Left ("Failed to parse chunk: " ++ err)
+                | ev <- events
+                , sseEventData ev /= "[DONE]"
+                ]
   in case sequence chunks of
-       Left err -> Left err
+       Left err         -> Left err
        Right validChunks ->
-         -- Reconstruct by folding deltas
          Right $ foldl Proto.mergeOpenAIDelta emptyResponse validChunks
   where
     emptyResponse = OpenAISuccess (OpenAISuccessResponse [])
