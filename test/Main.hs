@@ -4,6 +4,7 @@ module Main where
 
 import Test.Hspec
 import qualified CachedIntegrationSpec
+import qualified DeltaSpec
 import qualified ComposableHandlersSpec
 import qualified OpenAIComposableSpec
 import qualified OpenAIStreamingSpec
@@ -74,6 +75,7 @@ main = do
       Models.OpenAI.GPT.testsGPT54ProOpenRouter (openrouterProvider p)
       Models.OpenAI.GPT.testsGPT54OpenRouter (openrouterProvider p)
 
+    describe "Delta" DeltaSpec.spec
     describe "Composable Handlers" ComposableHandlersSpec.spec
 
     -- Property-based tests (QuickCheck)

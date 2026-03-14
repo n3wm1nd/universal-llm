@@ -16,6 +16,7 @@
 module UniversalLLM.Protocols.OpenAI where
 
 import Autodocodec
+import Data.Aeson.Types (parseEither)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Aeson (Value)
@@ -29,6 +30,7 @@ import GHC.Generics (Generic)
 import Control.Applicative ((<|>), asum)
 import Data.Maybe (listToMaybe)
 import qualified Data.List
+import UniversalLLM.Protocols.OpenAI.Delta (Delta(..), applyDelta)
 import UniversalLLM
 
 -- | Reasoning configuration for OpenRouter
@@ -432,230 +434,89 @@ instance HasCodec OpenAICompletionSuccessResponse where
     OpenAICompletionSuccessResponse
       <$> requiredField "choices" "Completion choices" .= completionChoices
 -- ============================================================================
--- Streaming Support - Typed Delta API
+-- Streaming Support
 -- ============================================================================
 
--- | Represents a streaming delta from OpenAI SSE (simplified for text/reasoning only)
-data OpenAIDelta
-  = OpenAITextDelta Text
-  | OpenAIReasoningDelta Text
-  deriving (Show, Eq)
-
--- | Streaming content for display (text or reasoning)
+-- | Streaming content for real-time display during an OpenAI stream.
 data OpenAIStreamingContent
-  = OpenAIStreamingText Text
-  | OpenAIStreamingReasoning Text
+  = OpenAIStreamingText      Text  -- ^ Increment to @content@
+  | OpenAIStreamingReasoning Text  -- ^ Increment to @reasoning_content@ / @reasoning@
   deriving (Show, Eq)
 
--- | Parse OpenAI delta from ByteString (SSE event data)
--- Extracts only text and reasoning deltas for now
-parseOpenAIDelta :: BS.ByteString -> Maybe OpenAIDelta
-parseOpenAIDelta bs =
-  case Aeson.eitherDecodeStrict bs of
-    Left _ -> Nothing
-    Right val -> case val of
-      Aeson.Object obj -> do
-        Aeson.Array choicesArr <- KM.lookup "choices" obj
-        Aeson.Object choice <- listToMaybe (V.toList choicesArr)
-        Aeson.Object delta <- KM.lookup "delta" choice
-        asum
-          [ do Aeson.String reasoning <- KM.lookup "reasoning_content" delta
-               return $ OpenAIReasoningDelta reasoning
-          , do Aeson.String reasoning <- KM.lookup "reasoning" delta
-               return $ OpenAIReasoningDelta reasoning
-          , do Aeson.String content <- KM.lookup "content" delta
-               return $ OpenAITextDelta content
+-- | Extract display chunks from a delta by inspecting OpenAI-specific field names.
+--
+-- Descends into @choices[].delta@ and collects non-empty, non-null values from
+-- @reasoning_content@ (or @reasoning@) and @content@, in that order.
+extractOpenAIStreamingContent :: Delta -> [OpenAIStreamingContent]
+extractOpenAIStreamingContent (Delta val) =
+  case val of
+    Aeson.Object obj ->
+      case KM.lookup "choices" obj of
+        Just (Aeson.Array choices) -> concatMap fromChoice (V.toList choices)
+        _                          -> []
+    _ -> []
+  where
+    fromChoice (Aeson.Object choice) =
+      case KM.lookup "delta" choice of
+        Just (Aeson.Object delta) ->
+          [ OpenAIStreamingReasoning t
+          | Just t <- [nonEmpty "reasoning_content" delta
+                       `orElse` nonEmpty "reasoning" delta]
+          ] ++
+          [ OpenAIStreamingText t
+          | Just t <- [nonEmpty "content" delta]
           ]
-      _ -> Nothing
+        _ -> []
+    fromChoice _ = []
 
--- | Apply OpenAI delta to accumulated response (simple version for text/reasoning only)
--- For full delta application including tool calls, use mergeOpenAIDelta with Value
-applyOpenAIDelta :: OpenAIResponse -> OpenAIDelta -> OpenAIResponse
-applyOpenAIDelta (OpenAISuccess resp) (OpenAITextDelta _text) =
-    -- For proper application, we'd need to merge into choices[0].message.content
-    -- This is why the full mergeOpenAIDelta uses Value
-    OpenAISuccess resp
-applyOpenAIDelta (OpenAISuccess resp) (OpenAIReasoningDelta _reasoning) =
-    OpenAISuccess resp
-applyOpenAIDelta acc _ = acc
+    nonEmpty k m = case KM.lookup k m of
+      Just (Aeson.String t) | not (Text.null t) -> Just t
+      _                                          -> Nothing
 
--- | Extract streaming content from a delta for display purposes
-extractOpenAIStreamingContent :: OpenAIDelta -> [OpenAIStreamingContent]
-extractOpenAIStreamingContent (OpenAITextDelta text) =
-    [OpenAIStreamingText text]
-extractOpenAIStreamingContent (OpenAIReasoningDelta reasoning) =
-    [OpenAIStreamingReasoning reasoning]
+    orElse (Just x) _ = Just x
+    orElse Nothing  y = y
 
--- ============================================================================
--- Streaming Support - Delta Merger for SSE (Full Value-based API)
--- ============================================================================
-
--- | Represents what's in a streaming delta
-data DeltaContent
-    = ContentDelta Text
-    | ReasoningContentDelta Text
-    | ToolCallsDelta [(Int, OpenAIToolCall)]  -- List of (index, toolCall) pairs
-    | InitContentDelta  -- Represents content: null in first delta (initializes content to empty string)
-    | EmptyDelta
-
--- | Merge OpenAI streaming delta into accumulated response
--- OpenAI streaming format sends incremental deltas in choices[].delta
--- We accumulate these deltas to reconstruct the final message
--- Handles both content deltas and tool_calls deltas
+-- | Merge an OpenAI streaming chunk (as a raw 'Value') into the accumulated
+-- response.
+--
+-- Streaming chunks use a @delta@ key inside @choices[]@ elements, while the
+-- non-streaming codec expects a @message@ key.  We normalise each incoming
+-- chunk by renaming @delta@ → @message@ so the accumulated 'Value' always
+-- matches the codec's expected shape.
 mergeOpenAIDelta :: OpenAIResponse -> Value -> OpenAIResponse
 mergeOpenAIDelta acc chunk =
-    case acc of
-        OpenAISuccess (OpenAISuccessResponse successChoices) ->
-            case extractDelta chunk of
-                Just (ContentDelta txt) ->
-                    OpenAISuccess $ OpenAISuccessResponse $ mergeContentDelta successChoices txt
-                Just (ReasoningContentDelta txt) ->
-                    OpenAISuccess $ OpenAISuccessResponse $ mergeReasoningContentDelta successChoices txt
-                Just (ToolCallsDelta toolCallDeltas) ->
-                    OpenAISuccess $ OpenAISuccessResponse $ mergeToolCallsDelta successChoices toolCallDeltas
-                Just InitContentDelta ->
-                    -- Initialize content to empty string (from content: null in first delta)
-                    OpenAISuccess $ OpenAISuccessResponse $ initContentField successChoices
-                Just EmptyDelta ->
-                    -- Empty delta (e.g., role only, or finish_reason), keep accumulator
-                    acc
-                Nothing ->
-                    -- Can't parse delta, keep accumulator
-                    acc
-        _ -> acc  -- Error response, keep as-is
+    let normalised = normaliseDeltaKey chunk
+        accValue   = toJSONViaCodec acc
+        merged     = applyDelta accValue (Delta normalised)
+    in case parseEither parseJSONViaCodec merged of
+        Right r -> normaliseResponse r
+        Left _  -> acc  -- malformed accumulated state, keep as-is
   where
+    -- Rename "delta" → "message" inside every element of choices[].
+    normaliseDeltaKey :: Value -> Value
+    normaliseDeltaKey (Aeson.Object obj) =
+      Aeson.Object $ case KM.lookup "choices" obj of
+        Just (Aeson.Array cs) ->
+          KM.insert "choices" (Aeson.Array (V.map renameChoice cs)) obj
+        _ -> obj
+    normaliseDeltaKey v = v
 
-    extractDelta :: Value -> Maybe DeltaContent
-    extractDelta (Aeson.Object obj) = do
-        Aeson.Array choicesArr <- KM.lookup "choices" obj
-        Aeson.Object choice <- listToMaybe (V.toList choicesArr)
-        Aeson.Object delta <- KM.lookup "delta" choice
+    renameChoice :: Value -> Value
+    renameChoice (Aeson.Object o) =
+      case KM.lookup "delta" o of
+        Just deltaVal ->
+          Aeson.Object $ KM.insert "message" deltaVal $ KM.delete "delta" o
+        Nothing -> Aeson.Object o
+    renameChoice v = v
 
-        -- Try different delta fields using Alternative (<|>)
-        let contentDelta = KM.lookup "content" delta >>= \case
-                Aeson.String txt -> Just $ ContentDelta txt
-                Aeson.Null -> Just InitContentDelta  -- content: null means initialize to empty
-                _ -> Nothing
-            reasoningContentDelta = KM.lookup "reasoning_content" delta >>= \case
-                Aeson.String txt -> Just $ ReasoningContentDelta txt
-                _ -> Nothing
-            reasoningDelta = KM.lookup "reasoning" delta >>= \case
-                Aeson.String txt -> Just $ ReasoningContentDelta txt
-                _ -> Nothing
-            toolCallsDelta = KM.lookup "tool_calls" delta >>= \case
-                Aeson.Array toolCallsArr -> do
-                    let parsedCalls = [(idx, tc) | Aeson.Object tcObj <- V.toList toolCallsArr
-                                                 , Just (idx, tc) <- [parseToolCallDelta tcObj]]
-                    if null parsedCalls
-                        then Just EmptyDelta
-                        else Just $ ToolCallsDelta parsedCalls
-                _ -> Nothing
+    -- OpenAI always includes a content field (even empty string) in the final
+    -- non-streaming response. Streaming deltas never send content: "" so we
+    -- normalise Nothing → Just "" after accumulation to match that invariant.
+    normaliseResponse :: OpenAIResponse -> OpenAIResponse
+    normaliseResponse (OpenAISuccess (OpenAISuccessResponse cs)) =
+      OpenAISuccess (OpenAISuccessResponse (map normaliseChoice cs))
+    normaliseResponse r = r
 
-        contentDelta <|> reasoningContentDelta <|> reasoningDelta <|> toolCallsDelta <|> Just EmptyDelta
-    extractDelta _ = Nothing
-
-    -- Parse a single tool call delta from JSON object
-    -- Returns (index, toolCall) where index is used to match deltas together
-    parseToolCallDelta :: KM.KeyMap Value -> Maybe (Int, OpenAIToolCall)
-    parseToolCallDelta obj = do
-        -- Get the index - this tells us which tool call in the list this delta belongs to
-        Aeson.Number indexNum <- KM.lookup "index" obj
-        let index = floor indexNum
-
-        -- id might be present in first chunk, empty in subsequent chunks
-        let tcId = case KM.lookup "id" obj of
-                Just (Aeson.String s) -> s
-                _ -> ""
-        -- type is "function"
-        let tcType = case KM.lookup "type" obj of
-                Just (Aeson.String s) -> s
-                _ -> "function"
-        -- function object contains name and arguments (both might be partial)
-        Aeson.Object funcObj <- KM.lookup "function" obj
-        let funcName = case KM.lookup "name" funcObj of
-                Just (Aeson.String s) -> s
-                _ -> ""
-        let funcArgs = case KM.lookup "arguments" funcObj of
-                Just (Aeson.String s) -> s
-                _ -> ""
-
-        return (index, OpenAIToolCall tcId tcType (OpenAIToolFunction funcName funcArgs))
-
-    initContentField :: [OpenAIChoice] -> [OpenAIChoice]
-    initContentField [] =
-        [OpenAIChoice (defaultOpenAIMessage { role = "assistant", content = Just "" })]
-    initContentField [OpenAIChoice msg] =
-        [OpenAIChoice (msg { content = Just "" })]
-    initContentField xs = xs
-
-    mergeContentDelta :: [OpenAIChoice] -> Text -> [OpenAIChoice]
-    mergeContentDelta [] txt =
-        [OpenAIChoice (defaultOpenAIMessage { role = "assistant", content = Just txt })]
-    mergeContentDelta [OpenAIChoice msg] txt =
-        [OpenAIChoice (msg { content = Just $ maybe txt (<> txt) (content msg) })]
-    mergeContentDelta xs _ = xs
-
-    mergeReasoningContentDelta :: [OpenAIChoice] -> Text -> [OpenAIChoice]
-    mergeReasoningContentDelta [] txt =
-        [OpenAIChoice (defaultOpenAIMessage { role = "assistant", reasoning_content = Just txt })]
-    mergeReasoningContentDelta [OpenAIChoice msg] txt =
-        [OpenAIChoice (msg { reasoning_content = Just $ maybe txt (<> txt) (reasoning_content msg), content = content msg })]
-    mergeReasoningContentDelta xs _ = xs
-
-    mergeToolCallsDelta :: [OpenAIChoice] -> [(Int, OpenAIToolCall)] -> [OpenAIChoice]
-    mergeToolCallsDelta [] indexedCalls =
-        -- Initialize with tool calls at their indices
-        let initialCalls = buildToolCallList indexedCalls
-        in [OpenAIChoice (defaultOpenAIMessage { role = "assistant", tool_calls = Just initialCalls })]
-    mergeToolCallsDelta [OpenAIChoice msg] indexedCalls =
-        [OpenAIChoice (msg { tool_calls = Just $ mergeToolCallsByIndex (tool_calls msg) indexedCalls })]
-    mergeToolCallsDelta xs _ = xs
-
-    -- Build initial tool call list from indexed deltas
-    buildToolCallList :: [(Int, OpenAIToolCall)] -> [OpenAIToolCall]
-    buildToolCallList indexedCalls =
-        -- Sort by index and extract just the tool calls
-        map snd $ Data.List.sortOn fst indexedCalls
-
-    -- Merge tool calls by index
-    -- OpenAI streaming sends tool calls with an "index" field to indicate which call to update
-    mergeToolCallsByIndex :: Maybe [OpenAIToolCall] -> [(Int, OpenAIToolCall)] -> [OpenAIToolCall]
-    mergeToolCallsByIndex Nothing indexedCalls = buildToolCallList indexedCalls
-    mergeToolCallsByIndex (Just existing) indexedCalls =
-        foldl (\accumulated (idx, newCall) -> mergeToolCallAtIndex accumulated idx newCall) existing indexedCalls
-
-    -- Merge a single tool call at a specific index
-    mergeToolCallAtIndex :: [OpenAIToolCall] -> Int -> OpenAIToolCall -> [OpenAIToolCall]
-    mergeToolCallAtIndex existing idx newCall
-        | idx >= length existing =
-            -- Index beyond current list, append (with padding if necessary)
-            existing ++ replicate (idx - length existing) emptyToolCall ++ [newCall]
-        | otherwise =
-            -- Update existing tool call at index
-            case splitAt idx existing of
-              (before, at:after) ->
-                let merged = mergeToolCallPair at newCall
-                in before ++ [merged] ++ after
-              (_, []) -> existing  -- Shouldn't happen due to guard above
-
-    -- Empty placeholder tool call
-    emptyToolCall :: OpenAIToolCall
-    emptyToolCall = OpenAIToolCall "" "function" (OpenAIToolFunction "" "")
-
-    -- Merge two tool calls (accumulate fields)
-    mergeToolCallPair :: OpenAIToolCall -> OpenAIToolCall -> OpenAIToolCall
-    mergeToolCallPair existing new =
-        OpenAIToolCall
-            { callId = if Text.null (callId new) then callId existing else callId new
-            , toolCallType = if Text.null (toolCallType new) then toolCallType existing else toolCallType new
-            , toolFunction = OpenAIToolFunction
-                { toolFunctionName =
-                    if Text.null (toolFunctionName (toolFunction new))
-                        then toolFunctionName (toolFunction existing)
-                        else toolFunctionName (toolFunction new)
-                , toolFunctionArguments =
-                    -- Accumulate arguments
-                    toolFunctionArguments (toolFunction existing) <>
-                    toolFunctionArguments (toolFunction new)
-                }
-            }
+    normaliseChoice :: OpenAIChoice -> OpenAIChoice
+    normaliseChoice (OpenAIChoice msg) =
+      OpenAIChoice msg { content = content msg <|> Just "" }

@@ -47,6 +47,7 @@ library
     UniversalLLM.Models.OpenAI.GPT
     UniversalLLM.Models.OpenRouter
     UniversalLLM.Protocols.OpenAI
+    UniversalLLM.Protocols.OpenAI.Delta
     UniversalLLM.Protocols.Anthropic
     UniversalLLM.Providers.OpenAI
     UniversalLLM.Providers.Anthropic
@@ -92,6 +93,7 @@ test-suite universal-llm-tests
   main-is: Main.hs
   ghc-options: -Wno-name-shadowing -Wno-x-partial -Wno-orphans -Wno-unused-imports -Wno-unused-local-binds -Wno-unused-top-binds
   other-modules:
+    DeltaSpec
     ComposableHandlersSpec
     OpenAIComposableSpec
     OpenAIStreamingSpec
