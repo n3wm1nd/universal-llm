@@ -434,6 +434,26 @@ extractAnthropicStreamingContent (AnthropicTextDelta text) =
 extractAnthropicStreamingContent (AnthropicThinkingDelta thinking) =
     [AnthropicStreamingReasoning thinking]
 
+-- | Extract streaming content directly from a raw SSE event Value.
+-- Used by the ProviderProtocol instance where ProtocolDelta = Value.
+extractAnthropicStreamingContentFromValue :: Value -> [AnthropicStreamingContent]
+extractAnthropicStreamingContentFromValue (Aeson.Object obj) =
+    case KM.lookup "type" obj of
+        Just (Aeson.String "content_block_delta") ->
+            case KM.lookup "delta" obj of
+                Just (Aeson.Object delta) ->
+                    asum
+                        [ case KM.lookup "text" delta of
+                            Just (Aeson.String t) | not (t == "") -> [AnthropicStreamingText t]
+                            _ -> []
+                        , case KM.lookup "thinking" delta of
+                            Just (Aeson.String t) | not (t == "") -> [AnthropicStreamingReasoning t]
+                            _ -> []
+                        ]
+                _ -> []
+        _ -> []
+extractAnthropicStreamingContentFromValue _ = []
+
 -- ============================================================================
 -- Streaming Support - Delta Merger for SSE (Full Value-based API)
 -- ============================================================================
