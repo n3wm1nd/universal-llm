@@ -20,6 +20,7 @@ module UniversalLLM where
 
 import Data.Text (Text)
 import Data.Aeson (Value)
+import qualified Data.ByteString as BS
 import Control.Applicative ((<|>))
 
 -- ============================================================================
@@ -497,3 +498,41 @@ fromCompletionResponse model configs prompt resp =
       parser = ccpFromResponse composableProvider
   in parser model configs prompt resp
 
+-- ============================================================================
+-- Wire Protocol Abstraction
+-- ============================================================================
+
+-- | Streaming content chunks emitted during SSE streaming
+data StreamingContent = StreamingText Text | StreamingReasoning Text
+  deriving (Show, Eq)
+
+-- | SSE streaming support for a wire protocol's response type.
+--
+-- Only implemented for protocols that actually support SSE streaming.
+-- Protocols without streaming support simply have no instance.
+--
+-- Instances are defined in the protocol modules alongside the request/response
+-- types, keeping all wire-format knowledge co-located.
+--
+-- The @streamingEndpointPath@ is the bare path segment appended to the provider
+-- base URL (e.g. @\"messages\"@ or @\"chat/completions\"@).
+class StreamingProtocol response where
+  type ProtocolRequest response
+  type ProtocolDelta response
+  -- | Bare path segment for this protocol's API endpoint
+  -- (used for both streaming and non-streaming requests)
+  endpointPath :: Text
+  -- | Create an empty response for streaming accumulation
+  emptyStreamingResponse :: response
+  -- | Parse a delta from an SSE event's raw data bytes
+  parseDelta :: BS.ByteString -> Maybe (ProtocolDelta response)
+  -- | Apply a delta to the accumulated response
+  applyDelta :: response -> ProtocolDelta response -> response
+  -- | Extract display content from a delta for real-time rendering
+  extractStreamingContent :: ProtocolDelta response -> [StreamingContent]
+  -- | Full Value-based delta merge (for complete accumulation including tool calls)
+  mergeStreamingDelta :: response -> Value -> response
+
+-- | Augment a request to enable SSE streaming mode for this protocol
+class StreamingProtocol response => EnableStreaming response where
+  enableStreamingForProtocol :: ProtocolRequest response -> ProtocolRequest response

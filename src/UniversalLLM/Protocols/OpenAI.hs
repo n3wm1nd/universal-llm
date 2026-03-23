@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -30,7 +31,8 @@ import GHC.Generics (Generic)
 import Control.Applicative ((<|>), asum)
 import Data.Maybe (listToMaybe)
 import qualified Data.List
-import UniversalLLM.Protocols.OpenAI.Delta (Delta(..), applyDelta)
+import qualified UniversalLLM.Protocols.OpenAI.Delta as Delta
+import UniversalLLM.Protocols.OpenAI.Delta (Delta(..))
 import UniversalLLM
 
 -- | Reasoning configuration for OpenRouter
@@ -487,7 +489,7 @@ mergeOpenAIDelta :: OpenAIResponse -> Value -> OpenAIResponse
 mergeOpenAIDelta acc chunk =
     let normalised = normaliseDeltaKey chunk
         accValue   = toJSONViaCodec acc
-        merged     = applyDelta accValue (Delta normalised)
+        merged     = Delta.applyDelta accValue (Delta normalised)
     in case parseEither parseJSONViaCodec merged of
         Right r -> normaliseResponse r
         Left _  -> acc  -- malformed accumulated state, keep as-is
@@ -520,3 +522,26 @@ mergeOpenAIDelta acc chunk =
     normaliseChoice :: OpenAIChoice -> OpenAIChoice
     normaliseChoice (OpenAIChoice msg) =
       OpenAIChoice msg { content = content msg <|> Just "" }
+
+-- ============================================================================
+-- StreamingProtocol / EnableStreaming instances
+-- ============================================================================
+
+instance StreamingProtocol OpenAIResponse where
+  type ProtocolRequest OpenAIResponse = OpenAIRequest
+  type ProtocolDelta OpenAIResponse = Delta
+  endpointPath = "chat/completions"
+  emptyStreamingResponse = OpenAISuccess $
+    defaultOpenAISuccessResponse
+      { choices = [defaultOpenAIChoice { message = defaultOpenAIMessage { role = "assistant" } }] }
+  parseDelta = Delta.parseDelta
+  applyDelta acc delta = mergeOpenAIDelta acc (deltaValue delta)
+  extractStreamingContent delta =
+      [ case c of
+          OpenAIStreamingText t      -> StreamingText t
+          OpenAIStreamingReasoning t -> StreamingReasoning t
+      | c <- extractOpenAIStreamingContent delta ]
+  mergeStreamingDelta = mergeOpenAIDelta
+
+instance EnableStreaming OpenAIResponse where
+  enableStreamingForProtocol = enableOpenAIStreaming

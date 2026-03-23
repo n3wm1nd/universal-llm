@@ -3,6 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -15,12 +16,12 @@ import Autodocodec
 import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Aeson (Value)
-import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
 import GHC.Generics (Generic)
 import Control.Applicative ((<|>), asum)
+import qualified UniversalLLM.Protocols.Anthropic.Delta as Delta
 import UniversalLLM
 
 -- Request structure
@@ -380,82 +381,7 @@ enableAnthropicStreaming :: AnthropicRequest -> AnthropicRequest
 enableAnthropicStreaming req = req { stream = Just True }
 
 -- ============================================================================
--- Streaming Support - Typed Delta API
--- ============================================================================
-
--- | Represents a streaming delta from Anthropic SSE
-data AnthropicDelta
-  = AnthropicTextDelta Text
-  | AnthropicThinkingDelta Text
-  deriving (Show, Eq)
-
--- | Streaming content for display (text or reasoning)
-data AnthropicStreamingContent
-  = AnthropicStreamingText Text
-  | AnthropicStreamingReasoning Text
-  deriving (Show, Eq)
-
--- | Parse Anthropic delta from ByteString (SSE event data)
--- Extracts only text and thinking deltas for now
-parseAnthropicDelta :: BS.ByteString -> Maybe AnthropicDelta
-parseAnthropicDelta bs =
-  case Aeson.eitherDecodeStrict bs of
-    Left _ -> Nothing
-    Right val -> case val of
-      Aeson.Object obj -> do
-        Aeson.String eventType <- KM.lookup "type" obj
-        case eventType of
-          "content_block_delta" -> do
-            Aeson.Object delta <- KM.lookup "delta" obj
-            asum
-              [ do Aeson.String thinking <- KM.lookup "thinking" delta
-                   return $ AnthropicThinkingDelta thinking
-              , do Aeson.String text <- KM.lookup "text" delta
-                   return $ AnthropicTextDelta text
-              ]
-          _ -> Nothing
-      _ -> Nothing
-
--- | Apply Anthropic delta to accumulated response (simple version for text/thinking only)
--- For full delta application including tool calls, use mergeAnthropicDelta with Value
-applyAnthropicDelta :: AnthropicResponse -> AnthropicDelta -> AnthropicResponse
-applyAnthropicDelta (AnthropicSuccess resp) (AnthropicTextDelta _text) =
-    -- For proper application, we'd need index information which isn't in this simplified delta
-    -- This is why the full mergeAnthropicDelta uses Value
-    AnthropicSuccess resp
-applyAnthropicDelta (AnthropicSuccess resp) (AnthropicThinkingDelta _thinking) =
-    AnthropicSuccess resp
-applyAnthropicDelta acc _ = acc
-
--- | Extract streaming content from a delta for display purposes
-extractAnthropicStreamingContent :: AnthropicDelta -> [AnthropicStreamingContent]
-extractAnthropicStreamingContent (AnthropicTextDelta text) =
-    [AnthropicStreamingText text]
-extractAnthropicStreamingContent (AnthropicThinkingDelta thinking) =
-    [AnthropicStreamingReasoning thinking]
-
--- | Extract streaming content directly from a raw SSE event Value.
--- Used by the ProviderProtocol instance where ProtocolDelta = Value.
-extractAnthropicStreamingContentFromValue :: Value -> [AnthropicStreamingContent]
-extractAnthropicStreamingContentFromValue (Aeson.Object obj) =
-    case KM.lookup "type" obj of
-        Just (Aeson.String "content_block_delta") ->
-            case KM.lookup "delta" obj of
-                Just (Aeson.Object delta) ->
-                    asum
-                        [ case KM.lookup "text" delta of
-                            Just (Aeson.String t) | not (t == "") -> [AnthropicStreamingText t]
-                            _ -> []
-                        , case KM.lookup "thinking" delta of
-                            Just (Aeson.String t) | not (t == "") -> [AnthropicStreamingReasoning t]
-                            _ -> []
-                        ]
-                _ -> []
-        _ -> []
-extractAnthropicStreamingContentFromValue _ = []
-
--- ============================================================================
--- Streaming Support - Delta Merger for SSE (Full Value-based API)
+-- Streaming Support - Delta Merger for SSE
 -- ============================================================================
 
 -- | Merge Anthropic streaming delta into accumulated response
@@ -627,3 +553,25 @@ mergeAnthropicDelta acc chunk =
         Aeson.String signature <- KM.lookup "signature" delta
         return signature
     extractSignatureDelta _ = Nothing
+
+-- ============================================================================
+-- StreamingProtocol / EnableStreaming instances
+-- ============================================================================
+
+instance StreamingProtocol AnthropicResponse where
+  type ProtocolRequest AnthropicResponse = AnthropicRequest
+  type ProtocolDelta AnthropicResponse = Delta.Delta
+  endpointPath = "messages"
+  emptyStreamingResponse = AnthropicSuccess $
+    defaultAnthropicSuccessResponse { responseRole = "assistant" }
+  parseDelta = Delta.parseDelta
+  applyDelta acc delta = mergeAnthropicDelta acc (Delta.deltaValue delta)
+  extractStreamingContent delta =
+      [ case c of
+          Delta.StreamingText t      -> StreamingText t
+          Delta.StreamingReasoning t -> StreamingReasoning t
+      | c <- Delta.streamingContent delta ]
+  mergeStreamingDelta acc chunk = mergeAnthropicDelta acc chunk
+
+instance EnableStreaming AnthropicResponse where
+  enableStreamingForProtocol = enableAnthropicStreaming

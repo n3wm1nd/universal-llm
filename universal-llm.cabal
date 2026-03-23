@@ -49,6 +49,7 @@ library
     UniversalLLM.Protocols.OpenAI
     UniversalLLM.Protocols.OpenAI.Delta
     UniversalLLM.Protocols.Anthropic
+    UniversalLLM.Protocols.Anthropic.Delta
     UniversalLLM.Providers.OpenAI
     UniversalLLM.Providers.Anthropic
     UniversalLLM.Providers.XMLToolCalls
