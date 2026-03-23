@@ -523,6 +523,9 @@ instance Provider (Model aiModel AnthropicOAuth) where
   type ProviderRequest (Model aiModel AnthropicOAuth) = AnthropicRequest
   type ProviderResponse (Model aiModel AnthropicOAuth) = AnthropicResponse
 
+instance EnableStreaming (Model aiModel Anthropic)    where enableStreamingForProtocol = enableAnthropicStreaming
+instance EnableStreaming (Model aiModel AnthropicOAuth) where enableStreamingForProtocol = enableAnthropicStreaming
+
 -- | OAuth-specific composable provider: Magic system prompt
 -- Automatically prepends the Claude Code authentication prompt
 -- This is a "patch" that enhances the base provider with OAuth-specific behavior

@@ -575,5 +575,3 @@ instance StreamingProtocol AnthropicResponse where
       | c <- Delta.streamingContent delta ]
   mergeStreamingDelta acc chunk = mergeAnthropicDelta acc chunk
 
-instance EnableStreaming AnthropicResponse where
-  enableStreamingForProtocol = enableAnthropicStreaming

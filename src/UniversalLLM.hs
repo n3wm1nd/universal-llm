@@ -538,6 +538,13 @@ class StreamingProtocol response where
   -- | Full Value-based delta merge (for complete accumulation including tool calls)
   mergeStreamingDelta :: response -> Value -> response
 
--- | Augment a request to enable SSE streaming mode for this protocol
-class StreamingProtocol response => EnableStreaming response where
-  enableStreamingForProtocol :: ProtocolRequest response -> ProtocolRequest response
+-- | Augment a request to enable SSE streaming mode.
+--
+-- Defined on the model (not the response type), so call sites only need
+-- @Provider m@ and @EnableStreaming m@ — no protocol-level equality constraints.
+-- The @StreamingProtocol (ProviderResponse m)@ superclass ensures the response
+-- type has delta mechanics, without leaking the equality constraint to call sites.
+class ( Provider m
+      , StreamingProtocol (ProviderResponse m)
+      ) => EnableStreaming m where
+  enableStreamingForProtocol :: ProviderRequest m -> ProviderRequest m

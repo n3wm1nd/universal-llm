@@ -545,5 +545,3 @@ instance StreamingProtocol OpenAIResponse where
       | c <- extractOpenAIStreamingContent delta ]
   mergeStreamingDelta = mergeOpenAIDelta
 
-instance EnableStreaming OpenAIResponse where
-  enableStreamingForProtocol = enableOpenAIStreaming
