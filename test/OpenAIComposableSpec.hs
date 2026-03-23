@@ -33,7 +33,7 @@ buildRequest :: TestModel
 buildRequest model = buildRequestGeneric TestModels.openRouterGLM45Air model (def, ((), ((), ())))
 
 -- Generic helper to build request with explicit composable provider
-buildRequestGeneric :: forall m s. (ProviderRequest m ~ OpenAIRequest)
+buildRequestGeneric :: forall m s. (ProviderRequest m ~ OpenAIRequest, Provider m)
                     => ComposableProvider m s
                     -> m
                     -> s

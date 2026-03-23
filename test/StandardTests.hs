@@ -55,7 +55,7 @@ newtype StandardTest m state = StandardTest
 -- Basic Text Tests
 -- ============================================================================
 
-text :: ( Monoid (ProviderRequest m)
+text :: ( Provider m
         , SupportsMaxTokens (ProviderOf m)
         )
      => StandardTest m state
@@ -101,7 +101,7 @@ text = StandardTest $ \cp model initialState getResponse -> do
 -- ============================================================================
 
 -- | Test that system messages at the start of conversation work
-systemMessage :: ( Monoid (ProviderRequest m)
+systemMessage :: ( Provider m
                  , SupportsMaxTokens (ProviderOf m)
                  )
               => StandardTest m state
@@ -125,7 +125,7 @@ systemMessage = StandardTest $ \cp model initialState getResponse -> do
 -- Some chat templates (e.g. Qwen3.5) require system messages at the beginning.
 -- The composable provider should handle this transparently — callers should be
 -- able to place SystemText anywhere in the message list.
-systemMessageMidConversation :: ( Monoid (ProviderRequest m)
+systemMessageMidConversation :: ( Provider m
                                 , SupportsMaxTokens (ProviderOf m)
                                 )
                              => StandardTest m state
@@ -151,7 +151,7 @@ systemMessageMidConversation = StandardTest $ \cp model initialState getResponse
 -- runix-code sends multiple SystemPrompt configs (main prompt + CLAUDE.md files).
 -- Each becomes a separate role:"system" message in the request. Some chat templates
 -- (e.g. Qwen3.5) may only accept a single system message.
-multipleSystemPrompts :: ( Monoid (ProviderRequest m)
+multipleSystemPrompts :: ( Provider m
                          , SupportsMaxTokens (ProviderOf m)
                          , SupportsSystemPrompt (ProviderOf m)
                          )
@@ -246,7 +246,7 @@ alwaysFail :: Location -> IO FailingToolResult
 alwaysFail (Location _location) = do
   fail "This tool intentionally fails"
 
-tools :: ( Monoid (ProviderRequest m)
+tools :: ( Provider m
          , SupportsMaxTokens (ProviderOf m)
          , HasTools m
          )
@@ -340,7 +340,7 @@ tools = StandardTest $ \cp model initialState getResponse -> do
 -- | Test that a tool with a specific name works through a complete round-trip
 -- This is useful for testing that tool names are preserved correctly,
 -- regardless of any provider-specific transformations
-toolWithName :: ( Monoid (ProviderRequest m)
+toolWithName :: ( Provider m
                 , SupportsMaxTokens (ProviderOf m)
                 , HasTools m
                 )
@@ -395,7 +395,7 @@ toolWithName toolName = StandardTest $ \cp model initialState getResponse -> do
 -- Reasoning Tests
 -- ============================================================================
 
-reasoning :: ( Monoid (ProviderRequest m)
+reasoning :: ( Provider m
              , SupportsMaxTokens (ProviderOf m)
              , HasReasoning m
              )
@@ -440,7 +440,7 @@ reasoning = StandardTest $ \cp model initialState getResponse -> do
 -- - Reasoning config is accepted (no errors)
 -- - Responses work correctly with reasoning enabled
 -- - Conversation history with reasoning config can be sent back
-hiddenReasoning :: ( Monoid (ProviderRequest m)
+hiddenReasoning :: ( Provider m
                    , SupportsMaxTokens (ProviderOf m)
                    , HasReasoning m
                    )
@@ -473,7 +473,7 @@ hiddenReasoning = StandardTest $ \cp model initialState getResponse -> do
 -- Combined Tests
 -- ============================================================================
 
-reasoningWithTools :: ( Monoid (ProviderRequest m)
+reasoningWithTools :: ( Provider m
                       , SupportsMaxTokens (ProviderOf m)
                       , HasReasoning m
                       , HasTools m
@@ -561,7 +561,7 @@ reasoningWithTools = StandardTest $ \cp model initialState getResponse -> do
 -- Implementation varies by model:
 --   - Models with signed reasoning (e.g., Claude) fall back to non-reasoning mode
 --   - Models without signed reasoning (e.g., GLM-4.5-Air) accept modifications as-is
-reasoningWithToolsModifiedReasoning :: ( Monoid (ProviderRequest m)
+reasoningWithToolsModifiedReasoning :: ( Provider m
                                        , SupportsMaxTokens (ProviderOf m)
                                        , HasReasoning m
                                        , HasTools m
@@ -604,7 +604,7 @@ reasoningWithToolsModifiedReasoning = StandardTest $ \cp model initialState getR
     modifyReasoning msg = msg
 
 -- OpenAI-specific test to verify reasoning_details preservation
-openAIReasoningDetailsPreservation :: ( Monoid (ProviderRequest m)
+openAIReasoningDetailsPreservation :: ( Provider m
                                       , SupportsMaxTokens (ProviderOf m)
                                       , HasReasoning m
                                       , HasTools m

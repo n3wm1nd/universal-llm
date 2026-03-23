@@ -19,7 +19,8 @@ import Data.Monoid ()
 import Data.Default (Default, def)
 
 import UniversalLLM
-  ( ComposableProvider
+  ( Provider
+  , ComposableProvider
   , toProviderRequest
   , fromProviderResponse
   , ProviderRequest
@@ -60,7 +61,7 @@ withProvider cp model action =
 -- | Build a provider request from messages.
 -- State is threaded implicitly through the monad.
 toRequest :: forall model s m.
-             (Monad m, Monoid (ProviderRequest model))
+             (Monad m, Provider model)
           => ComposableProvider model s
           -> model
           -> [ModelConfig model]
@@ -96,7 +97,7 @@ fromResponse composableProvider model configs response =
 -- Usage: resp <- query [UserText "question"]
 --        resp2 <- query (resp <> [UserText "followup"])
 withProviderCall :: forall model s m a.
-                    (MonadFail m, Default s, Monoid (ProviderRequest model))
+                    (MonadFail m, Default s, Provider model)
                  => ComposableProvider model s
                  -> model
                  -> [ModelConfig model]

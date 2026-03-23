@@ -106,9 +106,8 @@ mkAnthropicCall oauthToken =
 -- Main agent loop - continues until text response (non-tool)
 -- This is polymorphic over BOTH provider and model
 agentLoop :: forall m req resp state.
-             (HasTools m,
-              req ~ ProviderRequest m, resp ~ ProviderResponse m,
-              Monoid req)
+             (HasTools m, Provider m,
+              req ~ ProviderRequest m, resp ~ ProviderResponse m)
           => ComposableProvider m state
           -> m
           -> state

@@ -47,7 +47,7 @@ buildStreamingRequest :: [ModelConfig TestModel]
 buildStreamingRequest configs msgs = buildStreamingRequestGeneric TestModels.openRouterGLM45Air (Model GLM45Air Provider.OpenRouter) (def, ((), ((), ()))) configs msgs
 
 -- Generic helper to build streaming request with explicit composable provider
-buildStreamingRequestGeneric :: forall m s. (ProviderRequest m ~ OpenAIRequest, Monoid (ProviderRequest m), HasStreaming m)
+buildStreamingRequestGeneric :: forall m s. (ProviderRequest m ~ OpenAIRequest, Provider m, HasStreaming m)
                            => ComposableProvider m s
                            -> m
                            -> s

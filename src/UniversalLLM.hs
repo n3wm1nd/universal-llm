@@ -22,6 +22,7 @@ import Data.Text (Text)
 import Data.Aeson (Value)
 import qualified Data.ByteString as BS
 import Control.Applicative ((<|>))
+import Autodocodec (HasCodec)
 
 -- ============================================================================
 -- Core Model Type
@@ -222,7 +223,17 @@ data LLMError
   | ProviderError Int Text     -- HTTP status + raw response for debugging
   deriving (Show, Eq)
 
-class Provider m where
+-- | Bare path segment appended to the provider base URL for this request type
+-- (e.g. @\"messages\"@ or @\"chat/completions\"@).
+-- Only two instances exist — one per wire protocol.
+class ProtocolEndpoint req where
+  endpointPath :: Text
+
+class ( Monoid (ProviderRequest m)
+      , HasCodec (ProviderRequest m)
+      , HasCodec (ProviderResponse m)
+      , ProtocolEndpoint (ProviderRequest m)
+      ) => Provider m where
   type ProviderRequest m
   type ProviderResponse m
 
@@ -319,7 +330,7 @@ chainProviders cp1 cp2 m configs (s,s') =
 
 -- Build a provider request from messages using the model's provider implementation
 -- The base provider is responsible for creating the initial empty request structure
-toProviderRequest :: (Monoid (ProviderRequest m))
+toProviderRequest :: Provider m
                   => ComposableProvider m providerstackstate
                   -> m
                   -> [ModelConfig m]
@@ -513,15 +524,9 @@ data StreamingContent = StreamingText Text | StreamingReasoning Text
 --
 -- Instances are defined in the protocol modules alongside the request/response
 -- types, keeping all wire-format knowledge co-located.
---
--- The @streamingEndpointPath@ is the bare path segment appended to the provider
--- base URL (e.g. @\"messages\"@ or @\"chat/completions\"@).
 class StreamingProtocol response where
   type ProtocolRequest response
   type ProtocolDelta response
-  -- | Bare path segment for this protocol's API endpoint
-  -- (used for both streaming and non-streaming requests)
-  endpointPath :: Text
   -- | Create an empty response for streaming accumulation
   emptyStreamingResponse :: response
   -- | Parse a delta from an SSE event's raw data bytes

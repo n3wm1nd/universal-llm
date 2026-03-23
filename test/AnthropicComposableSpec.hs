@@ -55,7 +55,7 @@ buildStreamingRequestWithReasoning :: TestModelWithReasoning
 buildStreamingRequestWithReasoning model = buildStreamingRequestGeneric TestModels.anthropicSonnet45OAuth model (def, ((), ((), ())))
 
 -- Generic helper to build request with explicit composable provider
-buildRequestGeneric :: forall m s. (ProviderRequest m ~ AnthropicRequest)
+buildRequestGeneric :: forall m s. (ProviderRequest m ~ AnthropicRequest, Provider m)
                     => ComposableProvider m s
                     -> m
                     -> s
@@ -66,7 +66,7 @@ buildRequestGeneric composableProvider model s configs msgs =
   snd $ toProviderRequest composableProvider model configs s msgs
 
 -- Generic helper to build STREAMING request with explicit composable provider
-buildStreamingRequestGeneric :: forall m s. (ProviderRequest m ~ AnthropicRequest, HasStreaming m)
+buildStreamingRequestGeneric :: forall m s. (ProviderRequest m ~ AnthropicRequest, Provider m, HasStreaming m)
                              => ComposableProvider m s
                              -> m
                              -> s

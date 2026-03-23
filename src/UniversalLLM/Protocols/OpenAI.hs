@@ -524,13 +524,15 @@ mergeOpenAIDelta acc chunk =
       OpenAIChoice msg { content = content msg <|> Just "" }
 
 -- ============================================================================
--- StreamingProtocol / EnableStreaming instances
+-- ProtocolEndpoint / StreamingProtocol / EnableStreaming instances
 -- ============================================================================
+
+instance ProtocolEndpoint OpenAIRequest where
+  endpointPath = "chat/completions"
 
 instance StreamingProtocol OpenAIResponse where
   type ProtocolRequest OpenAIResponse = OpenAIRequest
   type ProtocolDelta OpenAIResponse = Delta
-  endpointPath = "chat/completions"
   emptyStreamingResponse = OpenAISuccess $
     defaultOpenAISuccessResponse
       { choices = [defaultOpenAIChoice { message = defaultOpenAIMessage { role = "assistant" } }] }

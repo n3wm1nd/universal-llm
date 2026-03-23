@@ -47,7 +47,7 @@ instance HasTools (MockFullXMLModel `Via` OpenAI.OpenAICompatible) where
   withTools = OpenAI.openAITools
 
 -- Helper to build a request from messages (with explicit composable provider)
-buildRequestGeneric :: (Monoid (ProviderRequest model))
+buildRequestGeneric :: Provider model
                    => ComposableProvider model s
                    -> model
                    -> [ModelConfig model]

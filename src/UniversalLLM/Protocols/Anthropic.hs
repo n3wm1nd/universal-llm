@@ -555,13 +555,15 @@ mergeAnthropicDelta acc chunk =
     extractSignatureDelta _ = Nothing
 
 -- ============================================================================
--- StreamingProtocol / EnableStreaming instances
+-- ProtocolEndpoint / StreamingProtocol / EnableStreaming instances
 -- ============================================================================
+
+instance ProtocolEndpoint AnthropicRequest where
+  endpointPath = "messages"
 
 instance StreamingProtocol AnthropicResponse where
   type ProtocolRequest AnthropicResponse = AnthropicRequest
   type ProtocolDelta AnthropicResponse = Delta.Delta
-  endpointPath = "messages"
   emptyStreamingResponse = AnthropicSuccess $
     defaultAnthropicSuccessResponse { responseRole = "assistant" }
   parseDelta = Delta.parseDelta
