@@ -14,6 +14,8 @@ Test suites for Zhipu AI's GLM model family.
 * GLM 4.6 (ZAI)
 * GLM 4.7 (ZAI)
 * GLM 5 (ZAI)
+* GLM 5.1 (ZAI)
+* GLM 5-Turbo (ZAI)
 
 = GLM 4.5 Air Provider-Specific Quirks
 
@@ -38,6 +40,8 @@ module Models.ZhipuAI.GLM
   , testsGLM47AlibabaCloud
   , testsGLM5ZAI
   , testsGLM5AlibabaCloud
+  , testsGLM51ZAI
+  , testsGLM5TurboZAI
   ) where
 
 import UniversalLLM (via, route)
@@ -49,6 +53,8 @@ import UniversalLLM.Models.ZhipuAI.GLM
   , GLM46(..)
   , GLM47(..)
   , GLM5(..)
+  , GLM51(..)
+  , GLM5Turbo(..)
   , ZAI(..)
   )
 import Protocol.OpenAITests
@@ -184,6 +190,22 @@ testsGLM47AlibabaCloud provider = do
 
     describe "Standard Tests" $
       testModel route (GLM47 `via` AlibabaCloud) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+
+-- | Test GLM 5.1 via ZAI
+testsGLM51ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsGLM51ZAI provider = do
+  describe "GLM 5.1 via ZAI" $ do
+    describe "Standard Tests" $
+      testModel route (GLM51 `via` ZAI) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+
+-- | Test GLM 5-Turbo via ZAI
+testsGLM5TurboZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsGLM5TurboZAI provider = do
+  describe "GLM 5-Turbo via ZAI" $ do
+    describe "Standard Tests" $
+      testModel route (GLM5Turbo `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 5 via AlibabaCloud

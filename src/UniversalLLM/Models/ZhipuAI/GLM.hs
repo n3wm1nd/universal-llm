@@ -18,7 +18,9 @@ These models can be accessed through multiple providers (llama.cpp, OpenRouter, 
 * 'GLM45Air' - GLM-4.5-Air, a fast and capable model with tool support
 * 'GLM46' - GLM-4.6, improved version via ZAI API
 * 'GLM47' - GLM-4.7, previous version via ZAI API
-* 'GLM5' - GLM-5, latest version via ZAI API
+* 'GLM5' - GLM-5, previous version via ZAI API
+* 'GLM51' - GLM-5.1, latest version via ZAI API
+* 'GLM5Turbo' - GLM-5-Turbo, fast variant via ZAI API
 
 = Provider Support
 
@@ -67,6 +69,8 @@ module UniversalLLM.Models.ZhipuAI.GLM
   , GLM46(..)
   , GLM47(..)
   , GLM5(..)
+  , GLM51(..)
+  , GLM5Turbo(..)
   , ZAI(..)
     -- * Workaround Combinators
   , glmEnsureMinTokens
@@ -353,6 +357,64 @@ instance HasJSON (Model GLM5 ZAI) where
 instance Routing (Model GLM5 ZAI) where
   type RoutingState (Model GLM5 ZAI) = ((), ((), ((), ())))
   route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM5 ZAI)
+
+--------------------------------------------------------------------------------
+-- GLM-5.1
+--------------------------------------------------------------------------------
+
+-- | GLM-5.1 - Latest GLM model (ZAI only)
+data GLM51 = GLM51 deriving (Show, Eq)
+
+instance Provider (Model GLM51 ZAI) where
+  type ProviderRequest (Model GLM51 ZAI) = OpenAIRequest
+  type ProviderResponse (Model GLM51 ZAI) = OpenAIResponse
+
+instance EnableStreaming (Model GLM51 ZAI) where enableStreamingForProtocol = enableOpenAIStreaming
+
+instance ModelName (Model GLM51 ZAI) where
+  modelName (Model _ _) = "glm-5.1"
+
+instance HasTools (Model GLM51 ZAI) where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning (Model GLM51 ZAI) where
+  withReasoning = OpenAI.openAIReasoning
+
+instance HasJSON (Model GLM51 ZAI) where
+  withJSON = OpenAI.openAIJSON
+
+instance Routing (Model GLM51 ZAI) where
+  type RoutingState (Model GLM51 ZAI) = ((), ((), ((), ())))
+  route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM51 ZAI)
+
+--------------------------------------------------------------------------------
+-- GLM-5-Turbo
+--------------------------------------------------------------------------------
+
+-- | GLM-5-Turbo - Fast variant of GLM-5 (ZAI only)
+data GLM5Turbo = GLM5Turbo deriving (Show, Eq)
+
+instance Provider (Model GLM5Turbo ZAI) where
+  type ProviderRequest (Model GLM5Turbo ZAI) = OpenAIRequest
+  type ProviderResponse (Model GLM5Turbo ZAI) = OpenAIResponse
+
+instance EnableStreaming (Model GLM5Turbo ZAI) where enableStreamingForProtocol = enableOpenAIStreaming
+
+instance ModelName (Model GLM5Turbo ZAI) where
+  modelName (Model _ _) = "glm-5-turbo"
+
+instance HasTools (Model GLM5Turbo ZAI) where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning (Model GLM5Turbo ZAI) where
+  withReasoning = OpenAI.openAIReasoning
+
+instance HasJSON (Model GLM5Turbo ZAI) where
+  withJSON = OpenAI.openAIJSON
+
+instance Routing (Model GLM5Turbo ZAI) where
+  type RoutingState (Model GLM5Turbo ZAI) = ((), ((), ((), ())))
+  route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM5Turbo ZAI)
 
 --------------------------------------------------------------------------------
 -- GLM-4.7 via AlibabaCloud
