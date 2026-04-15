@@ -76,7 +76,7 @@ testsSonnet45 provider = do
 
     describe "Composable Provider Tests" $
       testModelOffline route (ClaudeSonnet45 `via` AnthropicOAuth)
-        [ CPT.cacheCoherency ]
+        [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
 
     describe "OAuth Provider Tests" $
       testModel route (ClaudeSonnet45 `via` AnthropicOAuth) provider

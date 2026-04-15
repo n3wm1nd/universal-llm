@@ -44,6 +44,8 @@ module Protocol.CacheCoherency
   , stripCacheControlBlock
   ) where
 
+import Data.Aeson (Value)
+import qualified Data.Aeson as Aeson
 import UniversalLLM
 import qualified UniversalLLM.Protocols.OpenAI as OP
 import qualified UniversalLLM.Protocols.Anthropic as AP
@@ -157,28 +159,40 @@ instance HasWireMessages AP.AnthropicRequest where
 
 -- | Construct a plausible provider response from a list of messages.
 --
--- This is a test-only stand-in for what an LLM API would return.  Only
--- assistant-direction messages are meaningful in a response; others are
--- ignored.  The translation is intentionally straight-line — no role
--- constraints, grouping, or filler messages.
+-- This is a test-only stand-in for what an LLM API would return.  The
+-- response is a single assistant turn: all 'AssistantText' and 'AssistantTool'
+-- blocks are folded into one message, exactly as a real LLM API would return
+-- them.  Other message types (user, system, tool results) are ignored since
+-- they cannot appear in a response.
 class SimulateResponse resp where
   simulateResponse :: [Message m] -> resp
 
 instance SimulateResponse OP.OpenAIResponse where
   simulateResponse msgs =
-    let choices = [ OP.OpenAIChoice $ OP.defaultOpenAIMessage
-                      { OP.role    = "assistant"
-                      , OP.content = Just txt
-                      }
-                  | AssistantText txt <- msgs
-                  ]
-    in OP.OpenAISuccess (OP.OpenAISuccessResponse choices)
+    let textContent  = [ txt | AssistantText txt <- msgs ]
+        toolCalls    = [ OP.convertFromToolCall tc | AssistantTool tc <- msgs ]
+        -- OpenAI requires content = Just "" on assistant messages that carry
+        -- tool_calls (for verbatim round-trip preservation); pure text messages
+        -- use the actual text.  This matches what the provider produces.
+        assistantMsg = OP.defaultOpenAIMessage
+          { OP.role       = "assistant"
+          , OP.content    = case (textContent, toolCalls) of
+              (_,   _:_) -> Just ""           -- tool call: empty content as per provider
+              (t:_, [])  -> Just t            -- text-only: use the text
+              ([],  [])  -> Nothing
+          , OP.tool_calls = case toolCalls of { [] -> Nothing; tcs -> Just tcs }
+          }
+    in OP.OpenAISuccess (OP.OpenAISuccessResponse [OP.OpenAIChoice assistantMsg])
 
 instance SimulateResponse AP.AnthropicResponse where
   simulateResponse msgs =
-    let blocks = [ AP.AnthropicTextBlock txt Nothing
-                 | AssistantText txt <- msgs
-                 ]
+    let toBlock (AssistantText txt)  = Just (AP.AnthropicTextBlock txt Nothing)
+        toBlock (AssistantTool (ToolCall tcId tcName tcArgs)) =
+          Just (AP.AnthropicToolUseBlock tcId tcName tcArgs Nothing)
+        toBlock (AssistantTool (InvalidToolCall tcId tcName _ _)) =
+          Just (AP.AnthropicToolUseBlock tcId tcName Aeson.Null Nothing)
+        toBlock _                    = Nothing
+        blocks = [ b | Just b <- map toBlock msgs ]
     in AP.AnthropicSuccess AP.defaultAnthropicSuccessResponse
         { AP.responseRole    = "assistant"
         , AP.responseContent = blocks

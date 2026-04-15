@@ -52,8 +52,9 @@ import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
 import UniversalLLM.Models.OpenAI.GPT (GPTOSS(..), GPT53Codex(..), GPT53Chat(..), GPT54Pro(..), GPT54(..))
 import Protocol.OpenAITests
 import qualified StandardTests as ST
+import qualified ComposableProviderTests as CPT
 import TestCache (ResponseProvider)
-import TestHelpers (testModel)
+import TestHelpers (testModel, testModelOffline)
 import Test.Hspec (Spec, describe)
 
 -- | Test GPT-OSS via OpenRouter
@@ -78,6 +79,10 @@ testsGPTOSSOpenRouter provider = do
     describe "Standard Tests" $
       testModel route (GPTOSS `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+
+    describe "Composable Provider Tests" $
+      testModelOffline route (GPTOSS `via` OpenRouter)
+        [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
 
 -- | Test GPT-OSS via llama.cpp
 --

@@ -12,8 +12,10 @@ module ComposableProviderTests
   ( ComposableProviderTest(..)
   , testModelOffline
   , cacheCoherency
+  , cacheCoherencyWithTools
   ) where
 
+import qualified Data.Aeson as Aeson
 import Test.Hspec
 import Data.Default (Default, def)
 import Data.List (isPrefixOf)
@@ -74,7 +76,6 @@ cacheCoherency :: ( Provider m
                   , SimulateResponse (ProviderResponse m)
                   , AppendResponse (ProviderRequest m) (ProviderResponse m)
                   , HasWireMessages (ProviderRequest m)
-                  , CacheNormalized (ProviderRequest m)
                   , CacheNormalized (WireMessage (ProviderRequest m))
                   , Eq (WireMessage (ProviderRequest m))
                   , Show (WireMessage (ProviderRequest m))
@@ -110,6 +111,90 @@ cacheCoherency = ComposableProviderTest $ \cp model initialState ->
                then pure ()
                else expectationFailure $ unlines
                       [ "Cache coherency violation: request history is not a prefix of the follow-up request."
+                      , "Expected prefix (" <> show (length expectedPrefix) <> " messages):"
+                      , show expectedPrefix
+                      , "Actual messages (" <> show (length actualMessages) <> " messages):"
+                      , show actualMessages
+                      ]
+
+-- | Verify the cache coherency invariant for tool-calling conversations.
+--
+-- Same invariant as 'cacheCoherency', exercised on a richer scenario:
+-- system prompt + tool list via config, user query, assistant tool call,
+-- tool result, assistant final reply, then a follow-up user message.
+--
+-- The system prompt and tool list are passed as 'ModelConfig' values (not
+-- inline messages) to reflect how production callers build requests.
+cacheCoherencyWithTools
+  :: ( Provider m
+     , SupportsMaxTokens (ProviderOf m)
+     , SupportsSystemPrompt (ProviderOf m)
+     , HasTools m
+     , SimulateResponse (ProviderResponse m)
+     , AppendResponse (ProviderRequest m) (ProviderResponse m)
+     , HasWireMessages (ProviderRequest m)
+     , CacheNormalized (WireMessage (ProviderRequest m))
+     , Eq (WireMessage (ProviderRequest m))
+     , Show (WireMessage (ProviderRequest m))
+     )
+  => ComposableProviderTest m state
+cacheCoherencyWithTools = ComposableProviderTest $ \cp model initialState ->
+  describe "Cache Coherency (with tools)" $ do
+
+    -- A tool-calling round trip: the assistant calls read_file, receives the
+    -- result, replies with the file content, and the user asks a follow-up.
+    -- The first request (user query + tool definition) plus the simulated
+    -- tool-call response must appear as an exact cache-normalized prefix of
+    -- the second request.
+    it "tool call + tool result followed by assistant reply and follow-up" $ do
+      let readFileTool = ToolDefinition
+            { toolDefName        = "read_file"
+            , toolDefDescription = "Read the contents of a file."
+            , toolDefParameters  = Aeson.object
+                [ "type"       Aeson..= ("object" :: String)
+                , "properties" Aeson..= Aeson.object
+                    [ "path" Aeson..= Aeson.object
+                        [ "type"        Aeson..= ("string" :: String)
+                        , "description" Aeson..= ("File path to read" :: String)
+                        ]
+                    ]
+                , "required"   Aeson..= (["path"] :: [String])
+                ]
+            }
+          toolCall = ToolCall "call_1" "read_file"
+                       (Aeson.object ["path" Aeson..= ("file.txt" :: String)])
+          toolResult = ToolResult
+            { toolResultCall   = toolCall
+            , toolResultOutput = Right (Aeson.String "Hello, world!")
+            }
+
+          configs  = [ MaxTokens 2048
+                     , SystemPrompt "You are a file reader assistant."
+                     , Tools [readFileTool]
+                     ]
+          reqMsgs  = [ UserText "What's in file.txt?" ]
+          respMsgs = [ AssistantTool toolCall ]
+          nextMsgs = [ ToolResultMsg toolResult
+                     , AssistantText "The file contains: Hello, world!"
+                     , UserText "What about other.txt?"
+                     ]
+
+          (state1, req1) = toProviderRequest cp model configs initialState reqMsgs
+          (_, req2)      = toProviderRequest cp model configs state1
+                             (reqMsgs ++ respMsgs ++ nextMsgs)
+
+          merged = simulateAndAppend req1 respMsgs
+
+      case merged of
+        Nothing ->
+          expectationFailure "appendResponse returned Nothing (error response?)"
+        Just mergedReq ->
+          let expectedPrefix = map cacheNormalize (wireMessages mergedReq)
+              actualMessages = map cacheNormalize (wireMessages req2)
+          in if expectedPrefix `isPrefixOf` actualMessages
+               then pure ()
+               else expectationFailure $ unlines
+                      [ "Cache coherency violation: tool-call history is not a prefix of the follow-up request."
                       , "Expected prefix (" <> show (length expectedPrefix) <> " messages):"
                       , show expectedPrefix
                       , "Actual messages (" <> show (length actualMessages) <> " messages):"
