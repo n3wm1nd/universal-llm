@@ -45,8 +45,9 @@ import UniversalLLM.Models.Anthropic.Claude
 import Protocol.AnthropicTests
 import qualified Protocol.AnthropicOAuthBlacklist as Blacklist
 import qualified StandardTests as ST
+import qualified ComposableProviderTests as CPT
 import TestCache (ResponseProvider)
-import TestHelpers (testModel)
+import TestHelpers (testModel, testModelOffline)
 import Test.Hspec (Spec, describe)
 
 -- | Test Claude Sonnet 4.5 via Anthropic API
@@ -72,6 +73,10 @@ testsSonnet45 provider = do
     describe "Standard Tests" $
       testModel route (ClaudeSonnet45 `via` AnthropicOAuth) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+
+    describe "Composable Provider Tests" $
+      testModelOffline route (ClaudeSonnet45 `via` AnthropicOAuth)
+        [ CPT.cacheCoherency ]
 
     describe "OAuth Provider Tests" $
       testModel route (ClaudeSonnet45 `via` AnthropicOAuth) provider

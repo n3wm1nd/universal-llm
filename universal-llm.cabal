@@ -96,6 +96,8 @@ test-suite universal-llm-tests
   other-modules:
     DeltaSpec
     ComposableHandlersSpec
+    ComposableProviderTests
+    Protocol.CacheCoherency
     OpenAIComposableSpec
     OpenAIStreamingSpec
     StreamingReconstructionSpec

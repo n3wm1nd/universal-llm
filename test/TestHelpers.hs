@@ -6,11 +6,13 @@
 module TestHelpers
   ( testModel
   , runStandardTest
+  , testModelOffline
   ) where
 
 import Test.Hspec
 import Data.Default (Default, def)
 import StandardTests (StandardTest(..))
+import ComposableProviderTests (ComposableProviderTest(..), testModelOffline)
 import UniversalLLM
 import TestCache (ResponseProvider)
 
