@@ -32,8 +32,9 @@ import UniversalLLM.Providers.OpenAI (OpenRouter(..), AlibabaCloud(..))
 import UniversalLLM.Models.Moonshot.Kimi (KimiK25(..))
 import Protocol.OpenAITests
 import qualified StandardTests as ST
+import qualified ComposableProviderTests as CPT
 import TestCache (ResponseProvider)
-import TestHelpers (testModel)
+import TestHelpers (testModel, testModelOffline)
 import Test.Hspec (Spec, describe)
 
 -- | Test Kimi K2.5 via OpenRouter
@@ -61,6 +62,10 @@ testsOpenRouter provider = do
     describe "Standard Tests" $
       testModel route (KimiK25 `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+
+    describe "Composable Provider Tests" $
+      testModelOffline route (KimiK25 `via` OpenRouter)
+        [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
 
 -- | Test Kimi K2.5 via AlibabaCloud
 testsAlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec

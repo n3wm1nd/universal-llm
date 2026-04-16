@@ -2,6 +2,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 -- | Offline tests for ComposableProvider stacks.
 --
@@ -22,6 +24,7 @@ import Data.List (isPrefixOf)
 import UniversalLLM
 import Protocol.CacheCoherency
   ( CacheNormalized(..)
+  , ModelOf
   , HasWireMessages(..)
   , AppendResponse(..)
   , SimulateResponse(..)
@@ -71,12 +74,20 @@ simulateAndAppend req msgs = appendResponse req (simulateResponse msgs)
 --
 -- Deviations anywhere in the prefix are a problem; deviations at the tail
 -- (the new user turn being added) are expected and acceptable.
-cacheCoherency :: ( Provider m
+-- | Apply cache normalization to a wire message, selecting the instance via
+-- the model and provider type parameters.
+normalizeWireMsg
+  :: forall m msg. CacheNormalized (ModelOf m) (ProviderOf m) msg
+  => msg -> msg
+normalizeWireMsg = cacheNormalize @(ModelOf m) @(ProviderOf m)
+
+cacheCoherency :: forall m state.
+                  ( Provider m
                   , SupportsMaxTokens (ProviderOf m)
                   , SimulateResponse (ProviderResponse m)
                   , AppendResponse (ProviderRequest m) (ProviderResponse m)
                   , HasWireMessages (ProviderRequest m)
-                  , CacheNormalized (WireMessage (ProviderRequest m))
+                  , CacheNormalized (ModelOf m) (ProviderOf m) (WireMessage (ProviderRequest m))
                   , Eq (WireMessage (ProviderRequest m))
                   , Show (WireMessage (ProviderRequest m))
                   )
@@ -105,8 +116,8 @@ cacheCoherency = ComposableProviderTest $ \cp model initialState ->
         Nothing ->
           expectationFailure "appendResponse returned Nothing (error response?)"
         Just mergedReq ->
-          let expectedPrefix = map cacheNormalize (wireMessages mergedReq)
-              actualMessages = map cacheNormalize (wireMessages req2)
+          let expectedPrefix = map (normalizeWireMsg @m) (wireMessages mergedReq)
+              actualMessages = map (normalizeWireMsg @m) (wireMessages req2)
           in if expectedPrefix `isPrefixOf` actualMessages
                then pure ()
                else expectationFailure $ unlines
@@ -126,14 +137,15 @@ cacheCoherency = ComposableProviderTest $ \cp model initialState ->
 -- The system prompt and tool list are passed as 'ModelConfig' values (not
 -- inline messages) to reflect how production callers build requests.
 cacheCoherencyWithTools
-  :: ( Provider m
+  :: forall m state.
+     ( Provider m
      , SupportsMaxTokens (ProviderOf m)
      , SupportsSystemPrompt (ProviderOf m)
      , HasTools m
      , SimulateResponse (ProviderResponse m)
      , AppendResponse (ProviderRequest m) (ProviderResponse m)
      , HasWireMessages (ProviderRequest m)
-     , CacheNormalized (WireMessage (ProviderRequest m))
+     , CacheNormalized (ModelOf m) (ProviderOf m) (WireMessage (ProviderRequest m))
      , Eq (WireMessage (ProviderRequest m))
      , Show (WireMessage (ProviderRequest m))
      )
@@ -189,8 +201,8 @@ cacheCoherencyWithTools = ComposableProviderTest $ \cp model initialState ->
         Nothing ->
           expectationFailure "appendResponse returned Nothing (error response?)"
         Just mergedReq ->
-          let expectedPrefix = map cacheNormalize (wireMessages mergedReq)
-              actualMessages = map cacheNormalize (wireMessages req2)
+          let expectedPrefix = map (normalizeWireMsg @m) (wireMessages mergedReq)
+              actualMessages = map (normalizeWireMsg @m) (wireMessages req2)
           in if expectedPrefix `isPrefixOf` actualMessages
                then pure ()
                else expectationFailure $ unlines

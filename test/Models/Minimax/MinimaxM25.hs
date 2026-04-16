@@ -37,8 +37,9 @@ import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud
 import UniversalLLM.Models.Minimax.M (MinimaxM25(..))
 import Protocol.OpenAITests
 import qualified StandardTests as ST
+import qualified ComposableProviderTests as CPT
 import TestCache (ResponseProvider)
-import TestHelpers (testModel)
+import TestHelpers (testModel, testModelOffline)
 import Test.Hspec (Spec, describe)
 
 -- | Test MiniMax M2.5 via OpenRouter
@@ -66,6 +67,10 @@ testsOpenRouter provider = do
     describe "Standard Tests" $
       testModel route (MinimaxM25 `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+
+    describe "Composable Provider Tests" $
+      testModelOffline route (MinimaxM25 `via` OpenRouter)
+        [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
 
 -- | Test MiniMax M2.5 via llama.cpp
 --

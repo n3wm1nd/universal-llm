@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 {- |
 Module: Models.Amazon.Nova2Lite
@@ -36,10 +38,21 @@ import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (OpenRouter(..))
 import UniversalLLM.Models.Amazon.Nova (Nova2Lite(..))
 import Protocol.OpenAITests
+import Protocol.CacheCoherency (CacheNormalized(..), normalizeOpenAIRequestWith, normalizeNovaMessage)
+import qualified UniversalLLM.Protocols.OpenAI as OP
 import qualified StandardTests as ST
+import qualified ComposableProviderTests as CPT
 import TestCache (ResponseProvider)
-import TestHelpers (testModel)
+import TestHelpers (testModel, testModelOffline)
 import Test.Hspec (Spec, describe, HasCallStack)
+
+-- | Nova normalizes @content: ""@ to @content: null@ via @normalizeEmptyContent@
+-- in its provider chain.  Override the default OpenAI message instance to match.
+instance {-# OVERLAPPING #-} CacheNormalized Nova2Lite OpenRouter OP.OpenAIMessage where
+  cacheNormalize = normalizeNovaMessage
+
+instance {-# OVERLAPPING #-} CacheNormalized Nova2Lite OpenRouter OP.OpenAIRequest where
+  cacheNormalize = normalizeOpenAIRequestWith normalizeNovaMessage
 
 -- | Test Amazon Nova 2 Lite via OpenRouter
 --
@@ -86,3 +99,7 @@ testsOpenRouter provider = do
     describe "Standard Tests" $
       testModel route (Nova2Lite `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
+
+    describe "Composable Provider Tests" $
+      testModelOffline route (Nova2Lite `via` OpenRouter)
+        [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]

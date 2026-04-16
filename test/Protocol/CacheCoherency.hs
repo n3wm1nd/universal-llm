@@ -2,6 +2,11 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- | Wire-level cache coherency primitives for testing ComposableProvider stacks.
 --
@@ -37,103 +42,114 @@
 -- cache for that prefix.
 module Protocol.CacheCoherency
   ( CacheNormalized(..)
+  , ModelOf
   , HasWireMessages(..)
   , SimulateResponse(..)
   , AppendResponse(..)
-  -- * Anthropic helpers (exported for use in exception documentation)
+  -- * Helpers exported for model-specific overrides
   , stripCacheControlBlock
+  , normalizeOpenAIRequestWith
+  , normalizeNovaMessage
   ) where
 
-import Data.Aeson (Value)
 import qualified Data.Aeson as Aeson
 import UniversalLLM
 import qualified UniversalLLM.Protocols.OpenAI as OP
 import qualified UniversalLLM.Protocols.Anthropic as AP
 
--- | Strip fields that are irrelevant to provider-side caching.
+-- | Extract the AI model type from a 'Model' application.
+type family ModelOf m where
+  ModelOf (Model a _p) = a
+
+-- | Strip fields that are irrelevant to provider-side caching, for a specific
+-- AI model @m@ and provider @p@.
 --
--- What counts as cache-relevant is provider-specific and in some cases
--- requires empirical verification.  The conservative default is to keep
--- everything; instances should only strip what is *known* to be irrelevant.
+-- The typeclass is split on model and provider so that normalization can be
+-- tuned at any granularity: protocol-wide (the defaults here), per-provider,
+-- or per-model.  Provider-level defaults are @OVERLAPPABLE@; model-specific
+-- overrides defined alongside the model's tests take priority.
 --
 -- Known cache-irrelevant fields:
 --
--- * __Anthropic__: @cache_control@ annotations on messages and system blocks
---   are hints /to/ the caching system, not part of the cached content.
---   Generation parameters (@temperature@, @max_tokens@, @stream@) do not
---   affect the cache key.
+-- * __All Anthropic providers__: @cache_control@ annotations are hints /to/
+--   the caching infrastructure, recomputed on every request.  Generation
+--   parameters (@temperature@, @max_tokens@, @stream@) do not affect the key.
 --
--- * __OpenAI__: Generation parameters (@temperature@, @max_tokens@, @seed@,
---   @stream@) do not affect the cache key.
---
--- Cache-relevant fields (kept after normalisation):
---
--- * Message content and roles
--- * System prompt
--- * Tool definitions
--- * Reasoning configuration (affects what the model produces)
-class CacheNormalized a where
+-- * __All OpenAI-protocol providers__: Generation parameters
+--   (@temperature@, @max_tokens@, @seed@, @stream@) do not affect the key.
+--   Messages are kept verbatim by default; models that normalize differently
+--   (e.g. Nova's empty-content conversion) override the message instance.
+class CacheNormalized m p a where
   cacheNormalize :: a -> a
 
 -- ============================================================================
--- OpenAI CacheNormalized instances
+-- OpenAI shared helpers (exported for model-specific overrides)
 -- ============================================================================
 
--- | OpenAI messages: no known cache-irrelevant sub-fields for now.
-instance CacheNormalized OP.OpenAIMessage where
+-- | Normalize an OpenAI request: strip generation parameters, apply
+-- per-message normalization.
+normalizeOpenAIRequestWith
+  :: (OP.OpenAIMessage -> OP.OpenAIMessage)
+  -> OP.OpenAIRequest
+  -> OP.OpenAIRequest
+normalizeOpenAIRequestWith f req = OP.OpenAIRequest
+  { OP.model           = OP.model req
+  , OP.messages        = map f (OP.messages req)
+  , OP.temperature     = Nothing
+  , OP.max_tokens      = Nothing
+  , OP.seed            = Nothing
+  , OP.tools           = OP.tools req
+  , OP.response_format = OP.response_format req
+  , OP.stream          = Nothing
+  , OP.reasoning       = OP.reasoning req
+  }
+
+-- | Nova-specific wire message normalization: Amazon Bedrock converts
+-- @content: ""@ to @content: null@ via @normalizeEmptyContent@ in its
+-- provider chain.  Both mean "no content"; we equate them for comparison.
+normalizeNovaMessage :: OP.OpenAIMessage -> OP.OpenAIMessage
+normalizeNovaMessage msg = msg { OP.content = norm (OP.content msg) }
+  where
+    norm (Just "") = Nothing
+    norm c         = c
+
+-- ============================================================================
+-- OpenAI protocol defaults (OVERLAPPABLE — one instance per wire type)
+-- ============================================================================
+
+instance {-# OVERLAPPABLE #-} CacheNormalized m p OP.OpenAIRequest where
+  cacheNormalize = normalizeOpenAIRequestWith id
+
+instance {-# OVERLAPPABLE #-} CacheNormalized m p OP.OpenAIMessage where
   cacheNormalize = id
 
--- | OpenAI request: strip generation parameters, keep conversation-shaping fields.
-instance CacheNormalized OP.OpenAIRequest where
-  cacheNormalize req = OP.OpenAIRequest
-    { OP.model           = OP.model req
-    , OP.messages        = map cacheNormalize (OP.messages req)
-    , OP.temperature     = Nothing
-    , OP.max_tokens      = Nothing
-    , OP.seed            = Nothing
-    , OP.tools           = OP.tools req
-    , OP.response_format = OP.response_format req
-    , OP.stream          = Nothing
-    , OP.reasoning       = OP.reasoning req
-    }
-
 -- ============================================================================
--- Anthropic CacheNormalized instances
+-- Anthropic protocol defaults (OVERLAPPABLE — one instance per wire type)
 -- ============================================================================
 
 -- | Strip cache_control from a single content block.
 stripCacheControlBlock :: AP.AnthropicContentBlock -> AP.AnthropicContentBlock
-stripCacheControlBlock (AP.AnthropicTextBlock txt _)               = AP.AnthropicTextBlock txt Nothing
-stripCacheControlBlock (AP.AnthropicToolUseBlock i n v _)          = AP.AnthropicToolUseBlock i n v Nothing
-stripCacheControlBlock (AP.AnthropicToolResultBlock i c _)         = AP.AnthropicToolResultBlock i c Nothing
-stripCacheControlBlock b@AP.AnthropicThinkingBlock{}               = b { AP.thinkingCacheControl = Nothing }
+stripCacheControlBlock (AP.AnthropicTextBlock txt _)       = AP.AnthropicTextBlock txt Nothing
+stripCacheControlBlock (AP.AnthropicToolUseBlock i n v _)  = AP.AnthropicToolUseBlock i n v Nothing
+stripCacheControlBlock (AP.AnthropicToolResultBlock i c _) = AP.AnthropicToolResultBlock i c Nothing
+stripCacheControlBlock b@AP.AnthropicThinkingBlock{}       = b { AP.thinkingCacheControl = Nothing }
 
--- | Anthropic messages: strip cache_control from all content blocks.
-instance CacheNormalized AP.AnthropicMessage where
+instance {-# OVERLAPPABLE #-} CacheNormalized m p AP.AnthropicMessage where
   cacheNormalize msg = msg { AP.content = map stripCacheControlBlock (AP.content msg) }
 
--- | Strip cache_control from a system block.
-stripCacheControlSystem :: AP.AnthropicSystemBlock -> AP.AnthropicSystemBlock
-stripCacheControlSystem b = b { AP.systemCacheControl = Nothing }
-
--- | Strip cache_control from a tool definition.
-stripCacheControlTool :: AP.AnthropicToolDefinition -> AP.AnthropicToolDefinition
-stripCacheControlTool t = t { AP.anthropicToolCacheControl = Nothing }
-
--- | Anthropic request: strip generation parameters and cache_control annotations,
--- keep conversation-shaping fields.
-instance CacheNormalized AP.AnthropicRequest where
+instance {-# OVERLAPPABLE #-} CacheNormalized m p AP.AnthropicRequest where
   cacheNormalize req = AP.AnthropicRequest
     { AP.model         = AP.model req
-    , AP.messages      = map cacheNormalize (AP.messages req)
+    , AP.messages      = map stripMsg (AP.messages req)
     , AP.max_tokens    = 0  -- generation parameter, not cache-relevant
     , AP.temperature   = Nothing
-    , AP.system        = fmap (map stripCacheControlSystem) (AP.system req)
-    , AP.tools         = fmap (map stripCacheControlTool) (AP.tools req)
+    , AP.system        = fmap (map (\b -> b { AP.systemCacheControl = Nothing })) (AP.system req)
+    , AP.tools         = fmap (map (\t -> t { AP.anthropicToolCacheControl = Nothing })) (AP.tools req)
     , AP.stream        = Nothing
     , AP.thinking      = AP.thinking req
     , AP.output_config = AP.output_config req
     }
+    where stripMsg msg = msg { AP.content = map stripCacheControlBlock (AP.content msg) }
 
 -- ============================================================================
 -- HasWireMessages

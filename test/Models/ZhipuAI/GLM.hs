@@ -59,8 +59,9 @@ import UniversalLLM.Models.ZhipuAI.GLM
   )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
+import qualified ComposableProviderTests as CPT
 import TestCache (ResponseProvider)
-import TestHelpers (testModel)
+import TestHelpers (testModel, testModelOffline)
 import Test.Hspec (Spec, describe, xdescribe)
 import qualified Data.Text as T
 import Data.Text (Text)
@@ -87,6 +88,10 @@ testsGLM45AirOpenRouter provider = do
     describe "Standard Tests" $
       testModel route (GLM45Air `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+
+    describe "Composable Provider Tests" $
+      testModelOffline route (GLM45Air `via` OpenRouter)
+        [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
 
 -- | Test GLM 4.5 Air via llama.cpp
 --

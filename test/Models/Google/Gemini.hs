@@ -38,8 +38,9 @@ import UniversalLLM.Models.Google.Gemini
   )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
+import qualified ComposableProviderTests as CPT
 import TestCache (ResponseProvider)
-import TestHelpers (testModel)
+import TestHelpers (testModel, testModelOffline)
 import Test.Hspec (Spec, describe)
 
 -- | Test Gemini 3 Flash via OpenRouter
@@ -75,6 +76,10 @@ testsGemini3FlashOpenRouter provider = do
     describe "Standard Tests" $
       testModel route (Gemini3FlashPreview `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.openAIReasoningDetailsPreservation ]
+
+    describe "Composable Provider Tests" $
+      testModelOffline route (Gemini3FlashPreview `via` OpenRouter)
+        [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
 
 -- | Test Gemini 3 Pro via OpenRouter
 --

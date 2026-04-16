@@ -38,8 +38,9 @@ import UniversalLLM.Models.Alibaba.Qwen
   )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
+import qualified ComposableProviderTests as CPT
 import TestCache (ResponseProvider)
-import TestHelpers (testModel)
+import TestHelpers (testModel, testModelOffline)
 import Test.Hspec (Spec, describe)
 import Data.Text (Text)
 
@@ -66,6 +67,10 @@ testsOpenRouter provider = do
     describe "Standard Tests" $
       testModel route (Qwen35_122B `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+
+    describe "Composable Provider Tests" $
+      testModelOffline route (Qwen35_122B `via` OpenRouter)
+        [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
 
 -- | Test Qwen 3.5 122B via llama.cpp
 testsLlamaCpp :: ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
