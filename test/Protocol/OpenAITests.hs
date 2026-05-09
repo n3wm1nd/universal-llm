@@ -72,8 +72,8 @@ module Protocol.OpenAITests where
 import UniversalLLM.Protocols.OpenAI
 import Protocol.OpenAI  -- unqualified - we mainly call these
 import Data.Text (Text)
-import qualified Data.Text as T
-import Test.Hspec (Spec, describe, it, shouldSatisfy, HasCallStack)
+import Test.Hspec (Spec, describe, it, shouldSatisfy, HasCallStack, runIO)
+import TestFixtures (loadImageBase64, glassbottlePng, glassbottleMirroredJpeg)
 
 -- ============================================================================
 -- Capability Probes
@@ -503,3 +503,73 @@ providerErrorResponse makeRequest = do
     let req = (simpleUserRequest "What is 2+2?") { model = "invalid-model-name-that-does-not-exist" }
     resp <- makeRequest req
     assertIsProviderError resp
+
+-- | Probe: Vision / PNG format support
+--
+-- __Tests:__ Can the model accept a PNG image and identify its subject?
+--
+-- __Checks:__ Response mentions "bottle" when shown the glassbottle image
+--
+-- __Expected to pass:__ Vision-capable models
+--
+-- __Expected to fail:__ Text-only models
+visionPng :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+visionPng makeRequest modelName = do
+  (mediaType, b64Data) <- runIO glassbottlePng
+  it "accepts PNG and identifies image subject" $ do
+    let req = visionIdentifyRequest modelName mediaType b64Data
+    resp <- makeRequest req
+    assertMentions "bottle" resp
+
+-- | Probe: Vision / JPEG format support
+--
+-- __Tests:__ Can the model accept a JPEG image and identify its subject?
+--
+-- __Checks:__ Response mentions "bottle" when shown the mirrored glassbottle JPEG
+--
+-- __Expected to pass:__ Vision-capable models that support JPEG
+--
+-- __Expected to fail:__ Text-only models or models limited to PNG
+visionJpeg :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+visionJpeg makeRequest modelName = do
+  (mediaType, b64Data) <- runIO glassbottleMirroredJpeg
+  it "accepts JPEG and identifies image subject" $ do
+    let req = visionIdentifyRequest modelName mediaType b64Data
+    resp <- makeRequest req
+    assertMentions "bottle" resp
+
+-- | Probe: Vision / content accuracy (no hallucination)
+--
+-- __Tests:__ Does the model accurately describe image content without hallucinating?
+--
+-- __Checks:__ Response mentions "bottle", does NOT mention "cat"
+--
+-- __Expected to pass:__ Vision-capable models with accurate perception
+--
+-- __Expected to fail:__ Text-only models, or models that hallucinate common objects
+visionAccuracy :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+visionAccuracy makeRequest modelName = do
+  (mediaType, b64Data) <- runIO glassbottlePng
+  it "identifies what is in the image and does not hallucinate" $ do
+    let req = visionIdentifyRequest modelName mediaType b64Data
+    resp <- makeRequest req
+    assertMentions "bottle" resp
+    assertDoesNotMention "cat" resp
+
+-- | Probe: Vision / multiple images in one prompt
+--
+-- __Tests:__ Can the model receive two images in a single message and compare them?
+--
+-- __Checks:__ Model confirms that the second image is a mirrored version of the first
+--
+-- __Expected to pass:__ Vision models with multi-image support
+--
+-- __Expected to fail:__ Models limited to a single image per message
+visionMultipleImages :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+visionMultipleImages makeRequest modelName = do
+  (mt1, b64Png) <- runIO glassbottlePng
+  (mt2, b64Jpg) <- runIO glassbottleMirroredJpeg
+  it "compares two images and identifies mirroring" $ do
+    let req = visionCompareRequest modelName mt1 b64Png mt2 b64Jpg
+    resp <- makeRequest req
+    assertConfirmsYes resp

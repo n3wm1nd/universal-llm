@@ -25,6 +25,9 @@ module StandardTests
   , reasoningWithTools
   , reasoningWithToolsModifiedReasoning
   , openAIReasoningDetailsPreservation
+  , vision
+  , visionJpeg
+  , visionMultipleImages
   ) where
 
 import Test.Hspec
@@ -38,6 +41,7 @@ import Control.Monad.Catch (MonadCatch, SomeException, catch)
 import UniversalLLM
 import UniversalLLM.Tools (LLMTool(..), llmToolToDefinition, executeToolCallFromList, ToolFunction(..), ToolParameter(..), mkTool)
 import TestCache (ResponseProvider)
+import TestFixtures (glassbottlePng, glassbottleMirroredJpeg)
 import qualified UniversalLLM.Protocols.OpenAI as OpenAI
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse(..), OpenAISuccessResponse(..), OpenAIChoice(..), OpenAIMessage(role, content, reasoning_content, reasoning_details, tool_calls), OpenAIReasoningConfig(..), OpenAIToolCall(callId))
 import qualified UniversalLLM.Providers.OpenAI as OpenAIProvider
@@ -693,3 +697,82 @@ openAIReasoningDetailsPreservation = StandardTest $ \cp model initialState getRe
 
       -- Should successfully handle the follow-up
       length parsedMsgs3 `shouldSatisfy` (> 0)
+
+-- ============================================================================
+-- Vision Tests
+-- ============================================================================
+
+-- | Test that the model identifies the main subject of a PNG image correctly.
+--
+-- Sends glassbottle.png and checks the model mentions "bottle" but not "cat".
+vision :: ( Provider m
+          , HasVision m
+          , SupportsMaxTokens (ProviderOf m)
+          )
+       => StandardTest m state
+vision = StandardTest $ \cp model initialState getResponse -> do
+  describe "Vision (PNG)" $ do
+    (mediaType, b64Data) <- runIO glassbottlePng
+    it "identifies bottle in PNG image and does not hallucinate" $ do
+      let configs = [MaxTokens 2048]
+          msgs = [UserText "What is the main object in this image? Answer in one sentence.", UserImage mediaType b64Data]
+          (_, req) = toProviderRequest cp model configs initialState msgs
+
+      resp <- getResponse req
+
+      let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs initialState resp
+      length parsedMsgs `shouldSatisfy` (> 0)
+      let responseText = T.toLower $ T.concat [t | AssistantText t <- parsedMsgs]
+      responseText `shouldSatisfy` T.isInfixOf "bottle"
+      responseText `shouldSatisfy` (not . T.isInfixOf "cat")
+
+-- | Test that the model accepts and identifies content in a JPEG image.
+--
+-- Sends glassbottle-mirrored.jpg (JPEG format) and checks the model mentions "bottle".
+visionJpeg :: ( Provider m
+              , HasVision m
+              , SupportsMaxTokens (ProviderOf m)
+              )
+           => StandardTest m state
+visionJpeg = StandardTest $ \cp model initialState getResponse -> do
+  describe "Vision (JPEG)" $ do
+    (mediaType, b64Data) <- runIO glassbottleMirroredJpeg
+    it "identifies bottle in JPEG image" $ do
+      let configs = [MaxTokens 2048]
+          msgs = [UserText "What is the main object in this image? Answer in one sentence.", UserImage mediaType b64Data]
+          (_, req) = toProviderRequest cp model configs initialState msgs
+
+      resp <- getResponse req
+
+      let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs initialState resp
+      length parsedMsgs `shouldSatisfy` (> 0)
+      let responseText = T.toLower $ T.concat [t | AssistantText t <- parsedMsgs]
+      responseText `shouldSatisfy` T.isInfixOf "bottle"
+
+-- | Test that the model can compare two images in a single prompt.
+--
+-- Sends glassbottle.png and its horizontal mirror as a JPEG, asking whether
+-- the second is a mirrored version of the first. Expects a "yes" answer.
+visionMultipleImages :: ( Provider m
+                        , HasVision m
+                        , SupportsMaxTokens (ProviderOf m)
+                        )
+                     => StandardTest m state
+visionMultipleImages = StandardTest $ \cp model initialState getResponse -> do
+  describe "Vision (multiple images)" $ do
+    (mt1, b64Png) <- runIO glassbottlePng
+    (mt2, b64Jpg) <- runIO glassbottleMirroredJpeg
+    it "compares two images and identifies that the second is a horizontal mirror of the first" $ do
+      let configs = [MaxTokens 2048]
+          msgs = [ UserText "I am showing you two images. Is the second image a horizontally mirrored version of the first? Answer yes or no, then briefly explain."
+                 , UserImage mt1 b64Png
+                 , UserImage mt2 b64Jpg
+                 ]
+          (_, req) = toProviderRequest cp model configs initialState msgs
+
+      resp <- getResponse req
+
+      let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs initialState resp
+      length parsedMsgs `shouldSatisfy` (> 0)
+      let responseText = T.toLower $ T.concat [t | AssistantText t <- parsedMsgs]
+      responseText `shouldSatisfy` T.isInfixOf "yes"

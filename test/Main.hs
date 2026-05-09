@@ -53,6 +53,7 @@ main = do
       Models.ZhipuAI.GLM.testsGLM5TurboZAI (zaiProvider p)
       Models.Alibaba.Qwen35.testsOpenRouter (openrouterProvider p)
       Models.Alibaba.Qwen35.testsLlamaCpp (llamacppProvider p) "Qwen3.5-122B"
+      Models.Alibaba.Qwen35.testsLlamaCpp40B (llamacppProvider p) "Qwen3.5-40B"
       Models.Alibaba.Qwen35.testsQwen35PlusAlibabaCloud (alibabaCloudProvider p)
       Models.Alibaba.Qwen3Coder.testsLlamaCppNext (llamacppProvider p) "Qwen3-Coder-Next"
       Models.Alibaba.Qwen3Coder.testsLlamaCpp30bInstruct (llamacppProvider p) "Qwen3-Coder-30B-Instruct"

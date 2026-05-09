@@ -522,3 +522,77 @@ assertHasXMLToolCall functionName resp = do
     Just txt | T.isInfixOf ("<tool_call>" <> functionName) txt -> return ()
     Just txt -> error $ "Message content does not contain <tool_call>" <> T.unpack functionName <> ", got: " <> T.unpack txt
     Nothing -> error "Message has no content field"
+
+-- | Create a vision request with a user message containing a base64-encoded image
+visionRequest :: Text -> Text -> Text -> OpenAIRequest
+visionRequest modelName mediaType b64Data = mempty
+  { model = modelName
+  , messages =
+      [ emptyMessage
+          { role = "user"
+          , content = Just (PartsContent
+              [ OpenAITextPart "Describe this image briefly."
+              , OpenAIImagePart mediaType b64Data
+              ])
+          }
+      ]
+  }
+
+-- | Create a vision request asking what specific object is in the image
+visionIdentifyRequest :: Text -> Text -> Text -> OpenAIRequest
+visionIdentifyRequest modelName mediaType b64Data = mempty
+  { model = modelName
+  , messages =
+      [ emptyMessage
+          { role = "user"
+          , content = Just (PartsContent
+              [ OpenAITextPart "What is the main object in this image? Answer in one sentence."
+              , OpenAIImagePart mediaType b64Data
+              ])
+          }
+      ]
+  }
+
+-- | Create a multi-image request asking the model to compare two images
+visionCompareRequest :: Text -> Text -> Text -> Text -> Text -> OpenAIRequest
+visionCompareRequest modelName mediaType1 b64Data1 mediaType2 b64Data2 = mempty
+  { model = modelName
+  , messages =
+      [ emptyMessage
+          { role = "user"
+          , content = Just (PartsContent
+              [ OpenAITextPart "I am showing you two images. Is the second image a horizontally mirrored version of the first? Answer yes or no, then briefly explain."
+              , OpenAIImagePart mediaType1 b64Data1
+              , OpenAIImagePart mediaType2 b64Data2
+              ])
+          }
+      ]
+  }
+
+-- | Assert that response describes image content (non-empty assistant text)
+assertDescribesImage :: HasCallStack => OpenAIResponse -> Expectation
+assertDescribesImage = assertHasAssistantText
+
+-- | Assert that response mentions a specific word (case-insensitive)
+assertMentions :: HasCallStack => Text -> OpenAIResponse -> Expectation
+assertMentions word resp = do
+  let txt = T.toLower $ getAssistantText . expectSuccess $ resp
+  if T.isInfixOf (T.toLower word) txt
+    then return ()
+    else error $ "Expected response to mention '" <> T.unpack word <> "' but got: " <> T.unpack txt
+
+-- | Assert that response does NOT mention a specific word (case-insensitive)
+assertDoesNotMention :: HasCallStack => Text -> OpenAIResponse -> Expectation
+assertDoesNotMention word resp = do
+  let txt = T.toLower $ getAssistantText . expectSuccess $ resp
+  if T.isInfixOf (T.toLower word) txt
+    then error $ "Expected response NOT to mention '" <> T.unpack word <> "' but it did: " <> T.unpack txt
+    else return ()
+
+-- | Assert that response confirms affirmatively (contains "yes")
+assertConfirmsYes :: HasCallStack => OpenAIResponse -> Expectation
+assertConfirmsYes resp = do
+  let txt = T.toLower $ getAssistantText . expectSuccess $ resp
+  if T.isInfixOf "yes" txt
+    then return ()
+    else error $ "Expected affirmative response (containing 'yes') but got: " <> T.unpack txt

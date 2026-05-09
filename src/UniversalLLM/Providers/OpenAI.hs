@@ -139,9 +139,22 @@ appendToMessageIfSameRole targetRole txt msg@OpenAIMessage{ role = msgRole, cont
         Nothing -> Just $ msg { content = Just (TextContent txt) }
         Just (TextContent "") -> Just $ msg { content = Just (TextContent txt) }
         Just (TextContent existing) -> Just $ msg { content = Just (TextContent (existing <> "\n" <> txt)) }
-        Just (PartsContent _) -> Nothing
+        Just (PartsContent ps) -> Just $ msg { content = Just (PartsContent (ps <> [OpenAITextPart txt])) }
   | otherwise = Nothing
 appendToMessageIfSameRole _ _ _ = Nothing
+
+-- | Append an image part to the last user message, upgrading TextContent to PartsContent if needed.
+-- Returns Nothing if the last message is not a user message or has tool_call_id set.
+appendImagePartToUserMessage :: Text -> Text -> OpenAIMessage -> Maybe OpenAIMessage
+appendImagePartToUserMessage mediaType b64Data msg@OpenAIMessage{ role = "user", tool_call_id = Nothing } =
+  let newPart = OpenAIImagePart mediaType b64Data
+  in Just $ msg { content = Just $ case content msg of
+        Nothing                -> PartsContent [newPart]
+        Just (TextContent "")  -> PartsContent [newPart]
+        Just (TextContent txt) -> PartsContent [OpenAITextPart txt, newPart]
+        Just (PartsContent ps) -> PartsContent (ps <> [newPart])
+     }
+appendImagePartToUserMessage _ _ _ = Nothing
 
 -- | Append a tool call to a message's tool calls
 -- Allows adding tool calls to messages that have text content (for combined responses)
@@ -445,6 +458,12 @@ openAIReasoning _m configs _s = noopHandler
               , reasoning_max_tokens = Nothing
               , reasoning_effort = Just "low"
               , reasoning_exclude = Just False
+              }
+            (False:_) -> Just OpenAIReasoningConfig
+              { reasoning_enabled = Just False
+              , reasoning_max_tokens = Nothing
+              , reasoning_effort = Nothing
+              , reasoning_exclude = Nothing
               }
             _ -> Nothing
       in req { reasoning = reasoningConfig }
@@ -775,6 +794,24 @@ openAITools _m configs _s = noopHandler
               in Right (Just (AssistantTool (convertToolCall tc), OpenAISuccess (OpenAISuccessResponse newChoices)))
             _ -> Right Nothing
         [] -> Right Nothing
+
+-- Standalone vision provider
+openAIVision :: forall m . (HasVision m, ProviderRequest m ~ OpenAIRequest) => ComposableProvider m ()
+openAIVision _m _configs _s = noopHandler
+  { cpToRequest = handleVisionMessage
+  , cpSerializeMessage = serializeVisionMessages
+  , cpDeserializeMessage = deserializeVisionMessages
+  }
+  where
+    handleVisionMessage msg req = case msg of
+      UserImage mediaType b64Data ->
+        case lastMessage req >>= appendImagePartToUserMessage mediaType b64Data of
+          Just updatedMsg -> modifyLastMessage (const updatedMsg) req
+          Nothing -> appendMessage (defaultOpenAIMessage
+            { role = "user"
+            , content = Just (PartsContent [OpenAIImagePart mediaType b64Data])
+            }) req
+      _ -> req
 
 -- Standalone JSON provider
 openAIJSON :: forall m . (HasJSON m, ProviderRequest m ~ OpenAIRequest, ProviderResponse m ~ OpenAIResponse) => ComposableProvider m ()

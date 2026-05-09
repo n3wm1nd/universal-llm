@@ -58,6 +58,7 @@ let provider = route
 module UniversalLLM.Models.Alibaba.Qwen
   ( -- * Model Types
     Qwen35_122B(..)
+  , Qwen35_40B(..)
   , Qwen3CoderNext(..)
   , Qwen3Coder30bInstruct(..)
   , Qwen3CoderPlus(..)
@@ -97,6 +98,34 @@ instance HasReasoning (Model Qwen35_122B LlamaCpp) where
 instance Routing (Model Qwen35_122B LlamaCpp) where
   type RoutingState (Model Qwen35_122B LlamaCpp) = ((), ((), ((), ((), ((), ())))))
   route = OpenAI.mergeSystemMessages `chainProviders` OpenAI.systemMessagesFirst `chainProviders` withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen35_122B LlamaCpp)
+
+--------------------------------------------------------------------------------
+-- Qwen 3.5 40B (llama.cpp)
+--------------------------------------------------------------------------------
+
+-- | Qwen 3.5 40B - Mid-size reasoning model
+--
+-- Same capabilities as Qwen35_122B, smaller parameter count.
+data Qwen35_40B = Qwen35_40B deriving (Show, Eq)
+
+instance ModelName (Model Qwen35_40B LlamaCpp) where
+  modelName (Model _ _) = "Qwen3.5-40B"
+
+instance HasTools (Model Qwen35_40B LlamaCpp) where
+  withTools = OpenAI.openAITools
+
+instance HasJSON (Model Qwen35_40B LlamaCpp) where
+  withJSON = OpenAI.openAIJSON
+
+instance HasReasoning (Model Qwen35_40B LlamaCpp) where
+  withReasoning = OpenAI.openAIReasoning
+
+instance HasVision (Model Qwen35_40B LlamaCpp) where
+  withVision = OpenAI.openAIVision
+
+instance Routing (Model Qwen35_40B LlamaCpp) where
+  type RoutingState (Model Qwen35_40B LlamaCpp) = ((), ((), ((), ((), ((), ((), ()))))))
+  route = OpenAI.mergeSystemMessages `chainProviders` OpenAI.systemMessagesFirst `chainProviders` withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model Qwen35_40B LlamaCpp)
 
 --------------------------------------------------------------------------------
 -- Qwen 3.5 122B via OpenRouter

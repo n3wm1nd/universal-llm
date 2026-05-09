@@ -27,13 +27,14 @@ __llama.cpp:__
 
 -}
 
-module Models.Alibaba.Qwen35 (testsLlamaCpp, testsOpenRouter, testsQwen35PlusAlibabaCloud) where
+module Models.Alibaba.Qwen35 (testsLlamaCpp, testsLlamaCpp40B, testsOpenRouter, testsQwen35PlusAlibabaCloud) where
 
 import UniversalLLM (route, via)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud(..))
 import UniversalLLM.Models.Alibaba.Qwen
   ( Qwen35_122B(..)
+  , Qwen35_40B(..)
   , Qwen35Plus(..)
   )
 import Protocol.OpenAITests
@@ -97,6 +98,33 @@ testsLlamaCpp provider modelName = do
     describe "Standard Tests" $
       testModel route (Qwen35_122B `via` LlamaCpp) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+
+-- | Test Qwen 3.5 40B via llama.cpp
+testsLlamaCpp40B :: ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+testsLlamaCpp40B provider modelName = do
+  describe "Qwen 3.5 40B via llama.cpp" $ do
+    describe "Protocol" $ do
+      basicText provider modelName
+      toolCalling provider modelName
+      acceptsToolResults provider modelName
+      acceptsToolResultNoTools provider modelName
+      acceptsToolResultToolGone provider modelName
+      acceptsStaleToolInHistory provider modelName
+      acceptsOldToolCallStillAvailable provider modelName
+      consecutiveUserMessages provider modelName
+      startsWithAssistant provider modelName
+      reasoning provider modelName
+      visionPng provider modelName
+      visionJpeg provider modelName
+      visionAccuracy provider modelName
+      visionMultipleImages provider modelName
+      systemMessageAtStart provider modelName
+      -- Note: toolCallingWithReasoning fails - this fine-tune's chat template crashes
+      -- with a 500 when tools and reasoning are requested together.
+
+    describe "Standard Tests" $
+      testModel route (Qwen35_40B `via` LlamaCpp) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
 
 -- | Test Qwen 3.5 Plus via AlibabaCloud
 testsQwen35PlusAlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec

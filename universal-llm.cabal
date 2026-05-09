@@ -13,6 +13,11 @@ maintainer: your.email@example.com
 category: AI, Machine Learning
 build-type: Simple
 
+data-files:
+  test/fixtures/red-1x1.png
+  test/fixtures/glassbottle.png
+  test/fixtures/glassbottle-mirrored.jpg
+
 common shared-properties
   default-language: Haskell2010
   ghc-options:
@@ -116,6 +121,7 @@ test-suite universal-llm-tests
     TestHTTP
     TestHelpers
     TestProviders
+    TestFixtures
     ErrorClassifier
     GGUFNames
     CachedIntegrationSpec
@@ -135,6 +141,9 @@ test-suite universal-llm-tests
     Models.Moonshot.KimiK25
     Models.Minimax.MinimaxM25
     Models.OpenAI.GPT
+  autogen-modules: Paths_universal_llm
+  other-modules:
+    Paths_universal_llm
   hs-source-dirs: test
 
   build-depends:
@@ -149,6 +158,7 @@ test-suite universal-llm-tests
     autodocodec,
     cryptohash-sha256,
     base16-bytestring,
+    base64-bytestring,
     directory,
     filepath,
     temporary,
