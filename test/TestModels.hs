@@ -135,13 +135,13 @@ zaiGLM45 = route
 llamaCppQwen3Coder :: ComposableProvider (Model Qwen3Coder LlamaCpp) ((), ((), ()))
 llamaCppQwen3Coder = route
 
-openRouterNova2Lite :: ComposableProvider (Model Nova2Lite OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+openRouterNova2Lite :: ComposableProvider (Model Nova2Lite OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ((), ()))))
 openRouterNova2Lite = route
 
 openRouterGemini3ProPreview :: ComposableProvider (Model Gemini3ProPreview OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ()))
 openRouterGemini3ProPreview = route
 
-openRouterGemini3FlashPreview :: ComposableProvider (Model Gemini3FlashPreview OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ()))
+openRouterGemini3FlashPreview :: ComposableProvider (Model Gemini3FlashPreview OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ())))
 openRouterGemini3FlashPreview = route
 
 -- Test-specific instances for GLM45

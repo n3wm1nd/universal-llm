@@ -154,4 +154,4 @@ testsQwen35PlusAlibabaCloud provider = do
 
     describe "Standard Tests" $
       testModel route (Qwen35Plus `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.vision, ST.visionJpeg ]

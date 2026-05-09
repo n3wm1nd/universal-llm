@@ -101,7 +101,7 @@ testsOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel route (Nova2Lite `via` OpenRouter) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
 
     describe "Composable Provider Tests" $
       testModelOffline route (Nova2Lite `via` OpenRouter)

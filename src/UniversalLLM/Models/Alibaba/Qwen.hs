@@ -222,9 +222,12 @@ instance HasJSON (Model Qwen35Plus AlibabaCloud) where
 instance HasReasoning (Model Qwen35Plus AlibabaCloud) where
   withReasoning = OpenAI.openAIReasoning
 
+instance HasVision (Model Qwen35Plus AlibabaCloud) where
+  withVision = OpenAI.openAIVision
+
 instance Routing (Model Qwen35Plus AlibabaCloud) where
-  type RoutingState (Model Qwen35Plus AlibabaCloud) = ((), ((), ((), ())))
-  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen35Plus AlibabaCloud)
+  type RoutingState (Model Qwen35Plus AlibabaCloud) = ((), ((), ((), ((), ()))))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model Qwen35Plus AlibabaCloud)
 
 --------------------------------------------------------------------------------
 -- Qwen 3 Coder Next via AlibabaCloud

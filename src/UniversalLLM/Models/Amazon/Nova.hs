@@ -72,6 +72,9 @@ instance HasReasoning (Model Nova2Lite OpenRouter) where
   type ReasoningState (Model Nova2Lite OpenRouter) = OpenAI.OpenRouterReasoningState
   withReasoning = OpenAI.openRouterReasoning
 
+instance HasVision (Model Nova2Lite OpenRouter) where
+  withVision = OpenAI.openAIVision
+
 instance Routing (Model Nova2Lite OpenRouter) where
-  type RoutingState (Model Nova2Lite OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
-  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.normalizeEmptyContent `chainProviders` OpenAI.baseComposableProvider @(Model Nova2Lite OpenRouter)
+  type RoutingState (Model Nova2Lite OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ((), ()))))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.normalizeEmptyContent `chainProviders` OpenAI.baseComposableProvider @(Model Nova2Lite OpenRouter)

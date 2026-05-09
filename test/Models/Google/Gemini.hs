@@ -78,7 +78,7 @@ testsGemini3FlashOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel route (Gemini3FlashPreview `via` OpenRouter) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.openAIReasoningDetailsPreservation ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.openAIReasoningDetailsPreservation, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
 
     describe "Composable Provider Tests" $
       testModelOffline route (Gemini3FlashPreview `via` OpenRouter)

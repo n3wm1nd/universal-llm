@@ -79,9 +79,12 @@ instance HasReasoning (Model Gemini3FlashPreview OpenRouter) where
   type ReasoningState (Model Gemini3FlashPreview OpenRouter) = OpenAI.OpenRouterReasoningState
   withReasoning = OpenAI.openRouterReasoning
 
+instance HasVision (Model Gemini3FlashPreview OpenRouter) where
+  withVision = OpenAI.openAIVision
+
 instance Routing (Model Gemini3FlashPreview OpenRouter) where
-  type RoutingState (Model Gemini3FlashPreview OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ()))
-  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Gemini3FlashPreview OpenRouter)
+  type RoutingState (Model Gemini3FlashPreview OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model Gemini3FlashPreview OpenRouter)
 
 --------------------------------------------------------------------------------
 -- Google Gemini 3.1 Pro Preview

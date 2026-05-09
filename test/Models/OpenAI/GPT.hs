@@ -134,7 +134,7 @@ testsGPT53CodexOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel route (GPT53Codex `via` OpenRouter) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.hiddenReasoning ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.hiddenReasoning, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
 
 -- | Test GPT-5.3-Chat via OpenRouter
 --
@@ -159,7 +159,7 @@ testsGPT53ChatOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel route (GPT53Chat `via` OpenRouter) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
 
 -- | Test GPT-5.4-Pro via OpenRouter
 --
@@ -184,7 +184,7 @@ testsGPT54ProOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel route (GPT54Pro `via` OpenRouter) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.hiddenReasoning ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.hiddenReasoning, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
 
 -- | Test GPT-5.4 via OpenRouter
 --
@@ -209,4 +209,4 @@ testsGPT54OpenRouter provider = do
 
     describe "Standard Tests" $
       testModel route (GPT54 `via` OpenRouter) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.hiddenReasoning ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.hiddenReasoning, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]

@@ -63,7 +63,7 @@ testsOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel route (KimiK25 `via` OpenRouter) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation, ST.vision, ST.visionJpeg ]
 
     describe "Composable Provider Tests" $
       testModelOffline route (KimiK25 `via` OpenRouter)
@@ -93,4 +93,4 @@ testsAlibabaCloud provider = do
 
     describe "Standard Tests" $
       testModel route (KimiK25 `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.hiddenReasoning ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.hiddenReasoning, ST.vision, ST.visionJpeg ]

@@ -68,9 +68,12 @@ instance HasReasoning (Model KimiK25 OpenRouter) where
   type ReasoningState (Model KimiK25 OpenRouter) = OpenAI.OpenRouterReasoningState
   withReasoning = OpenAI.openRouterReasoning
 
+instance HasVision (Model KimiK25 OpenRouter) where
+  withVision = OpenAI.openAIVision
+
 instance Routing (Model KimiK25 OpenRouter) where
-  type RoutingState (Model KimiK25 OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ()))
-  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model KimiK25 OpenRouter)
+  type RoutingState (Model KimiK25 OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model KimiK25 OpenRouter)
 
 --------------------------------------------------------------------------------
 -- Kimi K2.5 via AlibabaCloud
@@ -89,6 +92,9 @@ instance HasTools (Model KimiK25 AlibabaCloud) where
 instance HasReasoning (Model KimiK25 AlibabaCloud) where
   withReasoning = OpenAI.openAIReasoning
 
+instance HasVision (Model KimiK25 AlibabaCloud) where
+  withVision = OpenAI.openAIVision
+
 instance Routing (Model KimiK25 AlibabaCloud) where
-  type RoutingState (Model KimiK25 AlibabaCloud) = ((), ((), ()))
-  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model KimiK25 AlibabaCloud)
+  type RoutingState (Model KimiK25 AlibabaCloud) = ((), ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model KimiK25 AlibabaCloud)
