@@ -119,12 +119,17 @@ testsLlamaCpp40B provider modelName = do
       visionAccuracy provider modelName
       visionMultipleImages provider modelName
       systemMessageAtStart provider modelName
-      -- Note: toolCallingWithReasoning fails - this fine-tune's chat template crashes
-      -- with a 500 when tools and reasoning are requested together.
+      -- Probes to investigate tools+reasoning interaction (500 from chat template):
+      toolsWithReasoningDisabled provider modelName
+      toolsWithReasoningEnabled provider modelName
+      toolsWithReasoningEffortOnly provider modelName
+      toolsWithReasoningFull provider modelName
+      toolsWithReasoningListFiles provider modelName
+      toolsWithReasoningAndMaxTokens provider modelName
 
     describe "Standard Tests" $
       testModel route (Qwen35_40B `via` LlamaCpp) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
 
 -- | Test Qwen 3.5 Plus via AlibabaCloud
 testsQwen35PlusAlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec

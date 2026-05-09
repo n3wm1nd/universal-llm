@@ -165,6 +165,22 @@ disableReasoning req = req
   { reasoning = Just $ emptyReasoningConfig { reasoning_enabled = Just False }
   }
 
+-- | Enable reasoning with effort field only (no enabled flag)
+enableReasoningEffortOnly :: OpenAIRequest -> OpenAIRequest
+enableReasoningEffortOnly req = req
+  { reasoning = Just $ emptyReasoningConfig { reasoning_effort = Just "low" }
+  }
+
+-- | Enable reasoning with enabled=true and effort (full config as openAIReasoning sends)
+enableReasoningFull :: OpenAIRequest -> OpenAIRequest
+enableReasoningFull req = req
+  { reasoning = Just $ emptyReasoningConfig
+      { reasoning_enabled = Just True
+      , reasoning_effort = Just "low"
+      , reasoning_exclude = Just False
+      }
+  }
+
 -- | Create an assistant message with a tool call
 --
 -- Example: assistantToolCallMessage "call_123" "get_weather" "{\"location\": \"London\"}"

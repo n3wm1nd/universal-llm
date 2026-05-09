@@ -484,6 +484,106 @@ acceptsOldToolCallStillAvailable makeRequest modelName = do
     resp <- makeRequest req
     assertHasAssistantText resp
 
+-- | Probe: Tools + reasoning_enabled=true (no effort, no exclude)
+--
+-- __Tests:__ Does the model accept tools alongside minimal reasoning config?
+--
+-- __Checks:__ Response succeeds (no 500)
+--
+-- __Use when:__ Investigating why tools+reasoning fails - isolates whether
+-- reasoning_enabled alone triggers the issue
+toolsWithReasoningEnabled :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolsWithReasoningEnabled makeRequest modelName = do
+  it "accepts tools with reasoning_enabled=true (no effort/exclude fields)" $ do
+    let req = enableReasoning (simpleUserRequest "Use the get_weather function to check the weather in London.")
+          { model = modelName, tools = Just [weatherTool] }
+    resp <- makeRequest req
+    wasSuccessful resp
+
+-- | Probe: Tools + full reasoning config (enabled=true, effort=low, exclude=false)
+--
+-- __Tests:__ Does the model accept tools alongside the full reasoning config
+-- that openAIReasoning sends?
+--
+-- __Checks:__ Response succeeds (no 500)
+--
+-- __Use when:__ Investigating which specific reasoning field causes crashes
+toolsWithReasoningFull :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolsWithReasoningFull makeRequest modelName = do
+  it "accepts tools with full reasoning config (enabled+effort+exclude)" $ do
+    let req = enableReasoningFull (simpleUserRequest "Use the get_weather function to check the weather in London.")
+          { model = modelName, tools = Just [weatherTool] }
+    resp <- makeRequest req
+    wasSuccessful resp
+
+-- | Probe: Tools + effort field only (no enabled flag)
+--
+-- __Tests:__ Does the model accept tools alongside reasoning effort without enabled flag?
+--
+-- __Checks:__ Response succeeds (no 500)
+--
+-- __Use when:__ Isolating whether reasoning_effort alone (without enabled=true) triggers crashes
+toolsWithReasoningEffortOnly :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolsWithReasoningEffortOnly makeRequest modelName = do
+  it "accepts tools with reasoning effort field only (no enabled flag)" $ do
+    let req = enableReasoningEffortOnly (simpleUserRequest "Use the get_weather function to check the weather in London.")
+          { model = modelName, tools = Just [weatherTool] }
+    resp <- makeRequest req
+    wasSuccessful resp
+
+-- | Probe: Tools + reasoning with list_files tool (same as ST.reasoningWithTools)
+--
+-- __Tests:__ Does the model accept tools+reasoning with the exact same tool def
+-- and prompt used in ST.reasoningWithTools?
+--
+-- __Checks:__ Response succeeds (no 500)
+--
+-- __Use when:__ Isolating whether the list_files tool schema or the specific
+-- prompt triggers the chat template crash seen in ST.reasoningWithTools
+toolsWithReasoningListFiles :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolsWithReasoningListFiles makeRequest modelName = do
+  it "accepts tools+reasoning with list_files tool and reasoning prompt" $ do
+    let listFilesTool = simpleTool "list_files" "List files matching a pattern" []
+        req = enableReasoningFull
+                (simpleUserRequest "Think carefully: What files match the pattern '*.md'? Use the available tools.")
+                  { model = modelName, tools = Just [listFilesTool] }
+    resp <- makeRequest req
+    wasSuccessful resp
+
+-- | Probe: Tools + full reasoning config + max_tokens (exact ST.reasoningWithTools shape)
+--
+-- __Tests:__ Does adding max_tokens to the tools+reasoning request trigger the 500?
+--
+-- __Use when:__ Isolating whether max_tokens is what triggers the chat template crash
+toolsWithReasoningAndMaxTokens :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolsWithReasoningAndMaxTokens makeRequest modelName = do
+  it "accepts tools+reasoning+max_tokens (exact shape of ST.reasoningWithTools)" $ do
+    let listFilesTool = simpleTool "list_files" "List files matching a pattern" []
+        req = enableReasoningFull
+                (simpleUserRequest "Think carefully: What files match the pattern '*.md'? Use the available tools.")
+                  { model = modelName
+                  , tools = Just [listFilesTool]
+                  , max_tokens = Just 4096
+                  }
+    resp <- makeRequest req
+    wasSuccessful resp
+
+-- | Probe: Tools + reasoning_enabled=false
+--
+-- __Tests:__ Does explicitly disabling reasoning while providing tools work?
+--
+-- __Checks:__ Response succeeds and contains tool calls or assistant text
+--
+-- __Use when:__ Checking if the reasoning field presence itself (regardless of value)
+-- is what triggers crashes
+toolsWithReasoningDisabled :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolsWithReasoningDisabled makeRequest modelName = do
+  it "accepts tools with reasoning explicitly disabled" $ do
+    let req = disableReasoning (simpleUserRequest "Use the get_weather function to check the weather in London.")
+          { model = modelName, tools = Just [weatherTool] }
+    resp <- makeRequest req
+    wasSuccessful resp
+
 -- | Probe: Provider error responses are valid protocol responses
 --
 -- __Tests:__ Does the provider properly return error responses in OpenAI format?

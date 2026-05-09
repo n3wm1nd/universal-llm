@@ -319,9 +319,21 @@ toOpenAIToolDef toolDef = OpenAIToolDefinition
   , function = OpenAIFunction
       { name = toolDefName toolDef
       , description = toolDefDescription toolDef
-      , parameters = toolDefParameters toolDef
+      , parameters = normalizeToolSchema (toolDefParameters toolDef)
       }
   }
+
+-- Normalize a JSON Schema for tool parameters by ensuring 'properties' and
+-- 'required' are present. Some chat template implementations (e.g. llama.cpp
+-- with Qwen3.5) crash when these keys are absent from an object schema.
+normalizeToolSchema :: Value -> Value
+normalizeToolSchema (Aeson.Object obj) =
+  let obj' = if KM.member "properties" obj
+                then obj
+                else KM.insert "properties" (Aeson.Object KM.empty)
+                   $ KM.insert "required" (Aeson.Array mempty) obj
+  in Aeson.Object obj'
+normalizeToolSchema v = v
 
 -- ============================================================================
 -- Default Values for Record Updates
