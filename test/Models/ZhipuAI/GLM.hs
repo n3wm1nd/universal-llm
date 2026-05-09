@@ -84,6 +84,7 @@ testsGLM45AirOpenRouter provider = do
       startsWithAssistant provider "z-ai/glm-4.5-air:free"
       reasoningViaDetails provider "z-ai/glm-4.5-air:free"
       providerErrorResponse provider
+      -- Note: OpenRouter reports no vision-capable endpoints for this model (404).
 
     describe "Standard Tests" $
       testModel route (GLM45Air `via` OpenRouter) provider
@@ -113,6 +114,7 @@ testsGLM45AirLlamaCpp provider modelName = do
       consecutiveUserMessages provider modelName
       startsWithAssistant provider modelName
       reasoning provider modelName  -- llama.cpp uses standard reasoning_content
+      -- Note: GLM-4.5-Air does not support vision (no multimodal weights; use -v model variants).
 
     describe "Standard Tests" $
       testModel route (GLM45Air `via` LlamaCpp) provider
@@ -121,6 +123,8 @@ testsGLM45AirLlamaCpp provider modelName = do
 -- | Test GLM 4.5 Air via ZAI
 --
 -- Standard tests only - protocol behaviour identical to OpenRouter.
+-- Note: ZAI rejects image_url content blocks with "Invalid API parameter" for these model IDs.
+-- Vision is available in the -v (vision) model variants, not tracked here.
 testsGLM45AirZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM45AirZAI provider = do
   describe "GLM 4.5 Air via ZAI" $ do
@@ -129,6 +133,7 @@ testsGLM45AirZAI provider = do
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning ]
 
 -- | Test GLM 4.5 (full) via ZAI
+-- Note: ZAI rejects image_url content blocks with "Invalid API parameter" for this model ID.
 testsGLM45ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM45ZAI provider = do
   describe "GLM 4.5 via ZAI" $ do
@@ -137,6 +142,7 @@ testsGLM45ZAI provider = do
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 4.6 via ZAI
+-- Note: ZAI rejects image_url content blocks with "Invalid API parameter" for this model ID.
 testsGLM46ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM46ZAI provider = do
   describe "GLM 4.6 via ZAI" $ do
@@ -145,6 +151,7 @@ testsGLM46ZAI provider = do
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 4.7 via ZAI
+-- Note: ZAI rejects image_url content blocks with "Invalid API parameter" for this model ID.
 testsGLM47ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM47ZAI provider = do
   describe "GLM 4.7 via ZAI" $ do
@@ -169,6 +176,8 @@ testsGLM5ZAI provider = do
       consecutiveUserMessages provider "glm-5"
       startsWithAssistant provider "glm-5"
       reasoning provider "glm-5"
+      -- Note: ZAI accepts the request but the model cannot see image_url content (reports no image attached).
+      -- Vision likely requires a dedicated multimodal model variant.
 
     describe "Standard Tests" $
       testModel route (GLM5 `via` ZAI) provider
@@ -192,12 +201,15 @@ testsGLM47AlibabaCloud provider = do
       systemMessageMidConversation provider "glm-4.7"
       multipleSystemMessages provider "glm-4.7"
       reasoning provider "glm-4.7"
+      -- Note: AlibabaCloud accepts image_url but glm-4.7 does not process images (hallucinates unrelated objects).
+      -- Vision is available in the -v (vision) model variants, not tracked here.
 
     describe "Standard Tests" $
       testModel route (GLM47 `via` AlibabaCloud) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 5.1 via ZAI
+-- Note: ZAI accepts the request but the model cannot see image_url content (reports no image attached).
 testsGLM51ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM51ZAI provider = do
   describe "GLM 5.1 via ZAI" $ do
@@ -206,6 +218,7 @@ testsGLM51ZAI provider = do
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 5-Turbo via ZAI
+-- Note: ZAI accepts the request but the model cannot see image_url content (reports no image attached).
 testsGLM5TurboZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM5TurboZAI provider = do
   describe "GLM 5-Turbo via ZAI" $ do
@@ -231,6 +244,8 @@ testsGLM5AlibabaCloud provider = do
       systemMessageMidConversation provider "glm-5"
       multipleSystemMessages provider "glm-5"
       reasoning provider "glm-5"
+      -- Note: AlibabaCloud accepts image_url but glm-5 does not process images (hallucinates unrelated objects).
+      -- Vision is available in the -v (vision) model variants, not tracked here.
 
     describe "Standard Tests" $
       testModel route (GLM5 `via` AlibabaCloud) provider

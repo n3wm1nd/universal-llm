@@ -58,6 +58,8 @@ testsOpenRouter provider = do
       -- reasoning provider "moonshotai/kimi-k2.5"
       reasoningViaDetails provider "moonshotai/kimi-k2.5"
       toolCallingWithReasoning provider "moonshotai/kimi-k2.5"
+      visionPng provider "moonshotai/kimi-k2.5"
+      visionJpeg provider "moonshotai/kimi-k2.5"
 
     describe "Standard Tests" $
       testModel route (KimiK25 `via` OpenRouter) provider
@@ -86,6 +88,8 @@ testsAlibabaCloud provider = do
       multipleSystemMessages provider "kimi-k2.5"
       -- Kimi K2.5 supports "Deep Thinking" but with hidden reasoning
       acceptsHiddenReasoning provider "kimi-k2.5"
+      visionPng provider "kimi-k2.5"
+      visionJpeg provider "kimi-k2.5"
 
     describe "Standard Tests" $
       testModel route (KimiK25 `via` AlibabaCloud) provider

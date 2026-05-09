@@ -149,6 +149,8 @@ testsQwen35PlusAlibabaCloud provider = do
       systemMessageMidConversation provider "qwen3.5-plus"
       multipleSystemMessages provider "qwen3.5-plus"
       reasoning provider "qwen3.5-plus"
+      visionPng provider "qwen3.5-plus"
+      visionJpeg provider "qwen3.5-plus"
 
     describe "Standard Tests" $
       testModel route (Qwen35Plus `via` AlibabaCloud) provider

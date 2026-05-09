@@ -63,6 +63,7 @@ testsOpenRouter provider = do
       -- reasoning provider "minimax/minimax-m2.5"
       reasoningViaDetails provider "minimax/minimax-m2.5"
       toolCallingWithReasoning provider "minimax/minimax-m2.5"
+      -- Note: OpenRouter reports no vision-capable endpoints for this model (404).
 
     describe "Standard Tests" $
       testModel route (MinimaxM25 `via` OpenRouter) provider
@@ -115,6 +116,7 @@ testsAlibabaCloud provider = do
       systemMessageMidConversation provider "MiniMax-M2.5"
       multipleSystemMessages provider "MiniMax-M2.5"
       reasoning provider "MiniMax-M2.5"
+      -- Note: AlibabaCloud accepts image_url but MiniMax-M2.5 does not process images (reports no image attached).
 
     describe "Standard Tests" $
       testModel route (MinimaxM25 `via` AlibabaCloud) provider

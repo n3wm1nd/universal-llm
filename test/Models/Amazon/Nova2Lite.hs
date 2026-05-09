@@ -88,6 +88,9 @@ testsOpenRouter provider = do
 
       consecutiveUserMessages provider "amazon/nova-2-lite-v1"
       startsWithAssistant provider "amazon/nova-2-lite-v1"
+      visionPng provider "amazon/nova-2-lite-v1"
+      visionJpeg provider "amazon/nova-2-lite-v1"
+      visionMultipleImages provider "amazon/nova-2-lite-v1"
 
       -- Note: reasoningViaDetails fails - Nova has reasoning but doesn't expose it via API
       -- The model has reasoning capabilities but OpenRouter/Bedrock doesn't provide reasoning_details

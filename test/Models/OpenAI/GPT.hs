@@ -75,6 +75,7 @@ testsGPTOSSOpenRouter provider = do
       startsWithAssistant provider "openai/gpt-oss-120b"
       reasoningViaDetails provider "openai/gpt-oss-120b"
       toolCallingWithReasoning provider "openai/gpt-oss-120b"
+      -- Note: GPT-OSS does not support vision (no official multimodal weights, no mmproj).
 
     describe "Standard Tests" $
       testModel route (GPTOSS `via` OpenRouter) provider
@@ -104,6 +105,7 @@ testsGPTOSSLlamaCpp provider modelName = do
       consecutiveUserMessages provider modelName
       startsWithAssistant provider modelName
       reasoning provider modelName
+      -- Note: GPT-OSS does not support vision (no official multimodal weights, no mmproj).
 
     describe "Standard Tests" $
       testModel route (GPTOSS `via` LlamaCpp) provider
@@ -126,6 +128,9 @@ testsGPT53CodexOpenRouter provider = do
       consecutiveUserMessages provider "openai/gpt-5.3-codex"
       startsWithAssistant provider "openai/gpt-5.3-codex"
       encryptedReasoning provider "openai/gpt-5.3-codex"
+      visionPng provider "openai/gpt-5.3-codex"
+      visionJpeg provider "openai/gpt-5.3-codex"
+      visionMultipleImages provider "openai/gpt-5.3-codex"
 
     describe "Standard Tests" $
       testModel route (GPT53Codex `via` OpenRouter) provider
@@ -148,6 +153,9 @@ testsGPT53ChatOpenRouter provider = do
       consecutiveUserMessages provider "openai/gpt-5.3-chat"
       startsWithAssistant provider "openai/gpt-5.3-chat"
       -- Note: GPT-5.3-Chat does NOT support reasoning via OpenRouter (no reasoning_details returned)
+      visionPng provider "openai/gpt-5.3-chat"
+      visionJpeg provider "openai/gpt-5.3-chat"
+      visionMultipleImages provider "openai/gpt-5.3-chat"
 
     describe "Standard Tests" $
       testModel route (GPT53Chat `via` OpenRouter) provider
@@ -170,6 +178,9 @@ testsGPT54ProOpenRouter provider = do
       consecutiveUserMessages provider "openai/gpt-5.4-pro"
       startsWithAssistant provider "openai/gpt-5.4-pro"
       encryptedReasoning provider "openai/gpt-5.4-pro"
+      visionPng provider "openai/gpt-5.4-pro"
+      visionJpeg provider "openai/gpt-5.4-pro"
+      visionMultipleImages provider "openai/gpt-5.4-pro"
 
     describe "Standard Tests" $
       testModel route (GPT54Pro `via` OpenRouter) provider
@@ -192,6 +203,9 @@ testsGPT54OpenRouter provider = do
       consecutiveUserMessages provider "openai/gpt-5.4"
       startsWithAssistant provider "openai/gpt-5.4"
       encryptedReasoning provider "openai/gpt-5.4"
+      visionPng provider "openai/gpt-5.4"
+      visionJpeg provider "openai/gpt-5.4"
+      visionMultipleImages provider "openai/gpt-5.4"
 
     describe "Standard Tests" $
       testModel route (GPT54 `via` OpenRouter) provider
