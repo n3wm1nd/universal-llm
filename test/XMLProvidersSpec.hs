@@ -121,7 +121,7 @@ mockTextResponse txt = OpenAISuccess $ defaultOpenAISuccessResponse
   { choices = [defaultOpenAIChoice
       { message = defaultOpenAIMessage
           { role = "assistant"
-          , content = Just txt
+          , content = Just (TextContent txt)
           }
       }]
   }
@@ -225,7 +225,7 @@ spec = do
         length reqMsgs `shouldBe` 3
         let msg = last reqMsgs
         role msg `shouldBe` "tool"
-        case content msg of
+        case contentText (content msg) of
           Just c -> T.isInfixOf "hello" c `shouldBe` True
           Nothing -> expectationFailure "Expected content in tool message"
         tool_call_id msg `shouldBe` Just "call_123"
@@ -243,7 +243,7 @@ spec = do
         -- First message should be system with tool definitions
         let msg = head reqMsgs
         role msg `shouldBe` "system"
-        case content msg of
+        case contentText (content msg) of
           Just sysContent -> do
             T.isInfixOf "You are helpful" sysContent `shouldBe` True
             T.isInfixOf "search" sysContent `shouldBe` True
@@ -267,7 +267,7 @@ spec = do
         length assistantMsgs `shouldSatisfy` (>= 1)
         let msg = last assistantMsgs
         role msg `shouldBe` "assistant"
-        case content msg of
+        case contentText (content msg) of
           Just c -> do
             T.isInfixOf "<tool_call>" c `shouldBe` True
             T.isInfixOf "multiply" c `shouldBe` True
@@ -292,7 +292,7 @@ spec = do
         length userMsgs `shouldSatisfy` (>= 2)  -- At least initial user + tool result
         let msg = last userMsgs
         role msg `shouldBe` "user"
-        case content msg of
+        case contentText (content msg) of
           Just c -> do
             T.isInfixOf "<tool_result>" c `shouldBe` True
             T.isInfixOf "call_789" c `shouldBe` True
@@ -320,7 +320,7 @@ spec = do
 
             -- System + 6 messages = 7 total
             -- (system with tools, then all 6 conversation messages)
-            contentTexts = [c | msg <- reqMsgs, Just c <- [content msg]]
+            contentTexts = [c | msg <- reqMsgs, Just c <- [contentText (content msg)]]
 
         -- Check that messages are in order
         length reqMsgs `shouldSatisfy` (>= 6)  -- At least 6 conversation messages
@@ -366,7 +366,7 @@ spec = do
         -- Tool result should preserve error message
         let msg = last reqMsgs
         role msg `shouldBe` "tool"
-        case content msg of
+        case contentText (content msg) of
           Just c -> T.isInfixOf "Tool execution failed" c `shouldBe` True
           Nothing -> expectationFailure "Expected tool message content"
 
@@ -387,7 +387,7 @@ spec = do
         -- Tool result should be XML with error
         let msg = last reqMsgs
         role msg `shouldBe` "user"
-        case content msg of
+        case contentText (content msg) of
           Just c -> do
             T.isInfixOf "<tool_result>" c `shouldBe` True
             T.isInfixOf "Error: Permission denied" c `shouldBe` True
@@ -415,7 +415,7 @@ spec = do
         -- Should convert to text representation
         let msg = last reqMsgs2
         role msg `shouldBe` "assistant"
-        case content msg of
+        case contentText (content msg) of
           Just c -> T.isInfixOf "nonexistent_tool" c `shouldBe` True
           Nothing -> expectationFailure "Expected assistant message content"
 

@@ -94,9 +94,81 @@ data OpenAIResponseFormat = OpenAIResponseFormat
   , json_schema :: Maybe Value
   } deriving (Generic, Show, Eq)
 
+-- | A single content part in a multi-modal message.
+-- Text parts encode as @{"type":"text","text":"..."}@.
+-- Image parts encode as @{"type":"image_url","image_url":{"url":"data:<mediaType>;base64,<data>"}}@.
+data OpenAIContentPart
+  = OpenAITextPart Text
+  | OpenAIImagePart Text Text  -- mediaType, base64Data
+  deriving (Show, Eq)
+
+instance HasCodec OpenAIContentPart where
+  codec = dimapCodec decode encode valueCodec
+    where
+      decode (Aeson.Object obj) = case KM.lookup "type" obj of
+        Just "text" -> case KM.lookup "text" obj of
+          Just (Aeson.String t) -> OpenAITextPart t
+          _ -> OpenAITextPart ""
+        Just "image_url" -> case KM.lookup "image_url" obj of
+          Just (Aeson.Object urlObj) -> case KM.lookup "url" urlObj of
+            Just (Aeson.String url) -> parseDataUrl url
+            _ -> OpenAIImagePart "" ""
+          _ -> OpenAIImagePart "" ""
+        _ -> OpenAITextPart ""
+      decode _ = OpenAITextPart ""
+
+      encode (OpenAITextPart t) = Aeson.object
+        [ "type" Aeson..= ("text" :: Text)
+        , "text" Aeson..= t
+        ]
+      encode (OpenAIImagePart mediaType b64Data) = Aeson.object
+        [ "type" Aeson..= ("image_url" :: Text)
+        , "image_url" Aeson..= Aeson.object
+            [ "url" Aeson..= ("data:" <> mediaType <> ";base64," <> b64Data)
+            ]
+        ]
+
+      parseDataUrl url =
+        let prefix = "data:"
+            rest = Text.drop (Text.length prefix) url
+            (mediaType, remainder) = Text.breakOn ";base64," rest
+            b64Data = Text.drop (Text.length ";base64,") remainder
+        in OpenAIImagePart mediaType b64Data
+
+-- | Message content: either plain text or an array of content parts.
+-- Plain text is used for all non-vision messages.
+-- Parts are used when a message contains images (or mixed text+images).
+data OpenAIMessageContent
+  = TextContent Text
+  | PartsContent [OpenAIContentPart]
+  deriving (Show, Eq)
+
+-- | Extract text from message content, if it is plain text.
+-- Returns Nothing for parts content (use 'contentParts' instead).
+contentText :: Maybe OpenAIMessageContent -> Maybe Text
+contentText (Just (TextContent t)) = Just t
+contentText _ = Nothing
+
+-- | Encode/decode OpenAIMessageContent as either a JSON string or array.
+instance HasCodec OpenAIMessageContent where
+  codec = dimapCodec decode encode valueCodec
+    where
+      decode (Aeson.String t) = TextContent t
+      decode (Aeson.Array arr) = PartsContent (map decodePart (V.toList arr))
+      decode _ = TextContent ""
+
+      encode (TextContent t) = Aeson.String t
+      encode (PartsContent parts) = Aeson.Array (V.fromList (map encodePart parts))
+
+      decodePart v = case parseEither (parseJSONVia codec) v of
+        Right p -> p
+        Left _ -> OpenAITextPart ""
+
+      encodePart = toJSONVia codec
+
 data OpenAIMessage = OpenAIMessage
   { role :: Text
-  , content :: Maybe Text
+  , content :: Maybe OpenAIMessageContent
   , reasoning_content :: Maybe Text
   , reasoning_details :: Maybe Value  -- OpenRouter reasoning metadata (must be preserved)
   , tool_calls :: Maybe [OpenAIToolCall]
@@ -171,7 +243,7 @@ instance HasCodec OpenAIMessage where
   codec = object "OpenAIMessage" $
     OpenAIMessage
       <$> requiredField "role" "Role" .= role
-      <*> optionalFieldOrNull "content" "Content" .= content
+      <*> optionalFieldOrNullWith "content" codec "Content" .= content
       <*> optionalFieldOrNull "reasoning_content" "Reasoning Content" .= reasoning_content
       <*> optionalField "reasoning_details" "OpenRouter reasoning metadata" .= reasoning_details
       <*> optionalField "tool_calls" "Tool calls" .= tool_calls
@@ -521,7 +593,7 @@ mergeOpenAIDelta acc chunk =
 
     normaliseChoice :: OpenAIChoice -> OpenAIChoice
     normaliseChoice (OpenAIChoice msg) =
-      OpenAIChoice msg { content = content msg <|> Just "" }
+      OpenAIChoice msg { content = content msg <|> Just (TextContent "") }
 
 -- ============================================================================
 -- ProtocolEndpoint / StreamingProtocol / EnableStreaming instances

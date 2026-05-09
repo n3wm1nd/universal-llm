@@ -89,7 +89,7 @@ emptyReasoningConfig = OpenAIReasoningConfig
 
 -- | Create a user message
 userMessage :: Text -> OpenAIMessage
-userMessage txt = emptyMessage { role = "user", content = Just txt }
+userMessage txt = emptyMessage { role = "user", content = Just (TextContent txt) }
 
 -- | Create a simple request with a user message
 --
@@ -106,7 +106,7 @@ consecutiveUserMessages msg1 msg2 = mempty { messages = [userMessage msg1, userM
 
 -- | Create an assistant message
 assistantMessage :: Text -> OpenAIMessage
-assistantMessage txt = emptyMessage { role = "assistant", content = Just txt }
+assistantMessage txt = emptyMessage { role = "assistant", content = Just (TextContent txt) }
 
 -- | Create a request starting with an assistant message
 --
@@ -188,12 +188,12 @@ toolResponseMessage :: Text -> Text -> OpenAIMessage
 toolResponseMessage callId result = emptyMessage
   { role = "tool"
   , tool_call_id = Just callId
-  , content = Just result
+  , content = Just (TextContent result)
   }
 
 -- | Create a system message
 systemMsg :: Text -> OpenAIMessage
-systemMsg txt = emptyMessage { role = "system", content = Just txt }
+systemMsg txt = emptyMessage { role = "system", content = Just (TextContent txt) }
 
 -- | Create a request with system message mid-conversation
 --
@@ -396,7 +396,7 @@ getFirstMessage (OpenAISuccessResponse choices) =
 -- >>> getAssistantText . expectSuccess $ resp
 getAssistantText :: OpenAISuccessResponse -> Text
 getAssistantText success =
-  case (getFirstMessage success).content of
+  case contentText (getFirstMessage success).content of
     Just txt -> txt
     Nothing -> error "Assistant message has no content"
 
@@ -518,7 +518,7 @@ assertHasEncryptedReasoning resp = do
 assertHasXMLToolCall :: HasCallStack => Text -> OpenAIResponse -> Expectation
 assertHasXMLToolCall functionName resp = do
   let msg = getFirstMessage . expectSuccess $ resp
-  case msg.content of
+  case contentText msg.content of
     Just txt | T.isInfixOf ("<tool_call>" <> functionName) txt -> return ()
     Just txt -> error $ "Message content does not contain <tool_call>" <> T.unpack functionName <> ", got: " <> T.unpack txt
     Nothing -> error "Message has no content field"

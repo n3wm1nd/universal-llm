@@ -128,7 +128,7 @@ spec getResponse = do
       length (messages req) `shouldBe` 1
       let msg = head (messages req)
       role msg `shouldBe` "user"
-      content msg `shouldBe` Just "First part\nSecond part"
+      content msg `shouldBe` Just (TextContent "First part\nSecond part")
 
   describe "OpenAI Composable Provider - Tool Calling" $ do
 
@@ -340,19 +340,19 @@ spec getResponse = do
       -- Test that we can create messages with various combinations of fields
       let msg1 = defaultOpenAIMessage
             { role = "assistant"
-            , content = Just "Hello"
+            , content = Just (TextContent "Hello")
             }
       role msg1 `shouldBe` "assistant"
-      content msg1 `shouldBe` Just "Hello"
+      content msg1 `shouldBe` Just (TextContent "Hello")
 
       -- Test with reasoning content
       let msg2 = defaultOpenAIMessage
             { role = "assistant"
-            , content = Just "The answer is 42"
+            , content = Just (TextContent "The answer is 42")
             , reasoning_content = Just "Let me think..."
             }
       reasoning_content msg2 `shouldBe` Just "Let me think..."
-      content msg2 `shouldBe` Just "The answer is 42"
+      content msg2 `shouldBe` Just (TextContent "The answer is 42")
 
       -- Test with tool calls
       let toolFunc = defaultOpenAIToolFunction

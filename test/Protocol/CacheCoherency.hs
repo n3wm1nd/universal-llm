@@ -110,8 +110,8 @@ normalizeOpenAIRequestWith f req = OP.OpenAIRequest
 normalizeNovaMessage :: OP.OpenAIMessage -> OP.OpenAIMessage
 normalizeNovaMessage msg = msg { OP.content = norm (OP.content msg) }
   where
-    norm (Just "") = Nothing
-    norm c         = c
+    norm (Just (OP.TextContent "")) = Nothing
+    norm c                          = c
 
 -- ============================================================================
 -- OpenAI protocol defaults (OVERLAPPABLE — one instance per wire type)
@@ -193,8 +193,8 @@ instance SimulateResponse OP.OpenAIResponse where
         assistantMsg = OP.defaultOpenAIMessage
           { OP.role       = "assistant"
           , OP.content    = case (textContent, toolCalls) of
-              (_,   _:_) -> Just ""           -- tool call: empty content as per provider
-              (t:_, [])  -> Just t            -- text-only: use the text
+              (_,   _:_) -> Just (OP.TextContent "")  -- tool call: empty content as per provider
+              (t:_, [])  -> Just (OP.TextContent t)   -- text-only: use the text
               ([],  [])  -> Nothing
           , OP.tool_calls = case toolCalls of { [] -> Nothing; tcs -> Just tcs }
           }

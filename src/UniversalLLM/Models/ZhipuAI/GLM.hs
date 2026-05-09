@@ -80,7 +80,7 @@ module UniversalLLM.Models.ZhipuAI.GLM
 import UniversalLLM
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud(..))
-import UniversalLLM.Protocols.OpenAI (OpenAIRequest(..), OpenAIMessage(..), OpenAIResponse, enableOpenAIStreaming)
+import UniversalLLM.Protocols.OpenAI (OpenAIRequest(..), OpenAIMessage(..), OpenAIMessageContent(..), OpenAIResponse, enableOpenAIStreaming)
 import Data.Text (Text)
 import qualified Data.Text as T
 
@@ -145,13 +145,13 @@ glmFixNullContent _model _configs _s =
     fixNullContent :: OpenAIMessage -> OpenAIMessage
     -- Assistant messages with null content (when they have tool calls)
     fixNullContent msg@OpenAIMessage{ role = "assistant", content = Nothing } =
-      msg { content = Just "" }
+      msg { content = Just (TextContent "") }
     -- Tool result messages with the string "null"
-    fixNullContent msg@OpenAIMessage{ role = "tool", content = Just "null" } =
-      msg { content = Just "" }
+    fixNullContent msg@OpenAIMessage{ role = "tool", content = Just (TextContent "null") } =
+      msg { content = Just (TextContent "") }
     -- Assistant messages with content - strip any <think> tags that might be malformed
-    fixNullContent msg@OpenAIMessage{ role = "assistant", content = Just contentTxt } =
-      msg { content = Just (stripThinkTags contentTxt) }
+    fixNullContent msg@OpenAIMessage{ role = "assistant", content = Just (TextContent contentTxt) } =
+      msg { content = Just (TextContent (stripThinkTags contentTxt)) }
     -- Everything else passes through unchanged
     fixNullContent msg = msg
 

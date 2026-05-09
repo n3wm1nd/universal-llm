@@ -83,21 +83,21 @@ setResponseFormat fmt req = req { response_format = Just fmt }
 userMessage :: Text -> OpenAIMessage
 userMessage txt = defaultOpenAIMessage
   { role = "user"
-  , content = Just txt
+  , content = Just (TextContent txt)
   }
 
 -- | Create an assistant message with text content
 assistantMessage :: Text -> OpenAIMessage
 assistantMessage txt = defaultOpenAIMessage
   { role = "assistant"
-  , content = Just txt
+  , content = Just (TextContent txt)
   }
 
 -- | Create a system message with text content
 systemMessage :: Text -> OpenAIMessage
 systemMessage txt = defaultOpenAIMessage
   { role = "system"
-  , content = Just txt
+  , content = Just (TextContent txt)
   }
 
 -- | Create an assistant message with reasoning content
@@ -106,7 +106,7 @@ systemMessage txt = defaultOpenAIMessage
 reasoningMessage :: Text -> OpenAIMessage
 reasoningMessage txt = defaultOpenAIMessage
   { role = "assistant"
-  , content = Just ""
+  , content = Just (TextContent "")
   , reasoning_content = Just txt
   }
 
@@ -116,7 +116,7 @@ reasoningMessage txt = defaultOpenAIMessage
 toolCallMessage :: [OpenAIToolCall] -> OpenAIMessage
 toolCallMessage calls = defaultOpenAIMessage
   { role = "assistant"
-  , content = Just ""  -- Must include empty content for verbatim preservation
+  , content = Just (TextContent "")  -- Must include empty content for verbatim preservation
   , tool_calls = Just calls
   }
 
@@ -124,20 +124,22 @@ toolCallMessage calls = defaultOpenAIMessage
 toolResultMessage :: Text -> Text -> OpenAIMessage
 toolResultMessage tcId contentTxt = defaultOpenAIMessage
   { role = "tool"
-  , content = Just contentTxt
+  , content = Just (TextContent contentTxt)
   , tool_call_id = Just tcId
   }
 
 -- | Append text to a message's content (only if roles match)
 -- Allows merging text with messages that have tool_calls or reasoning_content (for combined responses)
 -- Only merges if existing content is empty (Nothing or Just "")
+-- Does not merge into vision (parts) messages.
 appendToMessageIfSameRole :: Text -> Text -> OpenAIMessage -> Maybe OpenAIMessage
 appendToMessageIfSameRole targetRole txt msg@OpenAIMessage{ role = msgRole, content = existingContent, tool_call_id = Nothing }
   | msgRole == targetRole =
       case existingContent of
-        Nothing -> Just $ msg { content = Just txt }
-        Just "" -> Just $ msg { content = Just txt }
-        Just existing -> Just $ msg { content = Just (existing <> "\n" <> txt) }  -- Existing behavior for providers that need it
+        Nothing -> Just $ msg { content = Just (TextContent txt) }
+        Just (TextContent "") -> Just $ msg { content = Just (TextContent txt) }
+        Just (TextContent existing) -> Just $ msg { content = Just (TextContent (existing <> "\n" <> txt)) }
+        Just (PartsContent _) -> Nothing
   | otherwise = Nothing
 appendToMessageIfSameRole _ _ _ = Nothing
 
@@ -357,7 +359,7 @@ baseComposableProvider modelProxy configs _s = noopHandler
     parseTextResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
         (OpenAIChoice msg:rest) ->
-          case content msg of
+          case contentText (content msg) of
             Just txt | not (T.null txt) ->
               -- Extract text but preserve reasoning_content and other fields in the choice
               -- Skip empty content entirely (prevents duplicate assistant messages)
@@ -418,7 +420,7 @@ mergeSystemMessages _m _configs _s = noopHandler
       in case sysMsgs of
            []  -> others
            [_] -> sysMsgs ++ others
-           _   -> let merged = systemMessage (T.intercalate "\n\n" [t | msg <- sysMsgs, Just t <- [content msg]])
+           _   -> let merged = systemMessage (T.intercalate "\n\n" [t | msg <- sysMsgs, Just t <- [contentText (content msg)]])
                   in merged : others
 
     partition _ [] = ([], [])
@@ -640,7 +642,7 @@ openRouterReasoning _m configs state = noopHandler
             appendMessage
               (defaultOpenAIMessage
                 { role = "assistant"
-                , content = Just ""  -- Empty content when there's only reasoning
+                , content = Just (TextContent "")  -- Empty content when there's only reasoning
                 , reasoning_content = Nothing  -- Don't add reasoning_content when using reasoning_details
                 , reasoning_details = Just details  -- Preserve the details!
                 }) req
@@ -819,7 +821,7 @@ normalizeEmptyContent _m _configs _state = noopHandler
   where
     normalizeMessage :: OpenAIMessage -> OpenAIMessage
     normalizeMessage msg = case content msg of
-      Just "" -> msg { content = Nothing }
+      Just (TextContent "") -> msg { content = Nothing }
       _ -> msg
 
 -- ============================================================================

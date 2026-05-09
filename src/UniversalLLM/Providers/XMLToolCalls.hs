@@ -152,9 +152,9 @@ withFullXMLToolSupport = chainProviders xmlFullSupport
              let toolPrompt = formatToolDefinitionsAsXML toolDefs
                  (sysMsgs, otherMsgs) = span isSystemMessage (messages req)
                  updatedSysMsg = case sysMsgs of
-                   [] -> [defaultOpenAIMessage { role = "system", content = Just toolPrompt }]
-                   (msg@OpenAIMessage{ content = Just existingContent } : rest) ->
-                     msg { content = Just (existingContent <> "\n\n" <> toolPrompt) } : rest
+                   [] -> [defaultOpenAIMessage { role = "system", content = Just (TextContent toolPrompt) }]
+                   (msg@OpenAIMessage{ content = Just (TextContent existingContent) } : rest) ->
+                     msg { content = Just (TextContent (existingContent <> "\n\n" <> toolPrompt)) } : rest
                    (first:rest) -> first : rest
              in req { messages = updatedSysMsg <> otherMsgs }
       where

@@ -22,14 +22,14 @@ spec = do
               { model = "test-model"
               , messages = [defaultOpenAIMessage
                   { role = "user"
-                  , content = Just "test"
+                  , content = Just (TextContent "test")
                   }]
               }
             response = OpenAISuccess $ defaultOpenAISuccessResponse
               { choices = [defaultOpenAIChoice
                   { message = defaultOpenAIMessage
                       { role = "assistant"
-                      , content = Just "test response"
+                      , content = Just (TextContent "test response")
                       }
                   }]
               }
@@ -49,7 +49,7 @@ spec = do
               { model = "nonexistent-model"
               , messages = [defaultOpenAIMessage
                   { role = "user"
-                  , content = Just "uncached"
+                  , content = Just (TextContent "uncached")
                   }]
               }
 

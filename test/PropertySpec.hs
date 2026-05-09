@@ -302,7 +302,7 @@ prop_openaiSystemPrompt = forAll genNonEmptyText $ \sysPrompt ->
       req = toProviderRequestGLM45 configs msgs
   in not (null (OP.messages req)) ==>
        OP.role (head (OP.messages req)) === "system"
-       .&&. OP.content (head (OP.messages req)) === Just sysPrompt
+       .&&. OP.content (head (OP.messages req)) === Just (OP.TextContent sysPrompt)
 
 -- | Property: JSON mode sets response_format
 prop_openaiJSONMode :: Property
@@ -558,7 +558,7 @@ prop_openaiResponseParsingWithToolsAndReasoning = forAll genResponse $ \(msgs, r
       -- Create a mock response with text, reasoning, or tool calls
       responseMsg <- oneof
         [ -- Text response
-          (\txt -> OP.defaultOpenAIMessage { OP.role = "assistant", OP.content = Just txt }) <$> genNonEmptyText
+          (\txt -> OP.defaultOpenAIMessage { OP.role = "assistant", OP.content = Just (OP.TextContent txt) }) <$> genNonEmptyText
         , -- Reasoning response
           (\reasoning -> OP.defaultOpenAIMessage { OP.role = "assistant", OP.reasoning_content = Just reasoning }) <$> genNonEmptyText
         , -- Tool call response

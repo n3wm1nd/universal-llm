@@ -57,15 +57,15 @@ parseOpenAIMessage :: forall m.
                    -> Either Text (Message m)
 parseOpenAIMessage oaiMsg =
   case role oaiMsg of
-    "user" -> case content oaiMsg of
+    "user" -> case contentText (content oaiMsg) of
       Just txt -> Right $ UserText txt
       Nothing -> Left "User message missing content"
 
-    "assistant" -> case content oaiMsg of
+    "assistant" -> case contentText (content oaiMsg) of
       Just txt -> Right $ AssistantText txt
       Nothing -> Left "Assistant message missing content"
 
-    "system" -> case content oaiMsg of
+    "system" -> case contentText (content oaiMsg) of
       Just txt -> Right $ SystemText txt
       Nothing -> Left "System message missing content"
 
@@ -98,7 +98,7 @@ messageToOpenAI :: forall m.
                 -> Either Text OpenAIMessage
 messageToOpenAI (UserText txt) = Right $ OpenAIMessage
   { role = "user"
-  , content = Just txt
+  , content = Just (TextContent txt)
   , reasoning_content = Nothing
   , tool_calls = Nothing
   , tool_call_id = Nothing
@@ -106,7 +106,7 @@ messageToOpenAI (UserText txt) = Right $ OpenAIMessage
 
 messageToOpenAI (AssistantText txt) = Right $ OpenAIMessage
   { role = "assistant"
-  , content = Just txt
+  , content = Just (TextContent txt)
   , reasoning_content = Nothing
   , tool_calls = Nothing
   , tool_call_id = Nothing
@@ -114,7 +114,7 @@ messageToOpenAI (AssistantText txt) = Right $ OpenAIMessage
 
 messageToOpenAI (SystemText txt) = Right $ OpenAIMessage
   { role = "system"
-  , content = Just txt
+  , content = Just (TextContent txt)
   , reasoning_content = Nothing
   , tool_calls = Nothing
   , tool_call_id = Nothing

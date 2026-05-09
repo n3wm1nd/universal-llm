@@ -69,7 +69,7 @@ spec = do
       length (messages req) `shouldBe` 1
       let msg = head (messages req)
       role msg `shouldBe` "user"
-      content msg `shouldBe` Just "Hello"
+      content msg `shouldBe` Just (TextContent "Hello")
 
     it "baseComposableProvider merges consecutive user messages (BasicModel)" $ do
       let model = Model BasicModel OpenAIProvider.OpenAI
@@ -83,7 +83,7 @@ spec = do
       length (messages req2) `shouldBe` 1
       let msg = head (messages req2)
       role msg `shouldBe` "user"
-      content msg `shouldBe` Just "Hello\nWorld"
+      content msg `shouldBe` Just (TextContent "Hello\nWorld")
 
     it "composable providers compose manually (BasicModel)" $ do
       let model = Model BasicModel OpenAIProvider.OpenAI
@@ -106,7 +106,7 @@ spec = do
       length (messages req) `shouldBe` 1
       let msg = head (messages req)
       role msg `shouldBe` "assistant"
-      content msg `shouldBe` Just ""
+      content msg `shouldBe` Just (TextContent "")
       reasoning_content msg `shouldBe` Just "thinking about the problem..."
 
     it "reasoning handler composes with base handler (ReasoningModel)" $ do
@@ -127,7 +127,7 @@ spec = do
       length (messages req2) `shouldBe` 1
       let msg = head (messages req2)
       role msg `shouldBe` "assistant"
-      content msg `shouldBe` Just "Here's my answer"
+      content msg `shouldBe` Just (TextContent "Here's my answer")
       reasoning_content msg `shouldBe` Just "let me think..."
 
     it "composable providers chain (BasicModel)" $ do
@@ -143,7 +143,7 @@ spec = do
       length (messages req) `shouldBe` 1
       let msg = head (messages req)
       role msg `shouldBe` "user"
-      content msg `shouldBe` Just "test"
+      content msg `shouldBe` Just (TextContent "test")
 
     it "composable providers chain with reasoning (ReasoningModel)" $ do
       let model = Model ReasoningModel OpenAIProvider.OpenAI
@@ -163,7 +163,7 @@ spec = do
       length (messages req2) `shouldBe` 1
       let msg = head (messages req2)
       role msg `shouldBe` "assistant"
-      content msg `shouldBe` Just "answer"
+      content msg `shouldBe` Just (TextContent "answer")
       reasoning_content msg `shouldBe` Just "thinking..."
 
   describe "Composable Providers (bidirectional)" $ do
@@ -178,7 +178,7 @@ spec = do
       length (messages req) `shouldBe` 1
       let msg = head (messages req)
       role msg `shouldBe` "user"
-      content msg `shouldBe` Just "Hello"
+      content msg `shouldBe` Just (TextContent "Hello")
 
     it "composable providers compose via chainProviders" $ do
       let model = Model ReasoningModel OpenAIProvider.OpenAI
@@ -193,7 +193,7 @@ spec = do
       length (messages req) `shouldBe` 1
       let msg = head (messages req)
       role msg `shouldBe` "assistant"
-      content msg `shouldBe` Just ""
+      content msg `shouldBe` Just (TextContent "")
       reasoning_content msg `shouldBe` Just "thinking"
 
     -- This test demonstrates that type safety prevents using reasoning with non-reasoning models
