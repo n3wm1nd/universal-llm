@@ -48,6 +48,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Aeson as Aeson
 import Test.Hspec (Expectation, HasCallStack, shouldSatisfy)
+import TestFixtures (glassbottlePng, glassbottleMirroredJpeg)
 
 -- ============================================================================
 -- Request Helpers
@@ -190,6 +191,33 @@ hasThinking resp = any isThinking (responseContent resp)
     isThinking AnthropicThinkingBlock{} = True
     isThinking _ = False
 
+-- | Create a vision request asking what the main object in an image is
+visionIdentifyRequest :: Text -> Text -> Text -> AnthropicRequest
+visionIdentifyRequest modelName mediaType b64Data = mempty
+  { messages =
+      [ AnthropicMessage "user"
+          [ AnthropicTextBlock "What is the main object in this image? Answer in one sentence." Nothing
+          , AnthropicImageBlock mediaType b64Data
+          ]
+      ]
+  , model = modelName
+  , max_tokens = 4096
+  }
+
+-- | Create a multi-image request asking the model to compare two images
+visionCompareRequest :: Text -> Text -> Text -> Text -> Text -> AnthropicRequest
+visionCompareRequest modelName mediaType1 b64Data1 mediaType2 b64Data2 = mempty
+  { messages =
+      [ AnthropicMessage "user"
+          [ AnthropicTextBlock "I am showing you two images. Is the second image a horizontally mirrored version of the first? Answer yes or no, then briefly explain." Nothing
+          , AnthropicImageBlock mediaType1 b64Data1
+          , AnthropicImageBlock mediaType2 b64Data2
+          ]
+      ]
+  , model = modelName
+  , max_tokens = 4096
+  }
+
 -- ============================================================================
 -- Protocol Assertions
 --
@@ -215,3 +243,19 @@ assertHasReasoning :: HasCallStack => AnthropicResponse -> Expectation
 assertHasReasoning resp = do
   let success = expectSuccess resp
   hasThinking success `shouldSatisfy` id
+
+-- | Assert that response mentions a specific word (case-insensitive)
+assertMentions :: HasCallStack => Text -> AnthropicResponse -> Expectation
+assertMentions word resp = do
+  let txt = T.toLower $ getAssistantText . expectSuccess $ resp
+  if T.isInfixOf (T.toLower word) txt
+    then return ()
+    else error $ "Expected response to mention '" <> T.unpack word <> "' but got: " <> T.unpack txt
+
+-- | Assert that response confirms affirmatively (contains "yes")
+assertConfirmsYes :: HasCallStack => AnthropicResponse -> Expectation
+assertConfirmsYes resp = do
+  let txt = T.toLower $ getAssistantText . expectSuccess $ resp
+  if T.isInfixOf "yes" txt
+    then return ()
+    else error $ "Expected affirmative response (containing 'yes') but got: " <> T.unpack txt

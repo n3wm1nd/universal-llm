@@ -108,6 +108,7 @@ addConversationCacheControl req =
       AnthropicToolResultBlock rid rcontent (Just (CacheControl "ephemeral" "5m"))
     addCacheControlToBlock block@AnthropicThinkingBlock{} =
       block { thinkingCacheControl = Just (CacheControl "ephemeral" "5m") }
+    addCacheControlToBlock block@(AnthropicImageBlock _ _) = block
 
 -- | Append a content block to messages, grouping with last message if same role
 appendContentBlock :: Text -> AnthropicContentBlock -> AnthropicRequest -> AnthropicRequest
@@ -646,6 +647,19 @@ anthropicOAuthBlacklistedTools _m configs state = noopHandler
   , cpSerializeMessage = serializeToolMessages
   , cpDeserializeMessage = deserializeToolMessages
   }
+
+-- Standalone vision provider
+anthropicVision :: forall m. (HasVision m, ProviderRequest m ~ AnthropicRequest) => ComposableProvider m ()
+anthropicVision _m _configs _s = noopHandler
+  { cpToRequest = handleVisionMessage
+  , cpSerializeMessage = serializeVisionMessages
+  , cpDeserializeMessage = deserializeVisionMessages
+  }
+  where
+    handleVisionMessage msg req = case msg of
+      UserImage mediaType b64Data ->
+        appendContentBlock "user" (AnthropicImageBlock mediaType b64Data) req
+      _ -> req
 
 -- Note: For OAuth models, use the same anthropicReasoning provider
 -- Define per-model HasReasoning instances in test files or application code

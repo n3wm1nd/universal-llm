@@ -14,7 +14,7 @@ These models are currently accessed through OpenRouter.
 = Available Models
 
 * 'Gemini3FlashPreview' - Google's Gemini 3 Flash Preview (fast reasoning)
-* 'Gemini3ProPreview' - Google's Gemini 3 Pro Preview (more capable)
+* 'Gemini3ProPreview' - Google's Gemini 3.1 Pro Preview (more capable)
 
 = Provider-Specific Quirks
 
@@ -33,7 +33,7 @@ import UniversalLLM.Models.Google.Gemini
 let model = Model Gemini3FlashPreview OpenRouter
 let provider = route
 
--- Use Gemini 3 Pro
+-- Use Gemini 3.1 Pro
 let model = Model Gemini3ProPreview OpenRouter
 let provider = route
 @
@@ -84,16 +84,16 @@ instance Routing (Model Gemini3FlashPreview OpenRouter) where
   route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Gemini3FlashPreview OpenRouter)
 
 --------------------------------------------------------------------------------
--- Google Gemini 3 Pro Preview
+-- Google Gemini 3.1 Pro Preview
 --------------------------------------------------------------------------------
 
--- | Google Gemini 3 Pro Preview - More capable reasoning model
+-- | Google Gemini 3.1 Pro Preview - More capable reasoning model
 --
 -- Similar to Flash but with enhanced capabilities.
 data Gemini3ProPreview = Gemini3ProPreview deriving (Show, Eq)
 
 instance ModelName (Model Gemini3ProPreview OpenRouter) where
-  modelName (Model _ _) = "google/gemini-3-pro-preview"
+  modelName (Model _ _) = "google/gemini-3.1-pro-preview"
 
 instance HasTools (Model Gemini3ProPreview OpenRouter) where
   withTools = OpenAI.openAITools

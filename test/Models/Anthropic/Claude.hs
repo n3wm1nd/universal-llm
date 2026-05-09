@@ -64,6 +64,9 @@ testsSonnet45 provider = do
       startsWithAssistant oauthProvider
       reasoning oauthProvider
       toolCallingWithReasoning oauthProvider
+      visionPng oauthProvider "claude-sonnet-4-5-20250929"
+      visionJpeg oauthProvider "claude-sonnet-4-5-20250929"
+      visionMultipleImages oauthProvider "claude-sonnet-4-5-20250929"
 
     -- NOTE: Blacklist removed as of 2025 - keeping test structure for potential future use
     describe "OAuth Tool Name Blacklist" $ do
@@ -72,7 +75,7 @@ testsSonnet45 provider = do
 
     describe "Standard Tests" $
       testModel route (ClaudeSonnet45 `via` AnthropicOAuth) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
 
     describe "Composable Provider Tests" $
       testModelOffline route (ClaudeSonnet45 `via` AnthropicOAuth)
@@ -101,6 +104,9 @@ testsSonnet46 provider = do
       startsWithAssistant oauthProvider
       reasoning oauthProvider
       toolCallingWithReasoning oauthProvider
+      visionPng oauthProvider "claude-sonnet-4-6"
+      visionJpeg oauthProvider "claude-sonnet-4-6"
+      visionMultipleImages oauthProvider "claude-sonnet-4-6"
 
     -- NOTE: Blacklist removed as of 2025 - keeping test structure for potential future use
     describe "OAuth Tool Name Blacklist" $ do
@@ -109,7 +115,7 @@ testsSonnet46 provider = do
 
     describe "Standard Tests" $
       testModel route (ClaudeSonnet46 `via` AnthropicOAuth) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
 
     describe "OAuth Provider Tests" $
       testModel route (ClaudeSonnet46 `via` AnthropicOAuth) provider
@@ -134,6 +140,8 @@ testsHaiku45 provider = do
       startsWithAssistant oauthProvider
       reasoning oauthProvider
       toolCallingWithReasoning oauthProvider
+      visionPng oauthProvider "claude-haiku-4-5-20251001"
+      visionJpeg oauthProvider "claude-haiku-4-5-20251001"
 
     -- NOTE: Blacklist removed as of 2025 - keeping test structure for potential future use
     describe "OAuth Tool Name Blacklist" $ do
@@ -142,7 +150,7 @@ testsHaiku45 provider = do
 
     describe "Standard Tests" $
       testModel route (ClaudeHaiku45 `via` AnthropicOAuth) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.vision, ST.visionJpeg ]
 
     describe "OAuth Provider Tests" $
       testModel route (ClaudeHaiku45 `via` AnthropicOAuth) provider
@@ -169,6 +177,9 @@ testsOpus46 provider = do
       reasoning oauthProvider
       adaptiveReasoning oauthProvider
       toolCallingWithReasoning oauthProvider
+      visionPng oauthProvider "claude-opus-4-6"
+      visionJpeg oauthProvider "claude-opus-4-6"
+      visionMultipleImages oauthProvider "claude-opus-4-6"
 
     -- NOTE: Blacklist removed as of 2025 - keeping test structure for potential future use
     describe "OAuth Tool Name Blacklist" $ do
@@ -177,7 +188,7 @@ testsOpus46 provider = do
 
     describe "Standard Tests" $
       testModel route (ClaudeOpus46 `via` AnthropicOAuth) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
 
     describe "OAuth Provider Tests" $
       testModel route (ClaudeOpus46 `via` AnthropicOAuth) provider

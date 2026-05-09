@@ -83,7 +83,7 @@ spec = describe "Anthropic Streaming Thinking Signatures" $ do
             -- Now test that we can build a second request with this thinking block
             let model = Model ClaudeSonnet45 Provider.Anthropic
                 cp = anthropicSonnet45
-                initialState = (def, ((), ()))
+                initialState = (def, ((), ((), ())))
 
             -- Parse the response to get Message types
             let (state1, msgs1) = either (error . show) id $

@@ -81,9 +81,12 @@ instance HasReasoning (Model ClaudeSonnet45 Anthropic) where
   type ReasoningState (Model ClaudeSonnet45 Anthropic) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicReasoning
 
+instance HasVision (Model ClaudeSonnet45 Anthropic) where
+  withVision = Anthropic.anthropicVision
+
 instance Routing (Model ClaudeSonnet45 Anthropic) where
-  type RoutingState (Model ClaudeSonnet45 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ()))
-  route = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45 Anthropic)
+  type RoutingState (Model ClaudeSonnet45 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45 Anthropic)
 
 --------------------------------------------------------------------------------
 -- Claude Sonnet 4.5 without Reasoning
@@ -101,9 +104,12 @@ instance ModelName (Model ClaudeSonnet45NoReason Anthropic) where
 instance HasTools (Model ClaudeSonnet45NoReason Anthropic) where
   withTools = Anthropic.anthropicTools
 
+instance HasVision (Model ClaudeSonnet45NoReason Anthropic) where
+  withVision = Anthropic.anthropicVision
+
 instance Routing (Model ClaudeSonnet45NoReason Anthropic) where
-  type RoutingState (Model ClaudeSonnet45NoReason Anthropic) = ((), ())
-  route = withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45NoReason Anthropic)
+  type RoutingState (Model ClaudeSonnet45NoReason Anthropic) = ((), ((), ()))
+  route = withTools `chainProviders` withVision `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45NoReason Anthropic)
 
 --------------------------------------------------------------------------------
 -- Claude Sonnet 4.6
@@ -129,9 +135,12 @@ instance HasReasoning (Model ClaudeSonnet46 Anthropic) where
   type ReasoningState (Model ClaudeSonnet46 Anthropic) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicReasoning
 
+instance HasVision (Model ClaudeSonnet46 Anthropic) where
+  withVision = Anthropic.anthropicVision
+
 instance Routing (Model ClaudeSonnet46 Anthropic) where
-  type RoutingState (Model ClaudeSonnet46 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ()))
-  route = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet46 Anthropic)
+  type RoutingState (Model ClaudeSonnet46 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet46 Anthropic)
 
 --------------------------------------------------------------------------------
 -- Claude Haiku 4.5
@@ -156,9 +165,12 @@ instance HasReasoning (Model ClaudeHaiku45 Anthropic) where
   type ReasoningState (Model ClaudeHaiku45 Anthropic) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicReasoning
 
+instance HasVision (Model ClaudeHaiku45 Anthropic) where
+  withVision = Anthropic.anthropicVision
+
 instance Routing (Model ClaudeHaiku45 Anthropic) where
-  type RoutingState (Model ClaudeHaiku45 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ()))
-  route = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeHaiku45 Anthropic)
+  type RoutingState (Model ClaudeHaiku45 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeHaiku45 Anthropic)
 
 --------------------------------------------------------------------------------
 -- Claude Opus 4.6
@@ -184,9 +196,12 @@ instance HasReasoning (Model ClaudeOpus46 Anthropic) where
   type ReasoningState (Model ClaudeOpus46 Anthropic) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicAdaptiveReasoning
 
+instance HasVision (Model ClaudeOpus46 Anthropic) where
+  withVision = Anthropic.anthropicVision
+
 instance Routing (Model ClaudeOpus46 Anthropic) where
-  type RoutingState (Model ClaudeOpus46 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ()))
-  route = withReasoning `chainProviders` withTools `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus46 Anthropic)
+  type RoutingState (Model ClaudeOpus46 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus46 Anthropic)
 
 --------------------------------------------------------------------------------
 -- OAuth Versions
@@ -204,9 +219,12 @@ instance HasReasoning (Model ClaudeSonnet45 AnthropicOAuth) where
   type ReasoningState (Model ClaudeSonnet45 AnthropicOAuth) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicReasoning
 
+instance HasVision (Model ClaudeSonnet45 AnthropicOAuth) where
+  withVision = Anthropic.anthropicVision
+
 instance Routing (Model ClaudeSonnet45 AnthropicOAuth) where
-  type RoutingState (Model ClaudeSonnet45 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
-  route = withReasoning `chainProviders` withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45 AnthropicOAuth)
+  type RoutingState (Model ClaudeSonnet45 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ((), ()))))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45 AnthropicOAuth)
 
 -- OAuth version without reasoning
 -- NOTE: Tool name blacklist workaround removed as of 2025 - API no longer blocks tool names
@@ -216,9 +234,12 @@ instance ModelName (Model ClaudeSonnet45NoReason AnthropicOAuth) where
 instance HasTools (Model ClaudeSonnet45NoReason AnthropicOAuth) where
   withTools = Anthropic.anthropicTools
 
+instance HasVision (Model ClaudeSonnet45NoReason AnthropicOAuth) where
+  withVision = Anthropic.anthropicVision
+
 instance Routing (Model ClaudeSonnet45NoReason AnthropicOAuth) where
-  type RoutingState (Model ClaudeSonnet45NoReason AnthropicOAuth) = ((), ((), ()))
-  route = withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45NoReason AnthropicOAuth)
+  type RoutingState (Model ClaudeSonnet45NoReason AnthropicOAuth) = ((), ((), ((), ())))
+  route = withTools `chainProviders` withVision `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet45NoReason AnthropicOAuth)
 
 -- OAuth version for ClaudeSonnet46 (with reasoning)
 -- NOTE: Tool name blacklist workaround removed as of 2025 - API no longer blocks tool names
@@ -232,11 +253,14 @@ instance HasReasoning (Model ClaudeSonnet46 AnthropicOAuth) where
   type ReasoningState (Model ClaudeSonnet46 AnthropicOAuth) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicReasoning
 
-instance Routing (Model ClaudeSonnet46 AnthropicOAuth) where
-  type RoutingState (Model ClaudeSonnet46 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
-  route = withReasoning `chainProviders` withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet46 AnthropicOAuth)
+instance HasVision (Model ClaudeSonnet46 AnthropicOAuth) where
+  withVision = Anthropic.anthropicVision
 
--- OAuth version for ClaudeHaiku45 (with reasoning)
+instance Routing (Model ClaudeSonnet46 AnthropicOAuth) where
+  type RoutingState (Model ClaudeSonnet46 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ((), ()))))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet46 AnthropicOAuth)
+
+-- OAuth version for ClaudeHaiku45 (with reasoning and vision)
 -- NOTE: Tool name blacklist workaround removed as of 2025 - API no longer blocks tool names
 instance ModelName (Model ClaudeHaiku45 AnthropicOAuth) where
   modelName (Model _ _) = "claude-haiku-4-5-20251001"
@@ -248,9 +272,12 @@ instance HasReasoning (Model ClaudeHaiku45 AnthropicOAuth) where
   type ReasoningState (Model ClaudeHaiku45 AnthropicOAuth) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicReasoning
 
+instance HasVision (Model ClaudeHaiku45 AnthropicOAuth) where
+  withVision = Anthropic.anthropicVision
+
 instance Routing (Model ClaudeHaiku45 AnthropicOAuth) where
-  type RoutingState (Model ClaudeHaiku45 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
-  route = withReasoning `chainProviders` withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeHaiku45 AnthropicOAuth)
+  type RoutingState (Model ClaudeHaiku45 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ((), ()))))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeHaiku45 AnthropicOAuth)
 
 -- OAuth version for ClaudeOpus46 (with adaptive reasoning)
 -- NOTE: Tool name blacklist workaround removed as of 2025 - API no longer blocks tool names
@@ -264,6 +291,9 @@ instance HasReasoning (Model ClaudeOpus46 AnthropicOAuth) where
   type ReasoningState (Model ClaudeOpus46 AnthropicOAuth) = Anthropic.AnthropicReasoningState
   withReasoning = Anthropic.anthropicAdaptiveReasoning
 
+instance HasVision (Model ClaudeOpus46 AnthropicOAuth) where
+  withVision = Anthropic.anthropicVision
+
 instance Routing (Model ClaudeOpus46 AnthropicOAuth) where
-  type RoutingState (Model ClaudeOpus46 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
-  route = withReasoning `chainProviders` withTools `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus46 AnthropicOAuth)
+  type RoutingState (Model ClaudeOpus46 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ((), ()))))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus46 AnthropicOAuth)

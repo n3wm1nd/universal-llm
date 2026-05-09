@@ -99,6 +99,8 @@ type ToolUseName = Text
 type ToolUseInput = Value
 type ToolResultId = Text
 type ToolResultContent = Text
+type ImageMediaType = Text
+type ImageBase64Data = Text
 
 data AnthropicContentBlock
   = AnthropicTextBlock TextContent (Maybe CacheControl)
@@ -109,6 +111,7 @@ data AnthropicContentBlock
       , thinkingSignature :: Value  -- Required signature metadata from API
       , thinkingCacheControl :: Maybe CacheControl
       }
+  | AnthropicImageBlock ImageMediaType ImageBase64Data
   deriving (Generic, Show, Eq)
 
 data AnthropicToolDefinition = AnthropicToolDefinition
@@ -191,17 +194,20 @@ instance HasCodec AnthropicContentBlock where
     dimapCodec fromEither toEither $
       possiblyJointEitherCodec textBlockCodec
         (possiblyJointEitherCodec toolUseBlockCodec
-          (possiblyJointEitherCodec toolResultBlockCodec thinkingBlockCodec))
+          (possiblyJointEitherCodec toolResultBlockCodec
+            (possiblyJointEitherCodec thinkingBlockCodec imageBlockCodec)))
     where
       fromEither (Left (txt, cc)) = AnthropicTextBlock txt cc
       fromEither (Right (Left (tid, tname, tinput, cc))) = AnthropicToolUseBlock tid tname tinput cc
       fromEither (Right (Right (Left (rid, rcontent, cc)))) = AnthropicToolResultBlock rid rcontent cc
-      fromEither (Right (Right (Right (thinking, sig, cc)))) = AnthropicThinkingBlock thinking sig cc
+      fromEither (Right (Right (Right (Left (thinking, sig, cc))))) = AnthropicThinkingBlock thinking sig cc
+      fromEither (Right (Right (Right (Right (mt, d))))) = AnthropicImageBlock mt d
 
       toEither (AnthropicTextBlock txt cc) = Left (txt, cc)
       toEither (AnthropicToolUseBlock tid tname tinput cc) = Right (Left (tid, tname, tinput, cc))
       toEither (AnthropicToolResultBlock rid rcontent cc) = Right (Right (Left (rid, rcontent, cc)))
-      toEither (AnthropicThinkingBlock{..}) = Right (Right (Right (thinkingText, thinkingSignature, thinkingCacheControl)))
+      toEither (AnthropicThinkingBlock{..}) = Right (Right (Right (Left (thinkingText, thinkingSignature, thinkingCacheControl))))
+      toEither (AnthropicImageBlock mt d) = Right (Right (Right (Right (mt, d))))
 
       textBlockCodec =
         requiredField "type" "Block type" .= const ("text" :: Text)
@@ -230,6 +236,18 @@ instance HasCodec AnthropicContentBlock where
           <$> requiredField "thinking" "Thinking content" .= (\(t, _, _) -> t)
           <*> requiredField "signature" "Thinking signature metadata" .= (\(_, s, _) -> s)
           <*> optionalField "cache_control" "Cache control configuration" .= (\(_, _, cc) -> cc))
+
+      imageBlockCodec =
+        requiredField "type" "Block type" .= const ("image" :: Text)
+        *> dimapCodec
+            (\src -> case src of
+              Aeson.Object obj ->
+                let mt = case KM.lookup "media_type" obj of { Just (Aeson.String t) -> t; _ -> "" }
+                    d  = case KM.lookup "data" obj of { Just (Aeson.String t) -> t; _ -> "" }
+                in (mt, d)
+              _ -> ("", ""))
+            (\(mt, d) -> Aeson.object ["type" Aeson..= ("base64" :: Text), "media_type" Aeson..= mt, "data" Aeson..= d])
+            (requiredField "source" "Image source" .= id)
 
 instance HasCodec AnthropicMessage where
   codec = object "AnthropicMessage" $

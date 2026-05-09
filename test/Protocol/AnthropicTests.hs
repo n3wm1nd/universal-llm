@@ -70,7 +70,8 @@ module Protocol.AnthropicTests where
 import UniversalLLM.Protocols.Anthropic
 import Protocol.Anthropic  -- unqualified - we mainly call these
 import Data.Text (Text)
-import Test.Hspec (Spec, describe, it, HasCallStack)
+import Test.Hspec (Spec, describe, it, HasCallStack, runIO)
+import TestFixtures (glassbottlePng, glassbottleMirroredJpeg)
 
 -- ============================================================================
 -- Capability Probes
@@ -158,6 +159,52 @@ adaptiveReasoning makeRequest = do
     let req = enableAdaptiveReasoning (simpleUserRequest "Think step by step: What is 17 * 29?")
     resp <- makeRequest req
     assertHasReasoning resp
+
+-- | Probe: Vision / PNG format support
+--
+-- __Tests:__ Can the model accept a PNG image and identify its subject?
+--
+-- __Checks:__ Response mentions "bottle" when shown the glassbottle image
+--
+-- __Expected to pass:__ All Claude models (all support vision natively)
+visionPng :: HasCallStack => (AnthropicRequest -> IO AnthropicResponse) -> Text -> Spec
+visionPng makeRequest modelName = do
+  (mediaType, b64Data) <- runIO glassbottlePng
+  it "accepts PNG image and identifies subject" $ do
+    let req = visionIdentifyRequest modelName mediaType b64Data
+    resp <- makeRequest req
+    assertMentions "bottle" resp
+
+-- | Probe: Vision / JPEG format support
+--
+-- __Tests:__ Can the model accept a JPEG image and identify its subject?
+--
+-- __Checks:__ Response mentions "bottle" when shown the mirrored glassbottle JPEG
+--
+-- __Expected to pass:__ All Claude models
+visionJpeg :: HasCallStack => (AnthropicRequest -> IO AnthropicResponse) -> Text -> Spec
+visionJpeg makeRequest modelName = do
+  (mediaType, b64Data) <- runIO glassbottleMirroredJpeg
+  it "accepts JPEG image and identifies subject" $ do
+    let req = visionIdentifyRequest modelName mediaType b64Data
+    resp <- makeRequest req
+    assertMentions "bottle" resp
+
+-- | Probe: Vision / multiple images in one prompt
+--
+-- __Tests:__ Can the model receive two images in a single message and compare them?
+--
+-- __Checks:__ Model confirms the second image is a mirrored version of the first
+--
+-- __Expected to pass:__ All Claude models
+visionMultipleImages :: HasCallStack => (AnthropicRequest -> IO AnthropicResponse) -> Text -> Spec
+visionMultipleImages makeRequest modelName = do
+  (mt1, b64Png) <- runIO glassbottlePng
+  (mt2, b64Jpg) <- runIO glassbottleMirroredJpeg
+  it "accepts multiple images and compares them" $ do
+    let req = visionCompareRequest modelName mt1 b64Png mt2 b64Jpg
+    resp <- makeRequest req
+    assertConfirmsYes resp
 
 -- | Probe: Consecutive user messages
 --

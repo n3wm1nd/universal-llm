@@ -138,15 +138,15 @@ genConfigOpenAI = oneof
   ]
 
 
-toProviderRequestSonnet45 msg = fmap snd $ toProviderRequest anthropicSonnet45NoReason (Model ClaudeSonnet45NoReason Anthropic) msg ((), ())
-toProviderRequestSonnet45WithReasoning msg = fmap snd $ toProviderRequest anthropicSonnet45 (Model ClaudeSonnet45 Anthropic) msg (def, ((), ()))
+toProviderRequestSonnet45 msg = fmap snd $ toProviderRequest anthropicSonnet45NoReason (Model ClaudeSonnet45NoReason Anthropic) msg ((), ((), ()))
+toProviderRequestSonnet45WithReasoning msg = fmap snd $ toProviderRequest anthropicSonnet45 (Model ClaudeSonnet45 Anthropic) msg (def, ((), ((), ())))
 
 toProviderRequestGLM45 msg = fmap snd $ toProviderRequest openAITestPlaceholder (Model TestPlaceholderModel OpenAIProvider.OpenAI) msg ((), ((), ((), ())))
 toProviderRequestGLM45WithReasoning msg = fmap snd $ toProviderRequest openAITestPlaceholder (Model TestPlaceholderModel OpenAIProvider.OpenAI) msg ((), ((), ((), ())))
 
 -- fromProviderResponse signature: composableProvider -> model -> configs -> state -> response -> (state, messages)
 fromProviderResponseGLM45 configs resp = either (error . show) snd $ fromProviderResponse openAITestPlaceholder (Model TestPlaceholderModel OpenAIProvider.OpenAI) configs ((), ((), ((), ()))) resp
-fromProviderResponseSonnet45WithReasoning configs resp = either (error . show) snd $ fromProviderResponse anthropicSonnet45 (Model ClaudeSonnet45 Anthropic) configs (def, ((), ())) resp
+fromProviderResponseSonnet45WithReasoning configs resp = either (error . show) snd $ fromProviderResponse anthropicSonnet45 (Model ClaudeSonnet45 Anthropic) configs (def, ((), ((), ()))) resp
 
 -- ============================================================================
 -- Property tests for Anthropic

@@ -121,7 +121,7 @@ spec = do
             model = Model ClaudeSonnet45NoReason Anthropic.Anthropic
             configs = [Tools [toolDef]]
             msgs = [UserText "Calculate 10 * 7" :: Message (Model ClaudeSonnet45NoReason Anthropic.Anthropic)]
-            req = snd $ toProviderRequest TestModels.anthropicSonnet45NoReason model configs ((), ()) msgs
+            req = snd $ toProviderRequest TestModels.anthropicSonnet45NoReason model configs ((), ((), ())) msgs
 
         -- Verify tool is correctly translated to Anthropic format
         case AnthropicProt.tools req of
