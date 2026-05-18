@@ -135,6 +135,137 @@ reasoning makeRequest modelName = do
     resp <- makeRequest req
     assertHasReasoningContent resp
 
+-- | Probe: Reasoning toggle ON actually produces reasoning output
+--
+-- __Tests:__ Does reasoning_enabled=true actually cause the model to emit reasoning?
+--
+-- __Checks:__ Two requests - one with reasoning on, one off. The ON request must
+-- have reasoning_content and the OFF request must not.
+--
+-- __Purpose:__ The field being sent correctly doesn't mean the model honours it.
+-- Template-based models (llama.cpp) may ignore the reasoning field entirely and
+-- always think (or never think). This probe catches that.
+--
+-- __Expected to pass:__ Models that genuinely toggle reasoning via this field
+--
+-- __Expected to fail:__ Models that always reason regardless of the flag
+reasoningTogglesOn :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+reasoningTogglesOn makeRequest modelName = do
+  it "reasoning_enabled=true produces reasoning_content" $ do
+    let req = enableReasoning (simpleUserRequest "What is 15 * 23?") { model = modelName }
+    resp <- makeRequest req
+    assertHasReasoningContent resp
+
+-- | Probe: Reasoning toggle OFF actually suppresses reasoning output
+--
+-- __Tests:__ Does reasoning_enabled=false actually suppress reasoning_content?
+--
+-- __Checks:__ Request with reasoning disabled must have no reasoning_content
+-- and no reasoning_details.
+--
+-- __Purpose:__ Some models (e.g. hosted models behind a provider) ignore disable
+-- requests and still return reasoning output (or silently consume tokens/time
+-- for hidden reasoning). Some template-based models require /nothink or an
+-- empty <think></think> prefix instead.
+--
+-- __Expected to pass:__ Models that honour the disable flag
+--
+-- __Expected to fail:__ Models that always reason, or where the field has no effect
+reasoningTogglesOff :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+reasoningTogglesOff makeRequest modelName = do
+  it "reasoning_enabled=false suppresses reasoning_content" $ do
+    let req = disableReasoning (simpleUserRequest "What is 15 * 23?") { model = modelName }
+    resp <- makeRequest req
+    assertNoReasoningData resp
+
+-- | Probe: /nothink token suppresses reasoning (Qwen3 chat template)
+--
+-- __Tests:__ Does appending /nothink to the user message suppress reasoning_content?
+--
+-- __Purpose:__ llama.cpp Qwen3 chat templates honour the /nothink token to
+-- skip the <think> block. The reasoning_enabled field alone has no effect on
+-- template-rendered models.
+--
+-- __Expected to pass:__ Qwen3 models via llama.cpp
+--
+-- __Expected to fail:__ Models that don't use the Qwen3 chat template
+noThinkSuppressesReasoning :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+noThinkSuppressesReasoning makeRequest modelName = do
+  it "/nothink token suppresses reasoning_content" $ do
+    let req = (simpleUserRequest "What is 15 * 23? /nothink") { model = modelName }
+    resp <- makeRequest req
+    assertNoReasoningData resp
+
+-- | Probe: <think></think> assistant prefill suppresses reasoning (Qwen3)
+--
+-- __Tests:__ Does prefilling the assistant turn with <think></think> suppress reasoning?
+--
+-- __Purpose:__ An alternative to /nothink: force an empty think block by
+-- prefilling the assistant message. The model then continues past it without
+-- generating reasoning tokens.
+--
+-- __Expected to pass:__ Qwen3 models via llama.cpp that support assistant prefill
+--
+-- __Expected to fail:__ Models that don't support prefill or ignore the tag
+emptyThinkPrefillSuppressesReasoning :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+emptyThinkPrefillSuppressesReasoning makeRequest modelName = do
+  it "<think></think> assistant prefill suppresses reasoning_content" $ do
+    let req = mempty
+          { model = modelName
+          , messages =
+              [ userMessage "What is 15 * 23?"
+              , assistantMessage "<think></think>"
+              ]
+          }
+    resp <- makeRequest req
+    assertNoReasoningData resp
+
+-- | Probe: chat_template_kwargs enable_thinking=false suppresses reasoning (llama.cpp)
+--
+-- __Tests:__ Does chat_template_kwargs={"enable_thinking":false} suppress reasoning_content?
+--
+-- __Purpose:__ llama.cpp ignores reasoning_enabled but exposes enable_thinking via
+-- chat_template_kwargs. This is the documented way to disable thinking on template-based
+-- models. Note: known to be silently ignored in some llama.cpp builds.
+--
+-- __Expected to pass:__ Qwen3 models via a llama.cpp build that honours this param
+--
+-- __Expected to fail:__ OpenRouter and other providers; buggy llama.cpp builds
+chatTemplateKwargsDisablesThinking :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+chatTemplateKwargsDisablesThinking makeRequest modelName = do
+  it "chat_template_kwargs enable_thinking=false suppresses reasoning_content" $ do
+    let req = disableThinkingLlamaCpp (simpleUserRequest "What is 15 * 23?") { model = modelName }
+    resp <- makeRequest req
+    assertNoReasoningData resp
+
+-- | Probe: Empty reasoning prefill suppresses further reasoning (Qwen3)
+--
+-- __Tests:__ Does sending an AssistantReasoning "" message before the final
+-- turn suppress reasoning output?
+--
+-- __Purpose:__ If the model sees a prior (empty) reasoning turn for this
+-- question, it may skip generating a new <think> block and proceed directly
+-- to the answer. This is the semantic equivalent of <think></think> prefill
+-- but expressed through our Message abstraction rather than raw content.
+--
+-- __Expected to pass:__ Models that treat a prior reasoning message as
+-- "already thought, just answer now"
+--
+-- __Expected to fail:__ Models that ignore the reasoning history or always
+-- re-reason regardless
+emptyReasoningPrefillSuppressesReasoning :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+emptyReasoningPrefillSuppressesReasoning makeRequest modelName = do
+  it "empty AssistantReasoning prefill suppresses reasoning_content" $ do
+    let req = mempty
+          { model = modelName
+          , messages =
+              [ userMessage "What is 15 * 23?"
+              , emptyMessage { role = "assistant", reasoning_content = Just "" }
+              ]
+          }
+    resp <- makeRequest req
+    assertNoReasoningData resp
+
 -- | Probe: Reasoning via reasoning_details field (OpenRouter quirk)
 --
 -- __Tests:__ Does the provider put reasoning in reasoning_details?

@@ -114,6 +114,12 @@ testsLlamaCpp40B provider modelName = do
       consecutiveUserMessages provider modelName
       startsWithAssistant provider modelName
       reasoning provider modelName
+      reasoningTogglesOn provider modelName
+      -- reasoningTogglesOff: fails - reasoning_enabled=false is ignored by llama.cpp
+      -- noThinkSuppressesReasoning: fails - /nothink stripped before reaching template
+      -- emptyThinkPrefillSuppressesReasoning: rejected - prefill incompatible with enable_thinking
+      -- emptyReasoningPrefillSuppressesReasoning: rejected - assistant message needs content/tool_calls
+      chatTemplateKwargsDisablesThinking provider modelName
       visionPng provider modelName
       visionJpeg provider modelName
       visionAccuracy provider modelName
@@ -129,7 +135,7 @@ testsLlamaCpp40B provider modelName = do
 
     describe "Standard Tests" $
       testModel route (Qwen35_40B `via` LlamaCpp) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningDisabled, ST.reasoningWithTools, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
 
 -- | Test Qwen 3.5 Plus via AlibabaCloud
 testsQwen35PlusAlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec

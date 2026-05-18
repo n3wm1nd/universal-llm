@@ -513,6 +513,61 @@ openAIReasoning _m configs _s = noopHandler
     isEmptyMessage (AssistantReasoning txt) = T.null (T.strip txt)
     isEmptyMessage _ = False
 
+-- llama.cpp reasoning provider
+-- Uses chat_template_kwargs to toggle thinking, since llama.cpp ignores the
+-- reasoning_enabled field and controls thinking via the chat template instead.
+llamaCppReasoning :: forall m state. (HasReasoning m, ProviderRequest m ~ OpenAIRequest, ProviderResponse m ~ OpenAIResponse) => ComposableProvider m state
+llamaCppReasoning _m configs _s = noopHandler
+  { cpToRequest = handleReasoningMessage
+  , cpConfigHandler = \req ->
+      let lastMessageIsUser = case reverse (messages req) of
+            (msg:_) -> role msg == "user"
+            [] -> False
+          templateKwargs = case [r | Reasoning r <- configs] of
+            (True:_)  | lastMessageIsUser -> Just (object ["enable_thinking" .= True])
+            (False:_)                     -> Just (object ["enable_thinking" .= False])
+            _                             -> Nothing
+      in req { chat_template_kwargs = templateKwargs }
+  , cpFromResponse = parseReasoningResponse
+  , cpPureMessageResponse = orderReasoningBeforeText
+  , cpSerializeMessage = serializeReasoningMessages
+  , cpDeserializeMessage = deserializeReasoningMessages
+  }
+  where
+    parseReasoningResponse (OpenAIError err) =
+      Left $ ModelError $ errorMessage (errorDetail err)
+    parseReasoningResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
+      case respChoices of
+        (OpenAIChoice msg:rest) ->
+          case reasoning_content msg of
+            Just txt | not (T.null txt) ->
+              let updatedMsg = msg { reasoning_content = Nothing }
+                  newChoices = OpenAIChoice updatedMsg : rest
+              in Right (Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse newChoices)))
+            _ -> Right Nothing
+        [] -> Right Nothing
+
+    orderReasoningBeforeText :: [Message m] -> [Message m]
+    orderReasoningBeforeText = go [] [] . filter (not . isEmptyMessage)
+      where
+        go accum reasonMsgs [] = reasonMsgs ++ accum
+        go accum reasonMsgs (msg@(AssistantReasoning _) : rest) =
+          let hasText = any isAssistantText accum
+          in if hasText
+             then [msg] ++ reasonMsgs ++ accum ++ go [] [] rest
+             else go accum (reasonMsgs ++ [msg]) rest
+        go accum reasonMsgs (msg@(AssistantText _) : rest) =
+          go (accum ++ [msg]) reasonMsgs rest
+        go accum reasonMsgs (msg : rest) =
+          go (accum ++ [msg]) reasonMsgs rest
+
+    isAssistantText (AssistantText _) = True
+    isAssistantText _ = False
+
+    isEmptyMessage (AssistantText txt) = T.null (T.strip txt)
+    isEmptyMessage (AssistantReasoning txt) = T.null (T.strip txt)
+    isEmptyMessage _ = False
+
 -- OpenRouter reasoning provider - handles reasoning_details preservation
 -- This is specifically for OpenRouter which requires reasoning_details to be preserved
 -- across multi-turn conversations, especially when using tool calls with reasoning models

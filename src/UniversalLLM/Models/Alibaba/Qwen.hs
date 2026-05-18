@@ -93,7 +93,7 @@ instance HasJSON (Model Qwen35_122B LlamaCpp) where
   withJSON = OpenAI.openAIJSON
 
 instance HasReasoning (Model Qwen35_122B LlamaCpp) where
-  withReasoning = OpenAI.openAIReasoning
+  withReasoning = OpenAI.llamaCppReasoning
 
 instance Routing (Model Qwen35_122B LlamaCpp) where
   type RoutingState (Model Qwen35_122B LlamaCpp) = ((), ((), ((), ((), ((), ())))))
@@ -118,7 +118,7 @@ instance HasJSON (Model Qwen35_40B LlamaCpp) where
   withJSON = OpenAI.openAIJSON
 
 instance HasReasoning (Model Qwen35_40B LlamaCpp) where
-  withReasoning = OpenAI.openAIReasoning
+  withReasoning = OpenAI.llamaCppReasoning
 
 instance HasVision (Model Qwen35_40B LlamaCpp) where
   withVision = OpenAI.openAIVision

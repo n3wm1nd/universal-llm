@@ -165,6 +165,16 @@ disableReasoning req = req
   { reasoning = Just $ emptyReasoningConfig { reasoning_enabled = Just False }
   }
 
+-- | Disable thinking via llama.cpp's chat_template_kwargs
+disableThinkingLlamaCpp :: OpenAIRequest -> OpenAIRequest
+disableThinkingLlamaCpp req = req
+  { chat_template_kwargs = Just $ Aeson.object ["enable_thinking" Aeson..= False] }
+
+-- | Enable thinking via llama.cpp's chat_template_kwargs
+enableThinkingLlamaCpp :: OpenAIRequest -> OpenAIRequest
+enableThinkingLlamaCpp req = req
+  { chat_template_kwargs = Just $ Aeson.object ["enable_thinking" Aeson..= True] }
+
 -- | Enable reasoning with effort field only (no enabled flag)
 enableReasoningEffortOnly :: OpenAIRequest -> OpenAIRequest
 enableReasoningEffortOnly req = req

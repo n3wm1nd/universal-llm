@@ -21,6 +21,7 @@ module StandardTests
   , tools
   , toolWithName
   , reasoning
+  , reasoningDisabled
   , hiddenReasoning
   , reasoningWithTools
   , reasoningWithToolsModifiedReasoning
@@ -472,6 +473,30 @@ hiddenReasoning = StandardTest $ \cp model initialState getResponse -> do
 
       -- Should get a response (reasoning and/or text)
       length parsedMsgs2 `shouldSatisfy` (> 0)
+
+-- | Test that Reasoning False actually suppresses reasoning output
+--
+-- This test verifies that when reasoning is disabled via config, no
+-- AssistantReasoning messages appear in the response. This is distinct from
+-- just "accepting" a config — it checks that the toggle has an actual effect.
+--
+-- Fails for models/providers where the disable flag is ignored (e.g. llama.cpp
+-- with reasoning_enabled=false, which the template doesn't honour).
+reasoningDisabled :: ( Provider m
+                     , SupportsMaxTokens (ProviderOf m)
+                     , HasReasoning m
+                     )
+                  => StandardTest m state
+reasoningDisabled = StandardTest $ \cp model initialState getResponse -> do
+  describe "Reasoning Disabled" $ do
+    it "Reasoning False produces no AssistantReasoning messages" $ do
+      let configs = [MaxTokens 1024, Reasoning False]
+          msgs = [UserText "What is 15 * 23?"]
+          (state1, req) = toProviderRequest cp model configs initialState msgs
+      resp <- getResponse req
+      let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs state1 resp
+      let reasoningMsgs = [txt | AssistantReasoning txt <- parsedMsgs]
+      length reasoningMsgs `shouldBe` 0
 
 -- ============================================================================
 -- Combined Tests

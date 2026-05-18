@@ -61,6 +61,7 @@ data OpenAIRequest = OpenAIRequest
   , response_format :: Maybe OpenAIResponseFormat
   , stream :: Maybe Bool
   , reasoning :: Maybe OpenAIReasoningConfig
+  , chat_template_kwargs :: Maybe Value  -- llama.cpp: pass extra params to chat template (e.g. enable_thinking)
   } deriving (Generic, Show, Eq)
 
 instance Semigroup OpenAIRequest where
@@ -74,6 +75,7 @@ instance Semigroup OpenAIRequest where
     , response_format = response_format r2 <|> response_format r1
     , stream = stream r2 <|> stream r1
     , reasoning = reasoning r2 <|> reasoning r1
+    , chat_template_kwargs = chat_template_kwargs r2 <|> chat_template_kwargs r1
     }
 
 instance Monoid OpenAIRequest where
@@ -87,6 +89,7 @@ instance Monoid OpenAIRequest where
     , response_format = Nothing
     , stream = Nothing
     , reasoning = Nothing
+    , chat_template_kwargs = Nothing
     }
 
 data OpenAIResponseFormat = OpenAIResponseFormat
@@ -232,6 +235,7 @@ instance HasCodec OpenAIRequest where
       <*> optionalField "response_format" "Response format specification" .= response_format
       <*> optionalField "stream" "Enable streaming" .= stream
       <*> optionalField "reasoning" "Reasoning configuration (OpenRouter)" .= reasoning
+      <*> optionalField "chat_template_kwargs" "llama.cpp: extra params passed to chat template (e.g. enable_thinking)" .= chat_template_kwargs
 
 instance HasCodec OpenAIResponseFormat where
   codec = object "OpenAIResponseFormat" $
@@ -351,6 +355,7 @@ defaultOpenAIRequest = OpenAIRequest
   , response_format = Nothing
   , stream = Nothing
   , reasoning = Nothing
+  , chat_template_kwargs = Nothing
   }
 
 -- | Default OpenAI message (use record update syntax to set fields)
