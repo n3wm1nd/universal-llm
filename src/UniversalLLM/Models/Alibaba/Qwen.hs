@@ -59,6 +59,8 @@ module UniversalLLM.Models.Alibaba.Qwen
   ( -- * Model Types
     Qwen35_122B(..)
   , Qwen35_40B(..)
+  , Qwen36Plus(..)
+  , Qwen37Max(..)
   , Qwen3CoderNext(..)
   , Qwen3Coder30bInstruct(..)
   , Qwen3CoderPlus(..)
@@ -269,6 +271,84 @@ instance HasJSON (Model Qwen3CoderPlus AlibabaCloud) where
 instance Routing (Model Qwen3CoderPlus AlibabaCloud) where
   type RoutingState (Model Qwen3CoderPlus AlibabaCloud) = ((), ((), ()))
   route = withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen3CoderPlus AlibabaCloud)
+
+--------------------------------------------------------------------------------
+-- Qwen 3.6 Plus (AlibabaCloud + OpenRouter)
+--------------------------------------------------------------------------------
+
+-- | Qwen 3.6 Plus - Cloud-based model via Alibaba Cloud and OpenRouter
+--
+-- Capabilities:
+-- - Tool calling
+-- - JSON mode
+-- - Reasoning (Deep Thinking)
+-- - Vision
+data Qwen36Plus = Qwen36Plus deriving (Show, Eq)
+
+instance ModelName (Model Qwen36Plus AlibabaCloud) where
+  modelName (Model _ _) = "qwen3.6-plus"
+
+instance HasTools (Model Qwen36Plus AlibabaCloud) where
+  withTools = OpenAI.openAITools
+
+instance HasJSON (Model Qwen36Plus AlibabaCloud) where
+  withJSON = OpenAI.openAIJSON
+
+instance HasReasoning (Model Qwen36Plus AlibabaCloud) where
+  withReasoning = OpenAI.openAIReasoning
+
+instance HasVision (Model Qwen36Plus AlibabaCloud) where
+  withVision = OpenAI.openAIVision
+
+instance Routing (Model Qwen36Plus AlibabaCloud) where
+  type RoutingState (Model Qwen36Plus AlibabaCloud) = ((), ((), ((), ((), ()))))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model Qwen36Plus AlibabaCloud)
+
+instance ModelName (Model Qwen36Plus OpenRouter) where
+  modelName (Model _ _) = "qwen/qwen3.6-plus"
+
+instance HasTools (Model Qwen36Plus OpenRouter) where
+  withTools = OpenAI.openAITools
+
+instance HasJSON (Model Qwen36Plus OpenRouter) where
+  withJSON = OpenAI.openAIJSON
+
+instance HasReasoning (Model Qwen36Plus OpenRouter) where
+  type ReasoningState (Model Qwen36Plus OpenRouter) = OpenAI.OpenRouterReasoningState
+  withReasoning = OpenAI.openRouterReasoning
+
+instance Routing (Model Qwen36Plus OpenRouter) where
+  type RoutingState (Model Qwen36Plus OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen36Plus OpenRouter)
+
+--------------------------------------------------------------------------------
+-- Qwen 3.7 Max (OpenRouter)
+--------------------------------------------------------------------------------
+
+-- | Qwen 3.7 Max - Large frontier model via OpenRouter
+--
+-- Capabilities:
+-- - Tool calling
+-- - JSON mode
+-- - Reasoning
+data Qwen37Max = Qwen37Max deriving (Show, Eq)
+
+instance ModelName (Model Qwen37Max OpenRouter) where
+  modelName (Model _ _) = "qwen/qwen3.7-max"
+
+instance HasTools (Model Qwen37Max OpenRouter) where
+  withTools = OpenAI.openAITools
+
+instance HasJSON (Model Qwen37Max OpenRouter) where
+  withJSON = OpenAI.openAIJSON
+
+instance HasReasoning (Model Qwen37Max OpenRouter) where
+  type ReasoningState (Model Qwen37Max OpenRouter) = OpenAI.OpenRouterReasoningState
+  withReasoning = OpenAI.openRouterReasoning
+
+instance Routing (Model Qwen37Max OpenRouter) where
+  type RoutingState (Model Qwen37Max OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen37Max OpenRouter)
 
 --------------------------------------------------------------------------------
 -- Aliases (Qwen3Coder = latest = Qwen3CoderNext)

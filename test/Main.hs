@@ -22,8 +22,7 @@ import qualified ToolsSpec
 import qualified ReasoningConfigSpec
 import qualified Protocol.OpenAITests
 import qualified Models.ZhipuAI.GLM
-import qualified Models.Alibaba.Qwen3Coder
-import qualified Models.Alibaba.Qwen35
+import qualified Models.Alibaba.Qwen
 import qualified Models.Google.Gemini
 import qualified Models.Amazon.Nova2Lite
 import qualified Models.Anthropic.Claude
@@ -51,14 +50,17 @@ main = do
       Models.ZhipuAI.GLM.testsGLM5AlibabaCloud (alibabaCloudProvider p)
       Models.ZhipuAI.GLM.testsGLM51ZAI (zaiProvider p)
       Models.ZhipuAI.GLM.testsGLM5TurboZAI (zaiProvider p)
-      Models.Alibaba.Qwen35.testsOpenRouter (openrouterProvider p)
-      Models.Alibaba.Qwen35.testsLlamaCpp (llamacppProvider p) "Qwen3.5-122B"
-      Models.Alibaba.Qwen35.testsLlamaCpp40B (llamacppProvider p) "Qwen3.5-40B"
-      Models.Alibaba.Qwen35.testsQwen35PlusAlibabaCloud (alibabaCloudProvider p)
-      Models.Alibaba.Qwen3Coder.testsLlamaCppNext (llamacppProvider p) "Qwen3-Coder-Next"
-      Models.Alibaba.Qwen3Coder.testsLlamaCpp30bInstruct (llamacppProvider p) "Qwen3-Coder-30B-Instruct"
-      Models.Alibaba.Qwen3Coder.testsQwen3CoderNextAlibabaCloud (alibabaCloudProvider p)
-      Models.Alibaba.Qwen3Coder.testsQwen3CoderPlusAlibabaCloud (alibabaCloudProvider p)
+      Models.Alibaba.Qwen.testsQwen35_122BOpenRouter (openrouterProvider p)
+      Models.Alibaba.Qwen.testsQwen35_122BLlamaCpp (llamacppProvider p) "Qwen3.5-122B"
+      Models.Alibaba.Qwen.testsQwen35_40BLlamaCpp (llamacppProvider p) "Qwen3.5-40B"
+      Models.Alibaba.Qwen.testsQwen35PlusAlibabaCloud (alibabaCloudProvider p)
+      Models.Alibaba.Qwen.testsQwen36PlusAlibabaCloud (alibabaCloudProvider p)
+      Models.Alibaba.Qwen.testsQwen36PlusOpenRouter (openrouterProvider p)
+      Models.Alibaba.Qwen.testsQwen37MaxOpenRouter (openrouterProvider p)
+      Models.Alibaba.Qwen.testsQwen3CoderNextLlamaCpp (llamacppProvider p) "Qwen3-Coder-Next"
+      Models.Alibaba.Qwen.testsQwen3Coder30bInstructLlamaCpp (llamacppProvider p) "Qwen3-Coder-30B-Instruct"
+      Models.Alibaba.Qwen.testsQwen3CoderNextAlibabaCloud (alibabaCloudProvider p)
+      Models.Alibaba.Qwen.testsQwen3CoderPlusAlibabaCloud (alibabaCloudProvider p)
       Models.Google.Gemini.testsGemini3FlashOpenRouter (openrouterProvider p)
       Models.Google.Gemini.testsGemini3ProOpenRouter (openrouterProvider p)
       Models.Amazon.Nova2Lite.testsOpenRouter (openrouterProvider p)
