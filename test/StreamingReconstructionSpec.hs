@@ -148,7 +148,7 @@ spec loadedModel getNonStreamingResponse getStreamingResponse = do
           -- The actual model loaded in llamacpp is handled by the modelMatches filter
           model = Model GLM45Air LlamaCpp
           provider = llamaCppGLM45
-          state = (def, ((), ((), ())))
+          state = def
           nonStreamReq = snd $ toProviderRequest provider model configs state msgs
 
           -- Build streaming request
@@ -193,7 +193,7 @@ spec loadedModel getNonStreamingResponse getStreamingResponse = do
 
           model = Model GLM45Air LlamaCpp
           provider = llamaCppGLM45
-          state = (def, ((), ((), ())))
+          state = def
           nonStreamReq = snd $ toProviderRequest provider model configs state msgs
           streamReq = Proto.enableOpenAIStreaming nonStreamReq
 
@@ -215,7 +215,7 @@ spec loadedModel getNonStreamingResponse getStreamingResponse = do
 
           model = Model GLM45Air LlamaCpp
           provider = llamaCppGLM45
-          state = (def, ((), ((), ())))
+          state = def
           nonStreamReq = snd $ toProviderRequest provider model configs state msgs
           streamReq = Proto.enableOpenAIStreaming nonStreamReq
 

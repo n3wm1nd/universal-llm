@@ -28,14 +28,14 @@ buildRequest :: TestModel
              -> [ModelConfig TestModel]
              -> [Message TestModel]
              -> AnthropicRequest
-buildRequest model = buildRequestGeneric TestModels.anthropicSonnet45NoReasonOAuth model ((), ((), ((), ())))
+buildRequest model = buildRequestGeneric TestModels.anthropicSonnet45NoReasonOAuth model def
 
 -- Helper to build STREAMING request for ClaudeSonnet45NoReason
 buildStreamingRequest :: TestModel
                       -> [ModelConfig TestModel]
                       -> [Message TestModel]
                       -> AnthropicRequest
-buildStreamingRequest model = buildStreamingRequestGeneric TestModels.anthropicSonnet45NoReasonOAuth model ((), ((), ((), ())))
+buildStreamingRequest model = buildStreamingRequestGeneric TestModels.anthropicSonnet45NoReasonOAuth model def
 
 -- Type alias for the reasoning test model
 type TestModelWithReasoning = Model TestModels.ClaudeSonnet45 Provider.AnthropicOAuth
@@ -45,14 +45,14 @@ buildRequestWithReasoning :: TestModelWithReasoning
                           -> [ModelConfig TestModelWithReasoning]
                           -> [Message TestModelWithReasoning]
                           -> AnthropicRequest
-buildRequestWithReasoning model = buildRequestGeneric TestModels.anthropicSonnet45OAuth model (def, ((), ((), ((), ()))))
+buildRequestWithReasoning model = buildRequestGeneric TestModels.anthropicSonnet45OAuth model def
 
 -- Helper to build STREAMING request for ClaudeSonnet45 (with reasoning)
 buildStreamingRequestWithReasoning :: TestModelWithReasoning
                                    -> [ModelConfig TestModelWithReasoning]
                                    -> [Message TestModelWithReasoning]
                                    -> AnthropicRequest
-buildStreamingRequestWithReasoning model = buildStreamingRequestGeneric TestModels.anthropicSonnet45OAuth model (def, ((), ((), ((), ()))))
+buildStreamingRequestWithReasoning model = buildStreamingRequestGeneric TestModels.anthropicSonnet45OAuth model def
 
 -- Generic helper to build request with explicit composable provider
 buildRequestGeneric :: forall m s. (ProviderRequest m ~ AnthropicRequest, Provider m)
@@ -84,7 +84,7 @@ parseResponse :: TestModel
               -> AnthropicResponse
               -> Either LLMError [Message TestModel]
 parseResponse model configs _history resp =
-  let msgs = parseResponseGeneric TestModels.anthropicSonnet45NoReasonOAuth model configs ((), ((), ((), ()))) resp
+  let msgs = parseResponseGeneric TestModels.anthropicSonnet45NoReasonOAuth model configs def resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs
@@ -96,7 +96,7 @@ parseResponseWithReasoning :: TestModelWithReasoning
                            -> AnthropicResponse
                            -> Either LLMError [Message TestModelWithReasoning]
 parseResponseWithReasoning model configs _history resp =
-  let msgs = parseResponseGeneric TestModels.anthropicSonnet45OAuth model configs (def, ((), ((), ((), ())))) resp
+  let msgs = parseResponseGeneric TestModels.anthropicSonnet45OAuth model configs def resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs

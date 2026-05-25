@@ -50,7 +50,7 @@ spec = do
         let configs :: [ModelConfig (Model GLM45Air OpenRouter)]
             configs = [Reasoning True, MaxTokens 1000]
             msgs = [UserText "Hello"]
-            (_, req) = toProviderRequest openRouterGLM45Air (Model GLM45Air OpenRouter) configs (OpenRouterReasoningState mempty mempty, ((), ((), ()))) msgs
+            (_, req) = toProviderRequest openRouterGLM45Air (Model GLM45Air OpenRouter) configs def msgs
 
         -- Check that reasoning field is set
         case reasoning req of

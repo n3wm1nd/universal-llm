@@ -30,7 +30,7 @@ buildRequest :: TestModel
              -> [ModelConfig TestModel]
              -> [Message TestModel]
              -> OpenAIRequest
-buildRequest model = buildRequestGeneric TestModels.openRouterGLM45Air model (def, ((), ((), ())))
+buildRequest model = buildRequestGeneric TestModels.openRouterGLM45Air model def
 
 -- Generic helper to build request with explicit composable provider
 buildRequestGeneric :: forall m s. (ProviderRequest m ~ OpenAIRequest, Provider m)
@@ -54,7 +54,7 @@ parseOpenAIResponse model configs _history (OpenAIError (OpenAIErrorResponse err
         Nothing -> ""
   in Left $ ProviderError (code errDetail) $ errorMessage errDetail <> typeInfo
 parseOpenAIResponse model configs _history resp =
-  let msgs = parseOpenAIResponseGeneric TestModels.openRouterGLM45Air model configs (def, ((), ((), ()))) resp
+  let msgs = parseOpenAIResponseGeneric TestModels.openRouterGLM45Air model configs def resp
   in if null msgs
      then Left $ ParseError "No messages parsed from response"
      else Right msgs

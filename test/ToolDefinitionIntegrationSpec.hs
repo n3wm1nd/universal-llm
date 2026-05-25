@@ -18,6 +18,7 @@ import qualified Data.Vector as V
 import Autodocodec (HasCodec(..), named, requiredField')
 import qualified Autodocodec as AC
 import UniversalLLM
+import Data.Default (def)
 import UniversalLLM.Tools
 import qualified UniversalLLM.Protocols.OpenAI as OpenAIProt
 import qualified UniversalLLM.Protocols.Anthropic as AnthropicProt
@@ -81,7 +82,7 @@ spec = do
             model = Model GLM45Air OpenAI.OpenRouter
             configs = [Tools [toolDef]]
             msgs = [UserText "Calculate 5 + 3" :: Message (Model GLM45Air OpenAI.OpenRouter)]
-            req = snd $ toProviderRequest openRouterGLM45Air model configs (OpenAI.OpenRouterReasoningState mempty mempty, ((), ((), ()))) msgs
+            req = snd $ toProviderRequest openRouterGLM45Air model configs def msgs
 
         -- Verify tool is correctly translated to OpenAI format
         case OpenAIProt.tools req of
@@ -121,7 +122,7 @@ spec = do
             model = Model ClaudeSonnet45NoReason Anthropic.Anthropic
             configs = [Tools [toolDef]]
             msgs = [UserText "Calculate 10 * 7" :: Message (Model ClaudeSonnet45NoReason Anthropic.Anthropic)]
-            req = snd $ toProviderRequest TestModels.anthropicSonnet45NoReason model configs ((), ((), ())) msgs
+            req = snd $ toProviderRequest TestModels.anthropicSonnet45NoReason model configs def msgs
 
         -- Verify tool is correctly translated to Anthropic format
         case AnthropicProt.tools req of
@@ -155,7 +156,7 @@ spec = do
             model = Model GLM45Air OpenAI.OpenRouter
             configs = [Tools [calcDef]]
             msgs = [UserText "Do some math" :: Message (Model GLM45Air OpenAI.OpenRouter)]
-            req = snd $ toProviderRequest openRouterGLM45Air model configs (OpenAI.OpenRouterReasoningState mempty mempty, ((), ((), ()))) msgs
+            req = snd $ toProviderRequest openRouterGLM45Air model configs def msgs
 
         -- Should have tools in the request
         case OpenAIProt.tools req of

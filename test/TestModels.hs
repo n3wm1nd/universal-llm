@@ -97,51 +97,51 @@ import UniversalLLM.Models.Amazon.Nova
 
 -- Provider aliases for backward compatibility with tests
 -- All now use route instead of named provider functions
-anthropicSonnet45 :: ComposableProvider (Model ClaudeSonnet45 Anthropic) (Anthropic.AnthropicReasoningState, ((), ((), ())))
+anthropicSonnet45 :: ComposableProvider (Model ClaudeSonnet45 Anthropic) (RoutingState (Model ClaudeSonnet45 Anthropic))
 anthropicSonnet45 = route
 
-anthropicSonnet45NoReason :: ComposableProvider (Model ClaudeSonnet45NoReason Anthropic) ((), ((), ()))
+anthropicSonnet45NoReason :: ComposableProvider (Model ClaudeSonnet45NoReason Anthropic) (RoutingState (Model ClaudeSonnet45NoReason Anthropic))
 anthropicSonnet45NoReason = route
 
 -- NOTE: OAuthToolsState removed as of 2025 - blacklist workaround no longer needed
-anthropicSonnet45OAuth :: ComposableProvider (Model ClaudeSonnet45 AnthropicOAuth) (Anthropic.AnthropicReasoningState, ((), ((), ((), ()))))
+anthropicSonnet45OAuth :: ComposableProvider (Model ClaudeSonnet45 AnthropicOAuth) (RoutingState (Model ClaudeSonnet45 AnthropicOAuth))
 anthropicSonnet45OAuth = route
 
-anthropicSonnet45NoReasonOAuth :: ComposableProvider (Model ClaudeSonnet45NoReason AnthropicOAuth) ((), ((), ((), ())))
+anthropicSonnet45NoReasonOAuth :: ComposableProvider (Model ClaudeSonnet45NoReason AnthropicOAuth) (RoutingState (Model ClaudeSonnet45NoReason AnthropicOAuth))
 anthropicSonnet45NoReasonOAuth = route
 
-anthropicHaiku45 :: ComposableProvider (Model ClaudeHaiku45 Anthropic) (Anthropic.AnthropicReasoningState, ((), ((), ())))
+anthropicHaiku45 :: ComposableProvider (Model ClaudeHaiku45 Anthropic) (RoutingState (Model ClaudeHaiku45 Anthropic))
 anthropicHaiku45 = route
 
-anthropicHaiku45OAuth :: ComposableProvider (Model ClaudeHaiku45 AnthropicOAuth) (Anthropic.AnthropicReasoningState, ((), ((), ((), ()))))
+anthropicHaiku45OAuth :: ComposableProvider (Model ClaudeHaiku45 AnthropicOAuth) (RoutingState (Model ClaudeHaiku45 AnthropicOAuth))
 anthropicHaiku45OAuth = route
 
-anthropicOpus46 :: ComposableProvider (Model ClaudeOpus46 Anthropic) (Anthropic.AnthropicReasoningState, ((), ((), ())))
+anthropicOpus46 :: ComposableProvider (Model ClaudeOpus46 Anthropic) (RoutingState (Model ClaudeOpus46 Anthropic))
 anthropicOpus46 = route
 
-anthropicOpus46OAuth :: ComposableProvider (Model ClaudeOpus46 AnthropicOAuth) (Anthropic.AnthropicReasoningState, ((), ((), ((), ()))))
+anthropicOpus46OAuth :: ComposableProvider (Model ClaudeOpus46 AnthropicOAuth) (RoutingState (Model ClaudeOpus46 AnthropicOAuth))
 anthropicOpus46OAuth = route
 
 -- Backward compat aliases for GLM45Air providers
-llamaCppGLM45 :: ComposableProvider (Model GLM45Air LlamaCpp) ((), ((), ((), ())))
+llamaCppGLM45 :: ComposableProvider (Model GLM45Air LlamaCpp) (RoutingState (Model GLM45Air LlamaCpp))
 llamaCppGLM45 = route
 
-openRouterGLM45Air :: ComposableProvider (Model GLM45Air OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+openRouterGLM45Air :: ComposableProvider (Model GLM45Air OpenRouter) (RoutingState (Model GLM45Air OpenRouter))
 openRouterGLM45Air = route
 
-zaiGLM45 :: ComposableProvider (Model GLM45Air ZAI) ((), ((), ((), ())))
+zaiGLM45 :: ComposableProvider (Model GLM45Air ZAI) (RoutingState (Model GLM45Air ZAI))
 zaiGLM45 = route
 
-llamaCppQwen3Coder :: ComposableProvider (Model Qwen3Coder LlamaCpp) ((), ((), ()))
+llamaCppQwen3Coder :: ComposableProvider (Model Qwen3Coder LlamaCpp) (RoutingState (Model Qwen3Coder LlamaCpp))
 llamaCppQwen3Coder = route
 
-openRouterNova2Lite :: ComposableProvider (Model Nova2Lite OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ((), ()))))
+openRouterNova2Lite :: ComposableProvider (Model Nova2Lite OpenRouter) (RoutingState (Model Nova2Lite OpenRouter))
 openRouterNova2Lite = route
 
-openRouterGemini3ProPreview :: ComposableProvider (Model Gemini3ProPreview OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ()))
+openRouterGemini3ProPreview :: ComposableProvider (Model Gemini3ProPreview OpenRouter) (RoutingState (Model Gemini3ProPreview OpenRouter))
 openRouterGemini3ProPreview = route
 
-openRouterGemini3FlashPreview :: ComposableProvider (Model Gemini3FlashPreview OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+openRouterGemini3FlashPreview :: ComposableProvider (Model Gemini3FlashPreview OpenRouter) (RoutingState (Model Gemini3FlashPreview OpenRouter))
 openRouterGemini3FlashPreview = route
 
 -- Test-specific instances for GLM45
@@ -149,7 +149,7 @@ openRouterGemini3FlashPreview = route
 
 -- Backward compat alias for tests that used GLM45 with OpenRouter
 -- Now redirects to GLM45Air which is the correct model
-openRouterGLM45 :: ComposableProvider (Model GLM45Air OpenRouter) (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+openRouterGLM45 :: ComposableProvider (Model GLM45Air OpenRouter) (RoutingState (Model GLM45Air OpenRouter))
 openRouterGLM45 = route
 
 -- ============================================================================
