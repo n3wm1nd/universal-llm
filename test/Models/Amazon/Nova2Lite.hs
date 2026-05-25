@@ -19,6 +19,7 @@ Nova has specific quirks around tool usage.
 ✓ Consecutive user messages
 ✓ History starting with assistant message
 ✓ Fabricated tool history (accepts with tools present)
+✓ Vision (PNG, JPEG, multiple images)
 ✗ Tool result with no tools field (toolConfig required)
 ✗ Reasoning exposure (reasons internally, no reasoning_details in response)
 
