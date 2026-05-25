@@ -23,7 +23,7 @@ __OpenRouter:__
   Uses reasoning_details field instead of standard reasoning_content
   Requires reasoning_details to be preserved in conversation history
   Tool call chains break if reasoning_details is stripped
-  Requires thought_signature in function calls (cannot use fabricated tool history)
+  Accepts fabricated tool history (thought_signature no longer required as of testing)
 
 -}
 
@@ -52,22 +52,11 @@ testsGemini3FlashOpenRouter provider = do
     describe "Protocol" $ do
       basicText provider "google/gemini-3-flash-preview"
       toolCalling provider "google/gemini-3-flash-preview"
-
-      -- Note: acceptsToolResults fails - Gemini requires thought_signature in function calls.
-      -- Fabricated tool history is rejected because it lacks the required signatures.
-      -- Error: "Function call is missing a thought_signature in functionCall parts"
-      -- acceptsToolResults provider "google/gemini-3-flash-preview"
-
-      -- Note: acceptsToolResultsWithoutReasoning also fails - even with reasoning disabled,
-      -- Gemini still requires thought_signature in tool calls. Cannot use fabricated history.
-      -- acceptsToolResultsWithoutReasoning provider "google/gemini-3-flash-preview"
-
-      -- Note: All tool result/history probes would fail - requires thought_signature
-      -- acceptsToolResultNoTools provider "google/gemini-3-flash-preview"
-      -- acceptsToolResultToolGone provider "google/gemini-3-flash-preview"
-      -- acceptsStaleToolInHistory provider "google/gemini-3-flash-preview"
-      -- acceptsOldToolCallStillAvailable provider "google/gemini-3-flash-preview"
-
+      acceptsFabricatedToolHistory provider "google/gemini-3-flash-preview"
+      acceptsToolResultNoTools provider "google/gemini-3-flash-preview"
+      acceptsToolResultToolGone provider "google/gemini-3-flash-preview"
+      acceptsStaleToolInHistory provider "google/gemini-3-flash-preview"
+      acceptsOldToolCallStillAvailable provider "google/gemini-3-flash-preview"
       consecutiveUserMessages provider "google/gemini-3-flash-preview"
       startsWithAssistant provider "google/gemini-3-flash-preview"
       reasoningViaDetails provider "google/gemini-3-flash-preview"

@@ -950,3 +950,38 @@ rejectsEmptyReasoningPrefill makeRequest modelName = do
     resp `shouldSatisfy` \r -> case r of
       OpenAIError err -> "must contain either 'content' or 'tool_calls'" `T.isInfixOf` errorMessage (getErrorDetail err)
       OpenAISuccess _ -> False
+
+-- | Negative probe: tool result in history without toolConfig is rejected (Nova)
+--
+-- __Tests:__ Does Nova reject fabricated tool history when no tools are provided?
+--
+-- __Checks:__ Request with tool call + result but tools=Nothing is rejected
+--
+-- __Expected to pass:__ Amazon Nova via OpenRouter/Bedrock (toolConfig required)
+--
+-- __Expected to fail:__ If this probe fails, Nova no longer requires toolConfig
+rejectsToolResultWithoutToolConfig :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+rejectsToolResultWithoutToolConfig makeRequest modelName = do
+  it "rejects tool result in history when toolConfig field is missing" $ do
+    let req = requestWithToolResultNoTools { model = modelName }
+    resp <- makeRequest (\_ _ -> False) req
+    resp `shouldSatisfy` \r -> case r of
+      OpenAIError _ -> True
+      OpenAISuccess _ -> False
+
+-- | Probe: Accepts fabricated tool call history
+--
+-- __Tests:__ Does the model accept a fabricated tool call + result in history?
+--
+-- __Checks:__ Response succeeds with full tool call + result + matching tools present
+--
+-- __Expected to pass:__ Nova, Gemini (both accept fabricated tool history)
+--
+-- __Note:__ This was previously thought to require thought_signature (Gemini) or toolConfig
+-- (Nova), but testing shows both accept fabricated history when tools are provided.
+acceptsFabricatedToolHistory :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+acceptsFabricatedToolHistory makeRequest modelName = do
+  it "accepts fabricated tool call history" $ do
+    let req = requestWithToolCallHistory { model = modelName }
+    resp <- request makeRequest req
+    assertHasAssistantText resp

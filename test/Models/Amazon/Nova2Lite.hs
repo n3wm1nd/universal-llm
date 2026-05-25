@@ -18,7 +18,9 @@ Nova has specific quirks around tool usage.
 ✓ Tool calling (proper tool_calls format)
 ✓ Consecutive user messages
 ✓ History starting with assistant message
-✗ Reasoning exposure (has reasoning but not accessible via API)
+✓ Fabricated tool history (accepts with tools present)
+✗ Tool result with no tools field (toolConfig required)
+✗ Reasoning exposure (reasons internally, no reasoning_details in response)
 
 = Provider-Specific Quirks
 
@@ -63,41 +65,17 @@ testsOpenRouter provider = do
     describe "Protocol" $ do
       basicText provider "amazon/nova-2-lite-v1"
       toolCalling provider "amazon/nova-2-lite-v1"
-
-      -- Note: acceptsToolResults fails - Nova requires toolConfig field when using tool results
-      -- Error: "The toolConfig field must be defined when using toolUse and toolResult content blocks."
-      -- Cannot use fabricated tool history without proper toolConfig
-      -- acceptsToolResults provider "amazon/nova-2-lite-v1"
-
-      -- Note: acceptsToolResultsWithoutReasoning also fails - same toolConfig requirement
-      -- acceptsToolResultsWithoutReasoning provider "amazon/nova-2-lite-v1"
-
-      -- Note: acceptsToolResultNoTools fails - Nova requires toolConfig field to be present
-      -- even if empty. The field must exist when tool calls/results are in history.
-      -- acceptsToolResultNoTools provider "amazon/nova-2-lite-v1"
-
-      -- Note: acceptsToolResultToolGone fails - Nova requires toolConfig field when tool
-      -- results are present. Doesn't validate that tools match history, just needs field set.
-      -- acceptsToolResultToolGone provider "amazon/nova-2-lite-v1"
-
-      -- Note: acceptsStaleToolInHistory would also fail - same toolConfig requirement
-      -- acceptsStaleToolInHistory provider "amazon/nova-2-lite-v1"
-
-      -- Note: acceptsOldToolCallStillAvailable would also fail - same toolConfig requirement
-      -- acceptsOldToolCallStillAvailable provider "amazon/nova-2-lite-v1"
-
+      acceptsFabricatedToolHistory provider "amazon/nova-2-lite-v1"
+      rejectsToolResultWithoutToolConfig provider "amazon/nova-2-lite-v1"
+      acceptsToolResultToolGone provider "amazon/nova-2-lite-v1"
+      acceptsStaleToolInHistory provider "amazon/nova-2-lite-v1"
+      acceptsOldToolCallStillAvailable provider "amazon/nova-2-lite-v1"
       consecutiveUserMessages provider "amazon/nova-2-lite-v1"
       startsWithAssistant provider "amazon/nova-2-lite-v1"
+      acceptsHiddenReasoning provider "amazon/nova-2-lite-v1"
       visionPng provider "amazon/nova-2-lite-v1"
       visionJpeg provider "amazon/nova-2-lite-v1"
       visionMultipleImages provider "amazon/nova-2-lite-v1"
-
-      -- Note: reasoningViaDetails fails - Nova has reasoning but doesn't expose it via API
-      -- The model has reasoning capabilities but OpenRouter/Bedrock doesn't provide reasoning_details
-      -- reasoningViaDetails provider "amazon/nova-2-lite-v1"
-
-      -- Note: toolCallingWithReasoning fails - requires reasoning_details which Nova doesn't provide
-      -- toolCallingWithReasoning provider "amazon/nova-2-lite-v1"
 
     describe "Standard Tests" $
       testModel route (Nova2Lite `via` OpenRouter) provider
