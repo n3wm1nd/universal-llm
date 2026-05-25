@@ -12,7 +12,7 @@ import qualified Data.Text as T
 import Data.Aeson (object, (.=))
 import Control.Monad (unless)
 import qualified Data.Aeson as Aeson
-import TestCache (ResponseProvider)
+import TestCache (ResponseProvider, request)
 import TestModels
 import UniversalLLM
 import UniversalLLM.Protocols.Anthropic
@@ -140,7 +140,7 @@ spec getResponse = do
           req1 = Provider.withMagicSystemPrompt $
                    buildRequest model configs msgs1
 
-      resp1 <- getResponse req1
+      resp1 <- request getResponse req1
 
       case parseResponse model configs msgs1 resp1 of
         Right [AssistantText txt] -> do
@@ -151,7 +151,7 @@ spec getResponse = do
               req2 = Provider.withMagicSystemPrompt $
                        buildRequest model configs msgs2
 
-          resp2 <- getResponse req2
+          resp2 <- request getResponse req2
 
           case parseResponse model configs msgs2 resp2 of
             Right [AssistantText txt2] -> do
@@ -213,7 +213,7 @@ spec getResponse = do
           anthropicToolDescription tool `shouldBe` "Get the current weather in a given location"
         _ -> expectationFailure "Expected exactly one tool in request"
 
-      resp1 <- getResponse req1
+      resp1 <- request getResponse req1
 
       case parseResponse model configs msgs1 resp1 of
         Right [AssistantTool toolCall] -> do
@@ -233,7 +233,7 @@ spec getResponse = do
           -- user -> assistant (tool_use) -> user (tool_result)
           length (messages req2) `shouldBe` 3
 
-          resp2 <- getResponse req2
+          resp2 <- request getResponse req2
 
           case parseResponse model configs msgs2 resp2 of
             Right [AssistantText finalTxt] -> do
@@ -254,7 +254,7 @@ spec getResponse = do
           req = Provider.withMagicSystemPrompt $
                   buildRequest model configs msgs
 
-      resp <- getResponse req
+      resp <- request getResponse req
 
       case parseResponse model configs msgs resp of
         -- Could get just tool call, or text + tool call, or just text
@@ -501,7 +501,7 @@ spec getResponse = do
           req = Provider.withMagicSystemPrompt $
                  buildRequestWithReasoning model configs msgs
 
-      resp <- getResponse req
+      resp <- request getResponse req
 
       -- Verify we got a successful response from the API
       case resp of

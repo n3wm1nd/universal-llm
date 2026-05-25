@@ -10,7 +10,7 @@ module CompletionSpec (spec) where
 import Test.Hspec
 import Data.Text (Text)
 import qualified Data.Text as T
-import TestCache (ResponseProvider)
+import TestCache (ResponseProvider, request)
 import TestModels
 import UniversalLLM
 import UniversalLLM.Protocols.OpenAI
@@ -53,7 +53,7 @@ spec getResponse = do
 
           req = buildCompletionRequest model configs prompt
 
-      resp <- getResponse req
+      resp <- request getResponse req
 
       case parseCompletion model configs prompt resp of
         Right completedText -> do
@@ -101,7 +101,7 @@ spec getResponse = do
 
           req = buildCompletionRequest model configs prompt
 
-      resp <- getResponse req
+      resp <- request getResponse req
 
       case parseCompletion model configs prompt resp of
         Right completedText -> do

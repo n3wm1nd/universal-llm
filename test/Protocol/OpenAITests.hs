@@ -46,6 +46,7 @@ Probes test __protocol behavior__, NOT our abstractions:
 
 In a model-specific test suite:
 @
+import TestCache (request, ResponseProvider)
 import Protocol.OpenAITests
 
 modelTests :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
@@ -69,9 +70,11 @@ reasoningViaDetails provider "unknown-model" -- ✓ passes (quirk!)
 
 module Protocol.OpenAITests where
 
+import TestCache (request, ResponseProvider)
 import UniversalLLM.Protocols.OpenAI
 import Protocol.OpenAI  -- unqualified - we mainly call these
 import Data.Text (Text)
+import qualified Data.Text as T
 import Test.Hspec (Spec, describe, it, shouldSatisfy, HasCallStack, runIO)
 import TestFixtures (loadImageBase64, glassbottlePng, glassbottleMirroredJpeg)
 
@@ -89,11 +92,11 @@ import TestFixtures (loadImageBase64, glassbottlePng, glassbottleMirroredJpeg)
 -- __Checks:__ Response contains non-empty assistant text
 --
 -- __Expected to pass:__ Almost all models
-basicText :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+basicText :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 basicText makeRequest modelName = do
   it "returns assistant text for simple question" $ do
     let req = (simpleUserRequest "What is 2+2?") { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasAssistantText resp
 
 -- | Probe: Tool calling support
@@ -106,14 +109,14 @@ basicText makeRequest modelName = do
 --
 -- __Note:__ This only tests if the model CAN call tools, not if it does
 -- so correctly or appropriately. Use StandardTests for that.
-toolCalling :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolCalling :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 toolCalling makeRequest modelName = do
   it "makes tool calls when tools are available" $ do
     let req = (simpleUserRequest "Use the get_weather function to check the weather in London.")
           { model = modelName
           , tools = Just [weatherTool]
           }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasToolCalls resp
 
 -- | Probe: Reasoning content (standard field)
@@ -127,12 +130,12 @@ toolCalling makeRequest modelName = do
 -- __Expected to fail:__ OpenRouter (uses reasoning_details instead)
 --
 -- __See also:__ 'reasoningViaDetails' for the OpenRouter variant
-reasoning :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+reasoning :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 reasoning makeRequest modelName = do
   it "returns reasoning content when enabled" $ do
     let req = enableReasoning (simpleUserRequest "Think step by step: What is 15 * 23?")
           { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasReasoningContent resp
 
 -- | Probe: Reasoning toggle ON actually produces reasoning output
@@ -149,11 +152,11 @@ reasoning makeRequest modelName = do
 -- __Expected to pass:__ Models that genuinely toggle reasoning via this field
 --
 -- __Expected to fail:__ Models that always reason regardless of the flag
-reasoningTogglesOn :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+reasoningTogglesOn :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 reasoningTogglesOn makeRequest modelName = do
   it "reasoning_enabled=true produces reasoning_content" $ do
     let req = enableReasoning (simpleUserRequest "What is 15 * 23?") { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasReasoningContent resp
 
 -- | Probe: Reasoning toggle OFF actually suppresses reasoning output
@@ -171,11 +174,11 @@ reasoningTogglesOn makeRequest modelName = do
 -- __Expected to pass:__ Models that honour the disable flag
 --
 -- __Expected to fail:__ Models that always reason, or where the field has no effect
-reasoningTogglesOff :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+reasoningTogglesOff :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 reasoningTogglesOff makeRequest modelName = do
   it "reasoning_enabled=false suppresses reasoning_content" $ do
     let req = disableReasoning (simpleUserRequest "What is 15 * 23?") { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertNoReasoningData resp
 
 -- | Probe: /nothink token suppresses reasoning (Qwen3 chat template)
@@ -189,11 +192,11 @@ reasoningTogglesOff makeRequest modelName = do
 -- __Expected to pass:__ Qwen3 models via llama.cpp
 --
 -- __Expected to fail:__ Models that don't use the Qwen3 chat template
-noThinkSuppressesReasoning :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+noThinkSuppressesReasoning :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 noThinkSuppressesReasoning makeRequest modelName = do
   it "/nothink token suppresses reasoning_content" $ do
     let req = (simpleUserRequest "What is 15 * 23? /nothink") { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertNoReasoningData resp
 
 -- | Probe: <think></think> assistant prefill suppresses reasoning (Qwen3)
@@ -207,7 +210,7 @@ noThinkSuppressesReasoning makeRequest modelName = do
 -- __Expected to pass:__ Qwen3 models via llama.cpp that support assistant prefill
 --
 -- __Expected to fail:__ Models that don't support prefill or ignore the tag
-emptyThinkPrefillSuppressesReasoning :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+emptyThinkPrefillSuppressesReasoning :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 emptyThinkPrefillSuppressesReasoning makeRequest modelName = do
   it "<think></think> assistant prefill suppresses reasoning_content" $ do
     let req = mempty
@@ -217,7 +220,7 @@ emptyThinkPrefillSuppressesReasoning makeRequest modelName = do
               , assistantMessage "<think></think>"
               ]
           }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertNoReasoningData resp
 
 -- | Probe: chat_template_kwargs enable_thinking=false suppresses reasoning (llama.cpp)
@@ -231,11 +234,11 @@ emptyThinkPrefillSuppressesReasoning makeRequest modelName = do
 -- __Expected to pass:__ Qwen3 models via a llama.cpp build that honours this param
 --
 -- __Expected to fail:__ OpenRouter and other providers; buggy llama.cpp builds
-chatTemplateKwargsDisablesThinking :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+chatTemplateKwargsDisablesThinking :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 chatTemplateKwargsDisablesThinking makeRequest modelName = do
   it "chat_template_kwargs enable_thinking=false suppresses reasoning_content" $ do
     let req = disableThinkingLlamaCpp (simpleUserRequest "What is 15 * 23?") { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertNoReasoningData resp
 
 -- | Probe: Empty reasoning prefill suppresses further reasoning (Qwen3)
@@ -253,7 +256,7 @@ chatTemplateKwargsDisablesThinking makeRequest modelName = do
 --
 -- __Expected to fail:__ Models that ignore the reasoning history or always
 -- re-reason regardless
-emptyReasoningPrefillSuppressesReasoning :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+emptyReasoningPrefillSuppressesReasoning :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 emptyReasoningPrefillSuppressesReasoning makeRequest modelName = do
   it "empty AssistantReasoning prefill suppresses reasoning_content" $ do
     let req = mempty
@@ -263,7 +266,7 @@ emptyReasoningPrefillSuppressesReasoning makeRequest modelName = do
               , emptyMessage { role = "assistant", reasoning_content = Just "" }
               ]
           }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertNoReasoningData resp
 
 -- | Probe: Reasoning via reasoning_details field (OpenRouter quirk)
@@ -279,12 +282,12 @@ emptyReasoningPrefillSuppressesReasoning makeRequest modelName = do
 -- __Provider quirk:__ OpenRouter uses reasoning_details instead of
 -- reasoning_content. This requires a handler in ComposableProvider
 -- to translate the field for our Message abstraction.
-reasoningViaDetails :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+reasoningViaDetails :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 reasoningViaDetails makeRequest modelName = do
   it "returns reasoning in reasoning_details field" $ do
     let req = enableReasoning (simpleUserRequest "Think step by step: What is 15 * 23?")
           { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasReasoningDetails resp
 
 -- | Probe: Hidden reasoning (accepts config, no response fields)
@@ -303,12 +306,12 @@ reasoningViaDetails makeRequest modelName = do
 -- internally to improve response quality, but don't expose the reasoning
 -- process in the API response. This is "hidden reasoning" - the model thinks
 -- but doesn't show its work.
-acceptsHiddenReasoning :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsHiddenReasoning :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 acceptsHiddenReasoning makeRequest modelName = do
   it "accepts reasoning config without returning reasoning data" $ do
     let req = enableReasoning (simpleUserRequest "Think step by step: What is 15 * 23?")
           { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     -- Should succeed (not error)
     assertHasAssistantText resp
     -- Should NOT have reasoning_content or reasoning_details
@@ -329,12 +332,12 @@ acceptsHiddenReasoning makeRequest modelName = do
 -- __Model behavior:__ Some models return reasoning_details but the content
 -- is encrypted/signed by the provider. The field is present for round-tripping
 -- in conversation history but not readable as tokens.
-encryptedReasoning :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+encryptedReasoning :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 encryptedReasoning makeRequest modelName = do
   it "returns encrypted reasoning in reasoning_details field" $ do
     let req = enableReasoning (simpleUserRequest "Think step by step: What is 15 * 23?")
           { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     -- Should succeed with assistant text
     assertHasAssistantText resp
     -- Should have reasoning_details with encrypted data
@@ -354,14 +357,14 @@ encryptedReasoning makeRequest modelName = do
 -- __Model quirk:__ Some models trained for XML tool format return tools in
 -- the content field instead of using the tool_calls field. This requires
 -- withXMLResponseParsing handler in ComposableProvider.
-toolCallingViaXML :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolCallingViaXML :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 toolCallingViaXML makeRequest modelName = do
   it "returns tool calls as XML in content field" $ do
     let req = (simpleUserRequest "Use the get_weather function to check the weather in London.")
           { model = modelName
           , tools = Just [weatherTool]
           }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasXMLToolCall "get_weather" resp
 
 -- | Probe: Accepts tool call responses
@@ -378,11 +381,11 @@ toolCallingViaXML makeRequest modelName = do
 -- not the full conversation flow (that's covered by StandardTests).
 -- We use fabricated history because we only care about format acceptance.
 -- Some models (Gemini) may reject this - use acceptsToolResultsWithoutReasoning instead.
-acceptsToolResults :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsToolResults :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 acceptsToolResults makeRequest modelName = do
   it "accepts tool results in conversation history" $ do
     let req = requestWithToolCallHistory { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasAssistantText resp
 
 -- | Probe: Accepts tool call responses with reasoning disabled
@@ -398,11 +401,11 @@ acceptsToolResults makeRequest modelName = do
 -- __Note:__ This explicitly disables reasoning to test if fabricated tool histories
 -- work when we're not in reasoning mode. Some models (Gemini) require reasoning_details
 -- to be preserved in history, but might accept fabricated history if reasoning is disabled.
-acceptsToolResultsWithoutReasoning :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsToolResultsWithoutReasoning :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 acceptsToolResultsWithoutReasoning makeRequest modelName = do
   it "accepts tool results with reasoning disabled" $ do
     let req = disableReasoning requestWithToolCallHistory { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasAssistantText resp
 
 -- | Probe: Tool calling with reasoning preservation
@@ -418,7 +421,7 @@ acceptsToolResultsWithoutReasoning makeRequest modelName = do
 -- __Note:__ This uses a real conversation flow (can't fabricate reasoning_details).
 -- Some models (like Gemini) require reasoning_details to be preserved in history
 -- or they fail/behave incorrectly on subsequent responses.
-toolCallingWithReasoning :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolCallingWithReasoning :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 toolCallingWithReasoning makeRequest modelName = do
   it "preserves reasoning through tool call chains" $ do
     -- Step 1: Get model to make a tool call with reasoning
@@ -426,14 +429,14 @@ toolCallingWithReasoning makeRequest modelName = do
           { model = modelName
           , tools = Just [weatherTool]
           }
-    resp1 <- makeRequest req1
+    resp1 <- request makeRequest req1
 
     -- Verify it has reasoning and tool calls
     assertHasReasoningDetails resp1
 
     -- Step 2: Build request with tool result (helper preserves assistant message)
     let req2 = (requestWithToolResult resp1) { model = modelName }
-    resp2 <- makeRequest req2
+    resp2 <- request makeRequest req2
 
     -- Step 3: Verify we get a valid response
     assertHasAssistantText resp2
@@ -451,12 +454,12 @@ toolCallingWithReasoning makeRequest modelName = do
 -- __Note:__ Semantically, consecutive user messages make sense (user adds context
 -- or asks follow-up before assistant responds), but some APIs enforce strict
 -- user/assistant alternation.
-consecutiveUserMessages :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+consecutiveUserMessages :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 consecutiveUserMessages makeRequest modelName = do
   it "accepts consecutive user messages" $ do
     let req = (Protocol.OpenAI.consecutiveUserMessages "Here is some context." "Now answer this question: what is 2+2?")
           { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasAssistantText resp
 
 -- | Probe: History starting with assistant message
@@ -471,11 +474,11 @@ consecutiveUserMessages makeRequest modelName = do
 --
 -- __Note:__ Some APIs/templates require conversation to start with user message.
 -- Others accept assistant-first messages for system-like introductions or priming.
-startsWithAssistant :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+startsWithAssistant :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 startsWithAssistant makeRequest modelName = do
   it "accepts history starting with assistant message" $ do
     let req = Protocol.OpenAI.startsWithAssistant { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasAssistantText resp
 
 -- | Probe: System message mid-conversation
@@ -491,11 +494,11 @@ startsWithAssistant makeRequest modelName = do
 --
 -- __Note:__ If this fails but systemMessageAtStart passes, the model requires
 -- system messages to be hoisted to the front. Use systemMessagesFirst provider handler.
-systemMessageMidConversation :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+systemMessageMidConversation :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 systemMessageMidConversation makeRequest modelName = do
   it "accepts system message mid-conversation" $ do
     let req = requestWithSystemMidConversation { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasAssistantText resp
 
 -- | Probe: System message at start of conversation
@@ -507,11 +510,11 @@ systemMessageMidConversation makeRequest modelName = do
 -- __Expected to pass:__ Almost all models
 --
 -- __Expected to fail:__ Models that don't support system messages at all
-systemMessageAtStart :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+systemMessageAtStart :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 systemMessageAtStart makeRequest modelName = do
   it "accepts system message at start" $ do
     let req = requestWithSystemAtStart { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasAssistantText resp
 
 -- | Probe: Multiple system messages
@@ -527,11 +530,11 @@ systemMessageAtStart makeRequest modelName = do
 --
 -- __Note:__ If this fails, the model needs mergeSystemMessages provider handler
 -- to collapse multiple SystemPrompt configs into one.
-multipleSystemMessages :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+multipleSystemMessages :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 multipleSystemMessages makeRequest modelName = do
   it "accepts multiple system messages" $ do
     let req = requestWithMultipleSystemMessages { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasAssistantText resp
 
 -- | Probe: Tool result with no tools defined
@@ -546,11 +549,11 @@ multipleSystemMessages makeRequest modelName = do
 --
 -- __Note:__ This is the most restrictive case - no tools at all.
 -- Tests if tool definitions are required even for completed tool interactions.
-acceptsToolResultNoTools :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsToolResultNoTools :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 acceptsToolResultNoTools makeRequest modelName = do
   it "accepts tool result when no tools defined" $ do
     let req = requestWithToolResultNoTools { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     -- Just verify no error - response might be text or empty
     wasSuccessful resp
 
@@ -566,11 +569,11 @@ acceptsToolResultNoTools makeRequest modelName = do
 --
 -- __Note:__ This tests immediate removal - tool call just returned but tool is gone.
 -- Different from acceptsStaleToolInHistory which has assistant message after.
-acceptsToolResultToolGone :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsToolResultToolGone :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 acceptsToolResultToolGone makeRequest modelName = do
   it "accepts tool result when called tool no longer available" $ do
     let req = requestWithToolResultToolGone { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     -- Just verify no error - response might be text or empty
     wasSuccessful resp
 
@@ -588,11 +591,11 @@ acceptsToolResultToolGone makeRequest modelName = do
 -- Informs how careful we need to be when modifying tool sets during conversations.
 -- We ask "calculate 5 * 7" with calculator tool, but the key test is API accepts
 -- the request with stale get_weather tool in history.
-acceptsStaleToolInHistory :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsStaleToolInHistory :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 acceptsStaleToolInHistory makeRequest modelName = do
   it "accepts tool call in history when tool no longer available" $ do
     let req = requestWithStaleToolInHistory { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     -- Just verify request succeeds - model behavior may vary
     wasSuccessful resp
 
@@ -608,11 +611,11 @@ acceptsStaleToolInHistory makeRequest modelName = do
 --
 -- __Note:__ This is the "safe" case - tool is still available even though conversation moved on.
 -- Contrasts with acceptsStaleToolInHistory where tool is removed.
-acceptsOldToolCallStillAvailable :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+acceptsOldToolCallStillAvailable :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 acceptsOldToolCallStillAvailable makeRequest modelName = do
   it "accepts old tool call in history with tool still available" $ do
     let req = requestWithOldToolCallStillAvailable { model = modelName }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasAssistantText resp
 
 -- | Probe: Tools + reasoning_enabled=true (no effort, no exclude)
@@ -623,12 +626,12 @@ acceptsOldToolCallStillAvailable makeRequest modelName = do
 --
 -- __Use when:__ Investigating why tools+reasoning fails - isolates whether
 -- reasoning_enabled alone triggers the issue
-toolsWithReasoningEnabled :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolsWithReasoningEnabled :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 toolsWithReasoningEnabled makeRequest modelName = do
   it "accepts tools with reasoning_enabled=true (no effort/exclude fields)" $ do
     let req = enableReasoning (simpleUserRequest "Use the get_weather function to check the weather in London.")
           { model = modelName, tools = Just [weatherTool] }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     wasSuccessful resp
 
 -- | Probe: Tools + full reasoning config (enabled=true, effort=low, exclude=false)
@@ -639,12 +642,12 @@ toolsWithReasoningEnabled makeRequest modelName = do
 -- __Checks:__ Response succeeds (no 500)
 --
 -- __Use when:__ Investigating which specific reasoning field causes crashes
-toolsWithReasoningFull :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolsWithReasoningFull :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 toolsWithReasoningFull makeRequest modelName = do
   it "accepts tools with full reasoning config (enabled+effort+exclude)" $ do
     let req = enableReasoningFull (simpleUserRequest "Use the get_weather function to check the weather in London.")
           { model = modelName, tools = Just [weatherTool] }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     wasSuccessful resp
 
 -- | Probe: Tools + effort field only (no enabled flag)
@@ -654,12 +657,12 @@ toolsWithReasoningFull makeRequest modelName = do
 -- __Checks:__ Response succeeds (no 500)
 --
 -- __Use when:__ Isolating whether reasoning_effort alone (without enabled=true) triggers crashes
-toolsWithReasoningEffortOnly :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolsWithReasoningEffortOnly :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 toolsWithReasoningEffortOnly makeRequest modelName = do
   it "accepts tools with reasoning effort field only (no enabled flag)" $ do
     let req = enableReasoningEffortOnly (simpleUserRequest "Use the get_weather function to check the weather in London.")
           { model = modelName, tools = Just [weatherTool] }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     wasSuccessful resp
 
 -- | Probe: Tools + reasoning with list_files tool (same as ST.reasoningWithTools)
@@ -671,14 +674,14 @@ toolsWithReasoningEffortOnly makeRequest modelName = do
 --
 -- __Use when:__ Isolating whether the list_files tool schema or the specific
 -- prompt triggers the chat template crash seen in ST.reasoningWithTools
-toolsWithReasoningListFiles :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolsWithReasoningListFiles :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 toolsWithReasoningListFiles makeRequest modelName = do
   it "accepts tools+reasoning with list_files tool and reasoning prompt" $ do
     let listFilesTool = simpleTool "list_files" "List files matching a pattern" []
         req = enableReasoningFull
                 (simpleUserRequest "Think carefully: What files match the pattern '*.md'? Use the available tools.")
                   { model = modelName, tools = Just [listFilesTool] }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     wasSuccessful resp
 
 -- | Probe: Tools + full reasoning config + max_tokens (exact ST.reasoningWithTools shape)
@@ -686,7 +689,7 @@ toolsWithReasoningListFiles makeRequest modelName = do
 -- __Tests:__ Does adding max_tokens to the tools+reasoning request trigger the 500?
 --
 -- __Use when:__ Isolating whether max_tokens is what triggers the chat template crash
-toolsWithReasoningAndMaxTokens :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolsWithReasoningAndMaxTokens :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 toolsWithReasoningAndMaxTokens makeRequest modelName = do
   it "accepts tools+reasoning+max_tokens (exact shape of ST.reasoningWithTools)" $ do
     let listFilesTool = simpleTool "list_files" "List files matching a pattern" []
@@ -696,7 +699,7 @@ toolsWithReasoningAndMaxTokens makeRequest modelName = do
                   , tools = Just [listFilesTool]
                   , max_tokens = Just 4096
                   }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     wasSuccessful resp
 
 -- | Probe: Tools + reasoning_enabled=false
@@ -707,12 +710,12 @@ toolsWithReasoningAndMaxTokens makeRequest modelName = do
 --
 -- __Use when:__ Checking if the reasoning field presence itself (regardless of value)
 -- is what triggers crashes
-toolsWithReasoningDisabled :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+toolsWithReasoningDisabled :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 toolsWithReasoningDisabled makeRequest modelName = do
   it "accepts tools with reasoning explicitly disabled" $ do
     let req = disableReasoning (simpleUserRequest "Use the get_weather function to check the weather in London.")
           { model = modelName, tools = Just [weatherTool] }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     wasSuccessful resp
 
 -- | Probe: Provider error responses are valid protocol responses
@@ -728,11 +731,11 @@ toolsWithReasoningDisabled makeRequest modelName = do
 -- __Note:__ This verifies that OpenAIError is treated as a VALID protocol response,
 -- not a failure. We test this by triggering an error condition (invalid model name)
 -- and verifying we get a well-formed error response.
-providerErrorResponse :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Spec
+providerErrorResponse :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 providerErrorResponse makeRequest = do
   it "returns well-formed error response for invalid model" $ do
     let req = (simpleUserRequest "What is 2+2?") { model = "invalid-model-name-that-does-not-exist" }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertIsProviderError resp
 
 -- | Probe: Vision / PNG format support
@@ -744,12 +747,12 @@ providerErrorResponse makeRequest = do
 -- __Expected to pass:__ Vision-capable models
 --
 -- __Expected to fail:__ Text-only models
-visionPng :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+visionPng :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 visionPng makeRequest modelName = do
   (mediaType, b64Data) <- runIO glassbottlePng
   it "accepts PNG and identifies image subject" $ do
     let req = visionIdentifyRequest modelName mediaType b64Data
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertMentions "bottle" resp
 
 -- | Probe: Vision / JPEG format support
@@ -761,12 +764,12 @@ visionPng makeRequest modelName = do
 -- __Expected to pass:__ Vision-capable models that support JPEG
 --
 -- __Expected to fail:__ Text-only models or models limited to PNG
-visionJpeg :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+visionJpeg :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 visionJpeg makeRequest modelName = do
   (mediaType, b64Data) <- runIO glassbottleMirroredJpeg
   it "accepts JPEG and identifies image subject" $ do
     let req = visionIdentifyRequest modelName mediaType b64Data
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertMentions "bottle" resp
 
 -- | Probe: Vision / content accuracy (no hallucination)
@@ -778,12 +781,12 @@ visionJpeg makeRequest modelName = do
 -- __Expected to pass:__ Vision-capable models with accurate perception
 --
 -- __Expected to fail:__ Text-only models, or models that hallucinate common objects
-visionAccuracy :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+visionAccuracy :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 visionAccuracy makeRequest modelName = do
   (mediaType, b64Data) <- runIO glassbottlePng
   it "identifies what is in the image and does not hallucinate" $ do
     let req = visionIdentifyRequest modelName mediaType b64Data
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertMentions "bottle" resp
     assertDoesNotMention "cat" resp
 
@@ -796,11 +799,154 @@ visionAccuracy makeRequest modelName = do
 -- __Expected to pass:__ Vision models with multi-image support
 --
 -- __Expected to fail:__ Models limited to a single image per message
-visionMultipleImages :: HasCallStack => (OpenAIRequest -> IO OpenAIResponse) -> Text -> Spec
+visionMultipleImages :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
 visionMultipleImages makeRequest modelName = do
   (mt1, b64Png) <- runIO glassbottlePng
   (mt2, b64Jpg) <- runIO glassbottleMirroredJpeg
   it "compares two images and identifies mirroring" $ do
     let req = visionCompareRequest modelName mt1 b64Png mt2 b64Jpg
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertConfirmsYes resp
+
+-- ============================================================================
+-- Negative Probes
+--
+-- These probes verify that certain requests are REJECTED by the model/provider
+-- with a specific, known error. Passing means the rejection is still happening
+-- as expected. Failing means the API behaviour changed — a workaround may no
+-- longer be needed, or a new kind of failure appeared.
+--
+-- IsExpected predicates are precise: they match the exact error shape observed,
+-- so transient errors (rate limits, server outages) are never cached.
+-- ============================================================================
+
+-- | True if the response is the Qwen3.5 chat template system-message rejection:
+-- HTTP 500, server_error, code 500, "System message must be at the beginning" in the body.
+isQwenSystemMessageRejection :: Int -> OpenAIResponse -> Bool
+isQwenSystemMessageRejection _ (OpenAISuccess _) = False
+isQwenSystemMessageRejection sc (OpenAIError err) =
+  let d = getErrorDetail err
+  in sc == 500
+  && code d == 500
+  && errorType d == Just "server_error"
+  && "System message must be at the beginning" `T.isInfixOf` errorMessage d
+
+-- | True if the response is the llama.cpp think-prefill rejection:
+-- HTTP 400, invalid_request_error, "prefill is incompatible with enable_thinking".
+isLlamaCppThinkPrefillRejection :: Int -> OpenAIResponse -> Bool
+isLlamaCppThinkPrefillRejection sc (OpenAIError err) =
+  let d = getErrorDetail err
+  in sc == 400
+  && code d == 400
+  && errorType d == Just "invalid_request_error"
+  && "prefill is incompatible with enable_thinking" `T.isInfixOf` errorMessage d
+isLlamaCppThinkPrefillRejection _ _ = False
+
+-- | True if the response is the llama.cpp empty-assistant-message rejection:
+-- HTTP 400, invalid_request_error, "must contain either 'content' or 'tool_calls'".
+isLlamaCppEmptyAssistantRejection :: Int -> OpenAIResponse -> Bool
+isLlamaCppEmptyAssistantRejection sc (OpenAIError err) =
+  let d = getErrorDetail err
+  in sc == 400
+  && code d == 400
+  && errorType d == Just "invalid_request_error"
+  && "must contain either 'content' or 'tool_calls'" `T.isInfixOf` errorMessage d
+isLlamaCppEmptyAssistantRejection _ _ = False
+
+-- | Negative probe: system message mid-conversation is rejected
+--
+-- __Tests:__ Does the model reject a system message after user/assistant turns?
+--
+-- __Expected to pass:__ Qwen3.5 via llama.cpp (chat template constraint)
+--
+-- __Expected to fail:__ If this probe fails, the systemMessagesFirst workaround may no longer be needed.
+rejectsSystemMessageMidConversation :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+rejectsSystemMessageMidConversation makeRequest modelName = do
+  it "rejects system message mid-conversation (chat template constraint)" $ do
+    let req = requestWithSystemMidConversation { model = modelName }
+    resp <- makeRequest (\sc r -> isQwenSystemMessageRejection sc r) req
+    resp `shouldSatisfy` \r -> case r of
+      OpenAIError err -> "System message must be at the beginning" `T.isInfixOf` errorMessage (getErrorDetail err)
+      OpenAISuccess _ -> False
+
+-- | Negative probe: multiple system messages are rejected
+--
+-- __Tests:__ Does the model reject more than one system message?
+--
+-- __Expected to pass:__ Qwen3.5 via llama.cpp (chat template constraint)
+--
+-- __Expected to fail:__ If this probe fails, the mergeSystemMessages workaround may no longer be needed.
+rejectsMultipleSystemMessages :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+rejectsMultipleSystemMessages makeRequest modelName = do
+  it "rejects multiple system messages (chat template constraint)" $ do
+    let req = requestWithMultipleSystemMessages { model = modelName }
+    resp <- makeRequest (\sc r -> isQwenSystemMessageRejection sc r) req
+    resp `shouldSatisfy` \r -> case r of
+      OpenAIError err -> "System message must be at the beginning" `T.isInfixOf` errorMessage (getErrorDetail err)
+      OpenAISuccess _ -> False
+
+-- | Negative probe: reasoning_enabled=false does not suppress reasoning
+--
+-- __Tests:__ Does the model ignore reasoning_enabled=false and still return reasoning?
+--
+-- __Expected to pass:__ llama.cpp models that ignore the reasoning_enabled field
+--
+-- __Expected to fail:__ If this probe fails, the model now honours reasoning_enabled=false.
+ignoresReasoningDisable :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+ignoresReasoningDisable makeRequest modelName = do
+  it "ignores reasoning_enabled=false (still returns reasoning_content)" $ do
+    let req = disableReasoning (simpleUserRequest "What is 15 * 23?") { model = modelName }
+    resp <- request makeRequest req
+    assertHasReasoningContent resp
+
+-- | Negative probe: /nothink token does not suppress reasoning
+--
+-- __Tests:__ Does the model ignore the /nothink token and still return reasoning?
+--
+-- __Expected to pass:__ llama.cpp builds where /nothink is stripped before the template
+--
+-- __Expected to fail:__ If this probe fails, the build now honours /nothink.
+ignoresNoThink :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+ignoresNoThink makeRequest modelName = do
+  it "ignores /nothink token (still returns reasoning_content)" $ do
+    let req = (simpleUserRequest "What is 15 * 23? /nothink") { model = modelName }
+    resp <- request makeRequest req
+    assertHasReasoningContent resp
+
+-- | Negative probe: <think></think> assistant prefill is rejected
+--
+-- __Tests:__ Does the model reject an assistant prefill of <think></think>?
+--
+-- __Expected to pass:__ llama.cpp where prefill is incompatible with enable_thinking
+--
+-- __Expected to fail:__ If this probe fails, the model now accepts this prefill.
+rejectsEmptyThinkPrefill :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+rejectsEmptyThinkPrefill makeRequest modelName = do
+  it "rejects <think></think> assistant prefill (incompatible with enable_thinking)" $ do
+    let req = mempty
+          { model = modelName
+          , messages = [ userMessage "What is 15 * 23?", assistantMessage "<think></think>" ]
+          }
+    resp <- makeRequest (\sc r -> isLlamaCppThinkPrefillRejection sc r) req
+    resp `shouldSatisfy` \r -> case r of
+      OpenAIError err -> "prefill is incompatible with enable_thinking" `T.isInfixOf` errorMessage (getErrorDetail err)
+      OpenAISuccess _ -> False
+
+-- | Negative probe: empty reasoning_content prefill is rejected
+--
+-- __Tests:__ Does the model reject an assistant message with only reasoning_content = ""?
+--
+-- __Expected to pass:__ llama.cpp where assistant messages require content or tool_calls
+--
+-- __Expected to fail:__ If this probe fails, the model now accepts empty reasoning prefill.
+rejectsEmptyReasoningPrefill :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+rejectsEmptyReasoningPrefill makeRequest modelName = do
+  it "rejects empty reasoning prefill (assistant message needs content/tool_calls)" $ do
+    let req = mempty
+          { model = modelName
+          , messages = [ userMessage "What is 15 * 23?", emptyMessage { role = "assistant", reasoning_content = Just "" } ]
+          }
+    resp <- makeRequest (\sc r -> isLlamaCppEmptyAssistantRejection sc r) req
+    resp `shouldSatisfy` \r -> case r of
+      OpenAIError err -> "must contain either 'content' or 'tool_calls'" `T.isInfixOf` errorMessage (getErrorDetail err)
+      OpenAISuccess _ -> False

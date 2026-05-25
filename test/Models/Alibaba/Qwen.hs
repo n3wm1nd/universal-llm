@@ -91,9 +91,8 @@ testsQwen35_122BLlamaCpp provider modelName = do
       startsWithAssistant provider modelName
       reasoning provider modelName
       systemMessageAtStart provider modelName
-      -- multipleSystemMessages and systemMessageMidConversation fail —
-      -- Qwen3.5 chat template requires exactly one system message at the start.
-      -- Mitigated by mergeSystemMessages + systemMessagesFirst in route.
+      rejectsSystemMessageMidConversation provider modelName
+      rejectsMultipleSystemMessages provider modelName
 
     describe "Standard Tests" $
       testModel route (Qwen35_122B `via` LlamaCpp) provider
@@ -145,11 +144,11 @@ testsQwen35_40BLlamaCpp provider modelName = do
       startsWithAssistant provider modelName
       reasoning provider modelName
       reasoningTogglesOn provider modelName
-      -- reasoningTogglesOff: fails - reasoning_enabled=false is ignored by llama.cpp
-      -- noThinkSuppressesReasoning: fails - /nothink stripped before reaching template
-      -- emptyThinkPrefillSuppressesReasoning: rejected - prefill incompatible with enable_thinking
-      -- emptyReasoningPrefillSuppressesReasoning: rejected - assistant message needs content/tool_calls
       chatTemplateKwargsDisablesThinking provider modelName
+      ignoresReasoningDisable provider modelName
+      ignoresNoThink provider modelName
+      rejectsEmptyThinkPrefill provider modelName
+      rejectsEmptyReasoningPrefill provider modelName
       visionPng provider modelName
       visionJpeg provider modelName
       visionAccuracy provider modelName

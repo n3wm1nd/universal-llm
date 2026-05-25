@@ -14,7 +14,7 @@ import Data.Aeson (object, (.=))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
 import Network.SSE (parseSSEComplete, sseEventType, sseEventData)
-import TestCache (ResponseProvider)
+import TestCache (ResponseProvider, request)
 import TestModels
 import UniversalLLM
 import UniversalLLM.Protocols.Anthropic
@@ -80,7 +80,7 @@ spec getResponse = do
       Proto.stream req `shouldBe` Just True
 
       -- Get the SSE response
-      sseBody <- getResponse req
+      sseBody <- request getResponse req
 
       -- Validate basic SSE structure: should be non-empty
       BSL.null sseBody `shouldBe` False
@@ -120,7 +120,7 @@ spec getResponse = do
         _ -> expectationFailure "Expected get_weather tool in request"
 
       -- Get the SSE response
-      sseBody <- getResponse req
+      sseBody <- request getResponse req
 
       -- Validate SSE structure
       BSL.null sseBody `shouldBe` False
@@ -146,7 +146,7 @@ spec getResponse = do
       Proto.thinking req `shouldNotBe` Nothing
 
       -- Get the SSE response
-      sseBody <- getResponse req
+      sseBody <- request getResponse req
 
       -- Validate SSE structure
       BSL.null sseBody `shouldBe` False
@@ -191,7 +191,7 @@ spec getResponse = do
         _ -> expectationFailure "Expected get_weather tool in request"
 
       -- Get the SSE response
-      sseBody <- getResponse req
+      sseBody <- request getResponse req
 
       -- Validate SSE structure
       BSL.null sseBody `shouldBe` False
@@ -229,7 +229,7 @@ spec getResponse = do
       Proto.stream req `shouldBe` Just True
       Proto.thinking req `shouldNotBe` Nothing
 
-      sseBody <- getResponse req
+      sseBody <- request getResponse req
       BSL.null sseBody `shouldBe` False
 
       -- Response should have thinking_delta and tool_use content blocks

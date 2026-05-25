@@ -41,7 +41,7 @@ import Control.Monad (when)
 import Control.Monad.Catch (MonadCatch, SomeException, catch)
 import UniversalLLM
 import UniversalLLM.Tools (LLMTool(..), llmToolToDefinition, executeToolCallFromList, ToolFunction(..), ToolParameter(..), mkTool)
-import TestCache (ResponseProvider)
+import TestCache (ResponseProvider, request)
 import TestFixtures (glassbottlePng, glassbottleMirroredJpeg)
 import qualified UniversalLLM.Protocols.OpenAI as OpenAI
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse(..), OpenAISuccessResponse(..), OpenAIChoice(..), OpenAIMessage(role, content, reasoning_content, reasoning_details, tool_calls), OpenAIReasoningConfig(..), OpenAIToolCall(callId))
@@ -72,7 +72,7 @@ text = StandardTest $ \cp model initialState getResponse -> do
           msgs = [UserText "What is 2+2?"]
           (_, req) = toProviderRequest cp model configs initialState msgs
 
-      resp <- getResponse req
+      resp <- request getResponse req
 
       let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs initialState resp
 
@@ -85,7 +85,7 @@ text = StandardTest $ \cp model initialState getResponse -> do
           msgs1 = [UserText "What is 2+2?"]
           (state1, req1) = toProviderRequest cp model configs initialState msgs1
 
-      resp1 <- getResponse req1
+      resp1 <- request getResponse req1
       let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp model configs state1 resp1
 
       -- First response should contain messages
@@ -95,7 +95,7 @@ text = StandardTest $ \cp model initialState getResponse -> do
       let msgs2 = msgs1 ++ parsedMsgs1 ++ [UserText "What about 3+3?"]
           (_, req2) = toProviderRequest cp model configs state2 msgs2
 
-      resp2 <- getResponse req2
+      resp2 <- request getResponse req2
       let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
 
       -- Second response should also contain messages
@@ -119,7 +119,7 @@ systemMessage = StandardTest $ \cp model initialState getResponse -> do
                  ]
           (_, req) = toProviderRequest cp model configs initialState msgs
 
-      resp <- getResponse req
+      resp <- request getResponse req
 
       let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs initialState resp
 
@@ -145,7 +145,7 @@ systemMessageMidConversation = StandardTest $ \cp model initialState getResponse
                  ]
           (_, req) = toProviderRequest cp model configs initialState msgs
 
-      resp <- getResponse req
+      resp <- request getResponse req
 
       let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs initialState resp
 
@@ -174,7 +174,7 @@ multipleSystemPrompts = StandardTest $ \cp model initialState getResponse -> do
           msgs = [UserText "What is 2+2?"]
           (_, req) = toProviderRequest cp model configs initialState msgs
 
-      resp <- getResponse req
+      resp <- request getResponse req
 
       let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs initialState resp
 
@@ -267,7 +267,7 @@ tools = StandardTest $ \cp model initialState getResponse -> do
           (state1, req1) = toProviderRequest cp model configs initialState msgs
 
       -- First request should trigger tool use
-      resp1 <- getResponse req1
+      resp1 <- request getResponse req1
 
       let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp model configs state1 resp1
 
@@ -294,7 +294,7 @@ tools = StandardTest $ \cp model initialState getResponse -> do
         let msgs2 = msgs ++ parsedMsgs1 ++ toolResultMsgs
             (_, req2) = toProviderRequest cp model configs state2 msgs2
 
-        resp2 <- getResponse req2
+        resp2 <- request getResponse req2
         let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
 
         -- LLM should respond after receiving tool results
@@ -308,7 +308,7 @@ tools = StandardTest $ \cp model initialState getResponse -> do
           msgs = [UserText "Use the always_fail tool with location 'test'"]
           (state1, req1) = toProviderRequest cp model configs initialState msgs
 
-      resp1 <- getResponse req1
+      resp1 <- request getResponse req1
 
       let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp model configs state1 resp1
 
@@ -332,7 +332,7 @@ tools = StandardTest $ \cp model initialState getResponse -> do
         let msgs2 = msgs ++ parsedMsgs1 ++ toolResultMsgs
             (_, req2) = toProviderRequest cp model configs state2 msgs2
 
-        resp2 <- getResponse req2
+        resp2 <- request getResponse req2
         let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
 
         -- LLM should respond after receiving tool results (even if they're errors)
@@ -364,7 +364,7 @@ toolWithName toolName = StandardTest $ \cp model initialState getResponse -> do
           (state1, req1) = toProviderRequest cp model configs initialState msgs
 
       -- First request should trigger tool use
-      resp1 <- getResponse req1
+      resp1 <- request getResponse req1
 
       let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp model configs state1 resp1
 
@@ -390,7 +390,7 @@ toolWithName toolName = StandardTest $ \cp model initialState getResponse -> do
           let msgs2 = msgs ++ parsedMsgs1 ++ toolResultMsgs
               (_, req2) = toProviderRequest cp model configs state2 msgs2
 
-          resp2 <- getResponse req2
+          resp2 <- request getResponse req2
           let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
 
           -- Should get a response after tool execution
@@ -412,7 +412,7 @@ reasoning = StandardTest $ \cp model initialState getResponse -> do
           msgs = [UserText "Think step by step: What is 15 * 23?"]
           (state1, req) = toProviderRequest cp model configs initialState msgs
 
-      resp <- getResponse req
+      resp <- request getResponse req
 
       let (state2, parsedMsgs) = either (error . show) id $ fromProviderResponse cp model configs state1 resp
 
@@ -427,7 +427,7 @@ reasoning = StandardTest $ \cp model initialState getResponse -> do
       let msgs2 = msgs ++ parsedMsgs ++ [UserText "Now what is 20 * 30?"]
           (_, req2) = toProviderRequest cp model configs state2 msgs2
 
-      resp2 <- getResponse req2
+      resp2 <- request getResponse req2
       let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
 
       length parsedMsgs2 `shouldSatisfy` (> 0)
@@ -457,7 +457,7 @@ hiddenReasoning = StandardTest $ \cp model initialState getResponse -> do
           msgs = [UserText "Think step by step: What is 15 * 23?"]
           (state1, req) = toProviderRequest cp model configs initialState msgs
 
-      resp <- getResponse req
+      resp <- request getResponse req
 
       let (state2, parsedMsgs) = either (error . show) id $ fromProviderResponse cp model configs state1 resp
 
@@ -468,7 +468,7 @@ hiddenReasoning = StandardTest $ \cp model initialState getResponse -> do
       let msgs2 = msgs ++ parsedMsgs ++ [UserText "Now what is 20 * 30?"]
           (_, req2) = toProviderRequest cp model configs state2 msgs2
 
-      resp2 <- getResponse req2
+      resp2 <- request getResponse req2
       let parsedMsgs2 = either (error . show) snd $ fromProviderResponse cp model configs state2 resp2
 
       -- Should get a response (reasoning and/or text)
@@ -493,7 +493,7 @@ reasoningDisabled = StandardTest $ \cp model initialState getResponse -> do
       let configs = [MaxTokens 1024, Reasoning False]
           msgs = [UserText "What is 15 * 23?"]
           (state1, req) = toProviderRequest cp model configs initialState msgs
-      resp <- getResponse req
+      resp <- request getResponse req
       let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs state1 resp
       let reasoningMsgs = [txt | AssistantReasoning txt <- parsedMsgs]
       length reasoningMsgs `shouldBe` 0
@@ -518,7 +518,7 @@ reasoningWithTools = StandardTest $ \cp model initialState getResponse -> do
           msgs = [UserText "Think carefully: What files match the pattern '*.md'? Use the available tools."]
           (state1, req1) = toProviderRequest cp model configs initialState msgs
 
-      resp1 <- getResponse req1
+      resp1 <- request getResponse req1
 
       let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp model configs state1 resp1
 
@@ -549,7 +549,7 @@ reasoningWithTools = StandardTest $ \cp model initialState getResponse -> do
           let msgs2 = msgs ++ parsedMsgs1 ++ toolResults
               (state3, req2) = toProviderRequest cp model configs state2 msgs2
 
-          resp2 <- getResponse req2
+          resp2 <- request getResponse req2
           let (st4, pMsgs2) = either (error . show) id $ fromProviderResponse cp model configs state3 resp2
 
           -- Should get response to tool results
@@ -562,7 +562,7 @@ reasoningWithTools = StandardTest $ \cp model initialState getResponse -> do
       let msgs3 = msgs ++ parsedMsgs1 ++ toolResults ++ parsedMsgs2 ++ [UserText "Thank you. What do you think they are used for?"]
           (_, req3) = toProviderRequest cp model configs state4 msgs3
 
-      resp3 <- getResponse req3
+      resp3 <- request getResponse req3
       let parsedMsgs3 = either (error . show) snd $ fromProviderResponse cp model configs state4 resp3
 
       -- Should get response to follow-up with reasoning
@@ -606,7 +606,7 @@ reasoningWithToolsModifiedReasoning = StandardTest $ \cp model initialState getR
           msgs = [UserText "Think carefully: What is the capital of France?"]
           (state1, req1) = toProviderRequest cp model configs initialState msgs
 
-      resp1 <- getResponse req1
+      resp1 <- request getResponse req1
 
       let (state2, parsedMsgs1) = either (error . show) id $ fromProviderResponse cp model configs state1 resp1
 
@@ -620,7 +620,7 @@ reasoningWithToolsModifiedReasoning = StandardTest $ \cp model initialState getR
 
       -- This request should succeed even though reasoning was modified
       -- The provider handles it appropriately (fallback for signed reasoning, pass-through for unsigned)
-      resp2 <- getResponse req2
+      resp2 <- request getResponse req2
       let (_, parsedMsgs2) = either (error . show) id $ fromProviderResponse cp model configs state3 resp2
 
       -- Should get response (provider successfully handled modified reasoning)
@@ -661,7 +661,7 @@ openAIReasoningDetailsPreservation = StandardTest $ \cp model initialState getRe
               hasMaxTokens = case reasoningCfg.reasoning_max_tokens of { Just _ -> True; Nothing -> False }
           (hasEffort || hasMaxTokens) `shouldBe` True
 
-      resp1 <- getResponse req1
+      resp1 <- request getResponse req1
 
       -- Extract the raw assistant messages from resp1 for preservation checking
       let resp1RawMsgs = case resp1 of
@@ -707,7 +707,7 @@ openAIReasoningDetailsPreservation = StandardTest $ \cp model initialState getRe
           assistantMessages = take (length resp1RawMsgs) $ drop assistantStartIdx (OpenAI.messages req2)
       map reasoning_details assistantMessages `shouldBe` map reasoning_details resp1RawMsgs
 
-      resp2 <- getResponse req2
+      resp2 <- request getResponse req2
       let (state4, parsedMsgs2) = either (error . show) id $ fromProviderResponse cp model configs state3 resp2
 
       -- Should get response to tool results
@@ -717,7 +717,7 @@ openAIReasoningDetailsPreservation = StandardTest $ \cp model initialState getRe
       let msgs3 = msgs2 ++ parsedMsgs2 ++ [UserText "Thank you, now tell me more about those files."]
           (_, req3) = toProviderRequest cp model configs state4 msgs3
 
-      resp3 <- getResponse req3
+      resp3 <- request getResponse req3
       let parsedMsgs3 = either (error . show) snd $ fromProviderResponse cp model configs state4 resp3
 
       -- Should successfully handle the follow-up
@@ -743,7 +743,7 @@ vision = StandardTest $ \cp model initialState getResponse -> do
           msgs = [UserText "What is the main object in this image? Answer in one sentence.", UserImage mediaType b64Data]
           (_, req) = toProviderRequest cp model configs initialState msgs
 
-      resp <- getResponse req
+      resp <- request getResponse req
 
       let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs initialState resp
       length parsedMsgs `shouldSatisfy` (> 0)
@@ -767,7 +767,7 @@ visionJpeg = StandardTest $ \cp model initialState getResponse -> do
           msgs = [UserText "What is the main object in this image? Answer in one sentence.", UserImage mediaType b64Data]
           (_, req) = toProviderRequest cp model configs initialState msgs
 
-      resp <- getResponse req
+      resp <- request getResponse req
 
       let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs initialState resp
       length parsedMsgs `shouldSatisfy` (> 0)
@@ -795,7 +795,7 @@ visionMultipleImages = StandardTest $ \cp model initialState getResponse -> do
                  ]
           (_, req) = toProviderRequest cp model configs initialState msgs
 
-      resp <- getResponse req
+      resp <- request getResponse req
 
       let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs initialState resp
       length parsedMsgs `shouldSatisfy` (> 0)

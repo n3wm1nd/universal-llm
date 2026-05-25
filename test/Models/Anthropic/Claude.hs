@@ -55,7 +55,7 @@ import Test.Hspec (Spec, describe)
 -- Includes both protocol probes (wire format) and standard tests (high-level API).
 testsSonnet45 :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 testsSonnet45 provider = do
-  let oauthProvider req = provider (Anthropic.withMagicSystemPrompt req { model = "claude-sonnet-4-5-20250929" })
+  let oauthProvider isExpected req = provider isExpected (Anthropic.withMagicSystemPrompt req { model = "claude-sonnet-4-5-20250929" })
   describe "Claude Sonnet 4.5 via Anthropic" $ do
     describe "Protocol" $ do
       basicText oauthProvider
@@ -95,7 +95,7 @@ testsSonnet45 provider = do
 -- Includes both protocol probes (wire format) and standard tests (high-level API).
 testsSonnet46 :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 testsSonnet46 provider = do
-  let oauthProvider req = provider (Anthropic.withMagicSystemPrompt req { model = "claude-sonnet-4-6" })
+  let oauthProvider isExpected req = provider isExpected (Anthropic.withMagicSystemPrompt req { model = "claude-sonnet-4-6" })
   describe "Claude Sonnet 4.6 via Anthropic" $ do
     describe "Protocol" $ do
       basicText oauthProvider
@@ -131,7 +131,7 @@ testsSonnet46 provider = do
 -- Includes both protocol probes (wire format) and standard tests (high-level API).
 testsHaiku45 :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 testsHaiku45 provider = do
-  let oauthProvider req = provider (Anthropic.withMagicSystemPrompt req { model = "claude-haiku-4-5-20251001" })
+  let oauthProvider isExpected req = provider isExpected (Anthropic.withMagicSystemPrompt req { model = "claude-haiku-4-5-20251001" })
   describe "Claude Haiku 4.5 via Anthropic" $ do
     describe "Protocol" $ do
       basicText oauthProvider
@@ -167,7 +167,7 @@ testsHaiku45 provider = do
 -- Includes both protocol probes (wire format) and standard tests (high-level API).
 testsOpus46 :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 testsOpus46 provider = do
-  let oauthProvider req = provider (Anthropic.withMagicSystemPrompt req { model = "claude-opus-4-6" })
+  let oauthProvider isExpected req = provider isExpected (Anthropic.withMagicSystemPrompt req { model = "claude-opus-4-6" })
   describe "Claude Opus 4.6 via Anthropic" $ do
     describe "Protocol" $ do
       basicText oauthProvider

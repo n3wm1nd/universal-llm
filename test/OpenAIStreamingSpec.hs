@@ -17,7 +17,7 @@ import qualified Data.Aeson.KeyMap as KM
 import Data.Default (def)
 import Control.Monad (when)
 import Network.SSE (parseSSEComplete, sseEventData)
-import TestCache (ResponseProvider)
+import TestCache (ResponseProvider, request)
 import TestModels
 import UniversalLLM
 import UniversalLLM.Protocols.OpenAI
@@ -72,7 +72,7 @@ spec getResponse = do
       Proto.stream req `shouldBe` Just True
 
       -- Get the SSE response
-      sseBody <- getResponse req
+      sseBody <- request getResponse req
 
       -- Validate basic SSE structure: should be non-empty
       BSL.null sseBody `shouldBe` False
@@ -113,7 +113,7 @@ spec getResponse = do
         _ -> expectationFailure "Expected tools in request"
 
       -- Get the SSE response
-      sseBody <- getResponse req
+      sseBody <- request getResponse req
 
       -- Validate SSE structure
       BSL.null sseBody `shouldBe` False
@@ -138,7 +138,7 @@ spec getResponse = do
       Proto.stream req `shouldBe` Just True
 
       -- Get the SSE response
-      sseBody <- getResponse req
+      sseBody <- request getResponse req
 
       -- Validate SSE structure
       BSL.null sseBody `shouldBe` False
@@ -189,7 +189,7 @@ spec getResponse = do
         _ -> expectationFailure "Expected tools in request"
 
       -- Get the SSE response
-      sseBody <- getResponse req
+      sseBody <- request getResponse req
 
       -- Validate SSE structure
       BSL.null sseBody `shouldBe` False

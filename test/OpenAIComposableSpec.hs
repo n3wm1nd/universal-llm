@@ -14,7 +14,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.Map.Strict as Map
 import Data.Default (def)
-import TestCache (ResponseProvider)
+import TestCache (ResponseProvider, request)
 import TestModels
 import UniversalLLM
 import UniversalLLM.Protocols.OpenAI
@@ -82,7 +82,7 @@ spec getResponse = do
           msgs1 = [UserText "What is 2+2?" :: Message TestModel]
           req1 = buildRequest model configs msgs1
 
-      resp1 <- getResponse req1
+      resp1 <- request getResponse req1
 
       case parseOpenAIResponse (Model GLM45Air OpenRouter) configs msgs1 resp1 of
         Right parsedMsgs1 -> do
@@ -96,7 +96,7 @@ spec getResponse = do
           let msgs2 = msgs1 <> parsedMsgs1 <> [UserText "What about 3+3?"]
               req2 = buildRequest (Model GLM45Air OpenRouter) configs msgs2
 
-          resp2 <- getResponse req2
+          resp2 <- request getResponse req2
 
           case parseOpenAIResponse (Model GLM45Air OpenRouter) configs msgs2 resp2 of
             Right msgs -> do
@@ -161,7 +161,7 @@ spec getResponse = do
           name (function tool) `shouldBe` "get_weather"
         _ -> expectationFailure "Expected exactly one tool in request"
 
-      resp1 <- getResponse req1
+      resp1 <- request getResponse req1
 
       case parseOpenAIResponse (Model GLM45Air OpenRouter) configs msgs1 resp1 of
         Right parsedMsgs -> do
@@ -177,7 +177,7 @@ spec getResponse = do
               msgs2 = msgs1 <> parsedMsgs <> [ToolResultMsg toolResult]
               req2 = buildRequest (Model GLM45Air OpenRouter) configs msgs2
 
-          resp2 <- getResponse req2
+          resp2 <- request getResponse req2
 
           case parseOpenAIResponse (Model GLM45Air OpenRouter) configs msgs2 resp2 of
             Right msgs2Result -> do
@@ -228,7 +228,7 @@ spec getResponse = do
                 _ -> expectationFailure "Wrapped schema 'schema' field is not an object"
             _ -> expectationFailure "json_schema is not an object"
 
-      resp <- getResponse req
+      resp <- request getResponse req
 
       case parseOpenAIResponse (Model GLM45Air OpenRouter) configs msgs resp of
         Right parsedMsgs -> do

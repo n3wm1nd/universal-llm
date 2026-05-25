@@ -18,7 +18,7 @@ import Data.Maybe (listToMaybe)
 import qualified Data.Vector as V
 import qualified Data.Aeson.KeyMap as KM
 import Network.SSE (parseSSEComplete, sseEventData)
-import TestCache (ResponseProvider)
+import TestCache (ResponseProvider, request)
 import TestModels
 import UniversalLLM
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..))
@@ -160,10 +160,10 @@ spec loadedModel getNonStreamingResponse getStreamingResponse = do
       Proto.stream streamReq `shouldBe` Just True
 
       -- Get non-streaming response
-      nonStreamResp <- getNonStreamingResponse nonStreamReq
+      nonStreamResp <- request getNonStreamingResponse nonStreamReq
 
       -- Get streaming response and reconstruct
-      sseBody <- getStreamingResponse streamReq
+      sseBody <- request getStreamingResponse streamReq
 
       case reconstructFromSSE sseBody of
         Left err -> expectationFailure $ "Failed to reconstruct SSE response: " ++ err
@@ -198,8 +198,8 @@ spec loadedModel getNonStreamingResponse getStreamingResponse = do
           streamReq = Proto.enableOpenAIStreaming nonStreamReq
 
       -- Get both responses
-      nonStreamResp <- getNonStreamingResponse nonStreamReq
-      sseBody <- getStreamingResponse streamReq
+      nonStreamResp <- request getNonStreamingResponse nonStreamReq
+      sseBody <- request getStreamingResponse streamReq
 
       case reconstructFromSSE sseBody of
         Left err -> expectationFailure $ "Failed to reconstruct SSE response with tools: " ++ err
@@ -220,8 +220,8 @@ spec loadedModel getNonStreamingResponse getStreamingResponse = do
           streamReq = Proto.enableOpenAIStreaming nonStreamReq
 
       -- Get both responses
-      nonStreamResp <- getNonStreamingResponse nonStreamReq
-      sseBody <- getStreamingResponse streamReq
+      nonStreamResp <- request getNonStreamingResponse nonStreamReq
+      sseBody <- request getStreamingResponse streamReq
 
       case reconstructFromSSE sseBody of
         Left err -> expectationFailure $ "Failed to reconstruct SSE response with reasoning: " ++ err

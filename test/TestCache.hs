@@ -4,25 +4,20 @@
 module TestCache
   ( CachePath
   , ResponseProvider
+  , IsExpected
+  , IsTransient
+  , request
   , recordResponse
   , lookupResponse
-  , cachedRequest
-  , cachedRequestWithErrorCheck
   , recordMode
-  , recordModeWithErrorCheck
-  , recordModeWithFilter
   , recordModeWithFilterMsg
   , updateMode
-  , updateModeWithErrorCheck
-  , updateModeWithFilter
   , updateModeWithFilterMsg
   , playbackMode
   , liveMode
-  , liveModeWithFilter
   , liveModeWithFilterMsg
   , recordRawResponse
   , lookupRawResponse
-  , cachedRawRequest
   , recordModeRaw
   , recordModeRawWithFilterMsg
   , updateModeRaw
@@ -31,7 +26,6 @@ module TestCache
   , CacheMissException(..)
   ) where
 
-import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Char8 as BS8
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -39,13 +33,12 @@ import qualified Data.ByteString.Base16 as Base16
 import System.Directory (doesDirectoryExist, doesFileExist)
 import System.FilePath ((</>))
 import Control.Monad (unless)
-import Control.Exception (Exception, throwIO, catch)
+import Control.Exception (Exception)
 import Autodocodec (HasCodec, toJSONViaCodec, parseJSONViaCodec)
 import Data.Aeson.Types (parseEither)
 import qualified Data.Aeson as Aeson
 import Test.Hspec (pendingWith)
 
--- | Exception thrown when a cache miss occurs in playback mode
 data CacheMissException = CacheMissException String
   deriving (Show)
 
@@ -53,381 +46,201 @@ instance Exception CacheMissException
 
 type CachePath = FilePath
 
--- Response provider: abstracts how responses are obtained (cache/live/playback)
--- Parameterized by request and response types
-type ResponseProvider req resp = req -> IO resp
+-- | Per-request predicate: "is this the response I expected?"
+-- When True, always cache. When False and also transient, skip as pending.
+type IsExpected resp = Int -> resp -> Bool
 
--- Hash a request with endpoint URL to get cache key
--- Includes endpoint to distinguish between different providers serving same model
+-- | Per-provider predicate: "is this a transient server-side error?"
+-- Transient responses are not cached unless the probe explicitly expected them.
+type IsTransient resp = Int -> resp -> Bool
+
+-- | A provider is a function from (expectation predicate, request) to response.
+-- Each call site decides what it expects — the provider never does.
+type ResponseProvider req resp = IsExpected resp -> req -> IO resp
+
+-- | Make a request expecting HTTP 200. Sugar for the common case.
+request :: ResponseProvider req resp -> req -> IO resp
+request provider req = provider (\sc _ -> sc == 200) req
+
 hashRequest :: HasCodec req => String -> req -> String
 hashRequest endpoint req =
-  let endpointBytes = BS8.pack endpoint
-      jsonBytes = BSL.toStrict $ Aeson.encode $ toJSONViaCodec req
-      combined = endpointBytes <> jsonBytes
-      hash = SHA256.hash combined
-      hashHex = Base16.encode hash
-  in BS8.unpack hashHex
+  let combined = BS8.pack endpoint <> BSL.toStrict (Aeson.encode $ toJSONViaCodec req)
+  in BS8.unpack $ Base16.encode $ SHA256.hash combined
 
--- Record a response for a given request
--- Requires cache directory to already exist
--- Also saves the request for debugging purposes
 recordResponse :: (HasCodec req, HasCodec resp) => CachePath -> String -> req -> resp -> IO ()
 recordResponse cachePath endpoint req resp = do
   dirExists <- doesDirectoryExist cachePath
   unless dirExists $ error $ "Cache directory does not exist: " ++ cachePath
-  let cacheKey = hashRequest endpoint req
-      responsePath = cachePath </> cacheKey <> ".json"
-      requestPath = cachePath </> cacheKey <> "-request.json"
-      responseJson = Aeson.encode $ toJSONViaCodec resp
-      requestJson = Aeson.encode $ toJSONViaCodec req
-  BSL.writeFile responsePath responseJson
-  BSL.writeFile requestPath requestJson
+  let key = hashRequest endpoint req
+  BSL.writeFile (cachePath </> key <> ".json")             (Aeson.encode $ toJSONViaCodec resp)
+  BSL.writeFile (cachePath </> key <> "-request.json") (Aeson.encode $ toJSONViaCodec req)
 
--- Look up a cached response for a request
 lookupResponse :: (HasCodec req, HasCodec resp) => CachePath -> String -> req -> IO (Maybe resp)
 lookupResponse cachePath endpoint req = do
-  let cacheKey = hashRequest endpoint req
-      responsePath = cachePath </> cacheKey <> ".json"
+  let path = cachePath </> hashRequest endpoint req <> ".json"
+  exists <- doesFileExist path
+  if not exists then return Nothing else do
+    contents <- BSL.readFile path
+    case Aeson.decode contents of
+      Just val -> case parseEither parseJSONViaCodec val of
+        Right resp -> return $ Just resp
+        Left _     -> return Nothing
+      Nothing -> return Nothing
 
-  exists <- doesFileExist responsePath
-  if exists
-    then do
-      contents <- BSL.readFile responsePath
-      case Aeson.decode contents of
-        Just val -> case parseEither parseJSONViaCodec val of
-          Right resp -> return $ Just resp
-          Left _ -> return Nothing
-        Nothing -> return Nothing
-    else return Nothing
+handleResponse :: (HasCodec req, HasCodec resp)
+               => CachePath -> String -> IsTransient resp -> IsExpected resp
+               -> req -> Int -> resp -> IO resp
+handleResponse cachePath endpoint isTransient isExpected req statusCode response =
+  if isExpected statusCode response || not (isTransient statusCode response)
+    then recordResponse cachePath endpoint req response >> return response
+    else do
+      pendingWith $ "Transient error (status " ++ show statusCode ++ ") — not caching"
+      error "unreachable"
 
--- Cached request: check cache first, fall back to real request and cache the result
--- Only caches responses with status code 200
-cachedRequest :: (HasCodec req, HasCodec resp)
-              => CachePath
-              -> String  -- ^ Endpoint URL (for cache key)
-              -> req
-              -> IO (Int, resp)  -- Request returns (status code, response)
-              -> IO resp
-cachedRequest cachePath endpoint req makeRequest =
-  cachedRequestWithErrorCheck cachePath endpoint Nothing req makeRequest
-
--- Cached request with optional error classifier
--- If error classifier returns True, the response is NOT cached and test is marked pending
-cachedRequestWithErrorCheck :: (HasCodec req, HasCodec resp)
-                            => CachePath
-                            -> String  -- ^ Endpoint URL (for cache key)
-                            -> Maybe (Int -> resp -> Maybe String)  -- ^ Error classifier: returns Just msg if transient error
-                            -> req
-                            -> IO (Int, resp)  -- Request returns (status code, response)
-                            -> IO resp
-cachedRequestWithErrorCheck cachePath endpoint errorCheck req makeRequest = do
+cachedCall :: (HasCodec req, HasCodec resp)
+           => CachePath -> String -> IsTransient resp -> IsExpected resp
+           -> req -> IO (Int, resp) -> IO resp
+cachedCall cachePath endpoint isTransient isExpected req makeRequest = do
   cached <- lookupResponse cachePath endpoint req
   case cached of
     Just response -> return response
     Nothing -> do
       (statusCode, response) <- makeRequest
-      -- Check if this is a transient error that shouldn't be cached
-      case errorCheck of
-        Just checkFn | Just errMsg <- checkFn statusCode response -> do
-          -- Transient error - don't cache, mark as pending
-          pendingWith errMsg
-          error "unreachable"  -- pendingWith throws
-        _ -> do
-          -- Either successful response or permanent error - cache it
-          -- If no error classifier provided, only cache HTTP 200
-          let shouldCache = case errorCheck of
-                Just _ -> True  -- ErrorClassifier said to cache (returned Nothing)
-                Nothing -> statusCode == 200  -- No classifier, only cache 200s
-          if shouldCache
-            then recordResponse cachePath endpoint req response
-            else return ()
-          return response
+      handleResponse cachePath endpoint isTransient isExpected req statusCode response
 
--- Record mode: check cache first, fall back to live API and record response (only caches new responses)
 recordMode :: (HasCodec req, HasCodec resp)
-           => CachePath
-           -> String  -- ^ Endpoint URL (for cache key)
-           -> (req -> IO (Int, resp))  -- API call returns (status code, response)
+           => CachePath -> String -> IsTransient resp -> (req -> IO (Int, resp))
            -> ResponseProvider req resp
-recordMode cachePath endpoint apiCall req = cachedRequest cachePath endpoint req (apiCall req)
+recordMode cachePath endpoint isTransient apiCall isExpected req =
+  cachedCall cachePath endpoint isTransient isExpected req (apiCall req)
 
--- Record mode with error classification - transient errors are not cached and marked as pending
-recordModeWithErrorCheck :: (HasCodec req, HasCodec resp)
-                         => CachePath
-                         -> String  -- ^ Endpoint URL (for cache key)
-                         -> (Int -> resp -> Maybe String)  -- ^ Error classifier: returns Just msg if transient error
-                         -> (req -> IO (Int, resp))  -- API call returns (status code, response)
-                         -> ResponseProvider req resp
-recordModeWithErrorCheck cachePath endpoint errorCheck apiCall req =
-  cachedRequestWithErrorCheck cachePath endpoint (Just errorCheck) req (apiCall req)
-
--- Update mode: always make live API call and overwrite cache (updates existing responses)
--- Only caches responses with status code 200
 updateMode :: (HasCodec req, HasCodec resp)
-           => CachePath
-           -> String  -- ^ Endpoint URL (for cache key)
-           -> (req -> IO (Int, resp))  -- API call returns (status code, response)
+           => CachePath -> String -> IsTransient resp -> (req -> IO (Int, resp))
            -> ResponseProvider req resp
-updateMode cachePath endpoint apiCall req =
-  updateModeWithErrorCheck cachePath endpoint Nothing apiCall req
-
--- Update mode with error classification - transient errors are not cached and marked as pending
-updateModeWithErrorCheck :: (HasCodec req, HasCodec resp)
-                         => CachePath
-                         -> String  -- ^ Endpoint URL (for cache key)
-                         -> Maybe (Int -> resp -> Maybe String)  -- ^ Error classifier: returns Just msg if transient error
-                         -> (req -> IO (Int, resp))  -- API call returns (status code, response)
-                         -> ResponseProvider req resp
-updateModeWithErrorCheck cachePath endpoint errorCheck apiCall req = do
+updateMode cachePath endpoint isTransient apiCall isExpected req = do
   (statusCode, response) <- apiCall req
-  -- Check if this is a transient error that shouldn't be cached
-  case errorCheck of
-    Just checkFn | Just errMsg <- checkFn statusCode response -> do
-      -- Transient error - don't cache, mark as pending
-      pendingWith errMsg
-      error "unreachable"  -- pendingWith throws
-    _ -> do
-      -- Either successful response or permanent error - cache it
-      -- If no error classifier provided, only cache HTTP 200
-      let shouldCache = case errorCheck of
-            Just _ -> True  -- ErrorClassifier said to cache (returned Nothing)
-            Nothing -> statusCode == 200  -- No classifier, only cache 200s
-      if shouldCache
-        then recordResponse cachePath endpoint req response
-        else return ()
-      return response
+  handleResponse cachePath endpoint isTransient isExpected req statusCode response
 
--- Playback mode: only use cache, mark test as pending if not found (ensures no unexpected API calls)
--- Cache misses are treated as pending tests rather than failures, since tests may run without cached responses
 playbackMode :: (HasCodec req, HasCodec resp)
-             => CachePath
-             -> String  -- ^ Endpoint URL (for cache key)
+             => CachePath -> String
              -> ResponseProvider req resp
-playbackMode cachePath endpoint req = do
+playbackMode cachePath endpoint _isExpected req = do
   cached <- lookupResponse cachePath endpoint req
   case cached of
     Just response -> return response
     Nothing -> do
       pendingWith $ "Cache miss: No cached response for request hash: " ++ hashRequest endpoint req
-      error "unreachable"  -- pendingWith throws, but GHC doesn't know that
-
--- Live mode: always make real request, ignore cache
--- Returns just the response (discards status code)
-liveMode :: (req -> IO (Int, resp)) -> ResponseProvider req resp
-liveMode apiCall req = snd <$> apiCall req
-
--- Record mode with filter: skip request if filter returns False (mark as pending)
-recordModeWithFilter :: (HasCodec req, HasCodec resp)
-                     => CachePath
-                     -> String  -- ^ Endpoint URL (for cache key)
-                     -> (req -> Bool)  -- ^ Filter: returns True if request should proceed
-                     -> (req -> IO (Int, resp))  -- API call returns (status code, response)
-                     -> ResponseProvider req resp
-recordModeWithFilter cachePath endpoint filterFn apiCall req =
-  if filterFn req
-    then recordMode cachePath endpoint apiCall req
-    else do
-      pendingWith $ "Skipped: Request filter returned False for hash: " ++ hashRequest endpoint req
       error "unreachable"
 
--- Record mode with filter and custom message
--- Note: Checks cache FIRST before applying filter (record = use cache if available, otherwise make request)
--- Only caches responses with status code 200
+liveMode :: (req -> IO (Int, resp)) -> ResponseProvider req resp
+liveMode apiCall _isExpected req = snd <$> apiCall req
+
 recordModeWithFilterMsg :: (HasCodec req, HasCodec resp)
-                        => CachePath
-                        -> String  -- ^ Endpoint URL (for cache key)
-                        -> (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
-                        -> (req -> IO (Int, resp))  -- API call returns (status code, response)
+                        => CachePath -> String -> IsTransient resp
+                        -> (req -> (Bool, String)) -> (req -> IO (Int, resp))
                         -> ResponseProvider req resp
-recordModeWithFilterMsg cachePath endpoint filterFn apiCall req = do
-  -- Check cache first
+recordModeWithFilterMsg cachePath endpoint isTransient filterFn apiCall isExpected req = do
   cached <- lookupResponse cachePath endpoint req
   case cached of
-    Just response -> return response  -- Cache hit, use it
-    Nothing ->  -- Cache miss, check filter
-      case filterFn req of
-        (True, _) -> do
-          (statusCode, response) <- apiCall req
-          -- Only cache successful responses (HTTP 200)
-          if statusCode == 200
-            then recordResponse cachePath endpoint req response
-            else return ()  -- Don't cache non-200 responses
-          return response
-        (False, msg) -> do
-          pendingWith msg
-          error "unreachable"
+    Just response -> return response
+    Nothing -> case filterFn req of
+      (True, _)    -> cachedCall cachePath endpoint isTransient isExpected req (apiCall req)
+      (False, msg) -> pendingWith msg >> error "unreachable"
 
--- Update mode with filter: skip request if filter returns False (mark as pending)
-updateModeWithFilter :: (HasCodec req, HasCodec resp)
-                     => CachePath
-                     -> String  -- ^ Endpoint URL (for cache key)
-                     -> (req -> Bool)  -- ^ Filter: returns True if request should proceed
-                     -> (req -> IO (Int, resp))  -- API call returns (status code, response)
-                     -> ResponseProvider req resp
-updateModeWithFilter cachePath endpoint filterFn apiCall req =
-  if filterFn req
-    then updateMode cachePath endpoint apiCall req
-    else do
-      pendingWith $ "Skipped: Request filter returned False for hash: " ++ hashRequest endpoint req
-      error "unreachable"
-
--- Update mode with filter and custom message
--- Only caches responses with status code 200
 updateModeWithFilterMsg :: (HasCodec req, HasCodec resp)
-                        => CachePath
-                        -> String  -- ^ Endpoint URL (for cache key)
-                        -> (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
-                        -> (req -> IO (Int, resp))  -- API call returns (status code, response)
+                        => CachePath -> String -> IsTransient resp
+                        -> (req -> (Bool, String)) -> (req -> IO (Int, resp))
                         -> ResponseProvider req resp
-updateModeWithFilterMsg cachePath endpoint filterFn apiCall req =
+updateModeWithFilterMsg cachePath endpoint isTransient filterFn apiCall isExpected req =
   case filterFn req of
-    (True, _) -> updateMode cachePath endpoint apiCall req
-    (False, msg) -> do
-      pendingWith msg
-      error "unreachable"
+    (True, _)    -> do
+      (statusCode, response) <- apiCall req
+      handleResponse cachePath endpoint isTransient isExpected req statusCode response
+    (False, msg) -> pendingWith msg >> error "unreachable"
 
--- Live mode with filter: skip request if filter returns False (mark as pending)
-liveModeWithFilter :: (req -> Bool)  -- ^ Filter: returns True if request should proceed
-                   -> (req -> IO (Int, resp))  -- API call returns (status code, response)
-                   -> ResponseProvider req resp
-liveModeWithFilter filterFn apiCall req =
-  if filterFn req
-    then snd <$> apiCall req
-    else do
-      pendingWith $ "Skipped: Request filter returned False"
-      error "unreachable"
-
--- Live mode with filter and custom message
-liveModeWithFilterMsg :: (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
-                      -> (req -> IO (Int, resp))  -- API call returns (status code, response)
+liveModeWithFilterMsg :: (req -> (Bool, String)) -> (req -> IO (Int, resp))
                       -> ResponseProvider req resp
-liveModeWithFilterMsg filterFn apiCall req =
+liveModeWithFilterMsg filterFn apiCall _isExpected req =
   case filterFn req of
-    (True, _) -> snd <$> apiCall req
-    (False, msg) -> do
-      pendingWith msg
-      error "unreachable"
+    (True, _)    -> snd <$> apiCall req
+    (False, msg) -> pendingWith msg >> error "unreachable"
 
--- Cache raw ByteString responses (e.g., SSE streams) without JSON encoding
--- Stores as .sse file instead of .json
--- Also saves the request for debugging purposes
+-- Raw variants (SSE/ByteString)
+
 recordRawResponse :: HasCodec req => CachePath -> String -> req -> BSL.ByteString -> IO ()
 recordRawResponse cachePath endpoint req responseBody = do
   dirExists <- doesDirectoryExist cachePath
   unless dirExists $ error $ "Cache directory does not exist: " ++ cachePath
-  let cacheKey = hashRequest endpoint req
-      responsePath = cachePath </> cacheKey <> ".sse"
-      requestPath = cachePath </> cacheKey <> "-request.json"
-      requestJson = Aeson.encode $ toJSONViaCodec req
-  BSL.writeFile responsePath responseBody
-  BSL.writeFile requestPath requestJson
+  let key = hashRequest endpoint req
+  BSL.writeFile (cachePath </> key <> ".sse")              responseBody
+  BSL.writeFile (cachePath </> key <> "-request.json") (Aeson.encode $ toJSONViaCodec req)
 
--- Look up a cached raw ByteString response
 lookupRawResponse :: HasCodec req => CachePath -> String -> req -> IO (Maybe BSL.ByteString)
 lookupRawResponse cachePath endpoint req = do
-  let cacheKey = hashRequest endpoint req
-      responsePath = cachePath </> cacheKey <> ".sse"
+  let path = cachePath </> hashRequest endpoint req <> ".sse"
+  exists <- doesFileExist path
+  if exists then Just <$> BSL.readFile path else return Nothing
 
-  exists <- doesFileExist responsePath
-  if exists
-    then Just <$> BSL.readFile responsePath
-    else return Nothing
+handleRawResponse :: HasCodec req
+                  => CachePath -> String -> IsTransient BSL.ByteString -> IsExpected BSL.ByteString
+                  -> req -> Int -> BSL.ByteString -> IO BSL.ByteString
+handleRawResponse cachePath endpoint isTransient isExpected req statusCode response =
+  if isExpected statusCode response || not (isTransient statusCode response)
+    then recordRawResponse cachePath endpoint req response >> return response
+    else do
+      pendingWith $ "Transient error (status " ++ show statusCode ++ ") — not caching"
+      error "unreachable"
 
--- Cached raw request: check cache first, fall back to real request and cache the result
--- Only caches responses with status code 200
-cachedRawRequest :: HasCodec req
-                 => CachePath
-                 -> String  -- ^ Endpoint URL (for cache key)
-                 -> req
-                 -> IO (Int, BSL.ByteString)  -- Request returns (status code, response)
-                 -> IO BSL.ByteString
-cachedRawRequest cachePath endpoint req makeRequest = do
+recordModeRaw :: HasCodec req
+              => CachePath -> String -> IsTransient BSL.ByteString -> (req -> IO (Int, BSL.ByteString))
+              -> ResponseProvider req BSL.ByteString
+recordModeRaw cachePath endpoint isTransient apiCall isExpected req = do
   cached <- lookupRawResponse cachePath endpoint req
   case cached of
     Just response -> return response
     Nothing -> do
-      (statusCode, response) <- makeRequest
-      -- Only cache successful responses (HTTP 200)
-      if statusCode == 200
-        then recordRawResponse cachePath endpoint req response
-        else return ()  -- Don't cache non-200 responses
-      return response
+      (statusCode, response) <- apiCall req
+      handleRawResponse cachePath endpoint isTransient isExpected req statusCode response
 
--- Raw record mode: check cache first, fall back to live API and record response
-recordModeRaw :: HasCodec req
-              => CachePath
-              -> String  -- ^ Endpoint URL (for cache key)
-              -> (req -> IO (Int, BSL.ByteString))  -- API call returns (status code, response)
-              -> ResponseProvider req BSL.ByteString
-recordModeRaw cachePath endpoint apiCall req = cachedRawRequest cachePath endpoint req (apiCall req)
-
--- Raw update mode: always make live API call and overwrite cache
--- Only caches responses with status code 200
 updateModeRaw :: HasCodec req
-              => CachePath
-              -> String  -- ^ Endpoint URL (for cache key)
-              -> (req -> IO (Int, BSL.ByteString))  -- API call returns (status code, response)
+              => CachePath -> String -> IsTransient BSL.ByteString -> (req -> IO (Int, BSL.ByteString))
               -> ResponseProvider req BSL.ByteString
-updateModeRaw cachePath endpoint apiCall req = do
+updateModeRaw cachePath endpoint isTransient apiCall isExpected req = do
   (statusCode, response) <- apiCall req
-  -- Only cache successful responses (HTTP 200)
-  if statusCode == 200
-    then recordRawResponse cachePath endpoint req response
-    else return ()  -- Don't cache non-200 responses
-  return response
+  handleRawResponse cachePath endpoint isTransient isExpected req statusCode response
 
--- Raw playback mode: only use cache, mark test as pending if not found
--- Cache misses are treated as pending tests rather than failures, since tests may run without cached responses
 playbackModeRaw :: HasCodec req
-                => CachePath
-                -> String  -- ^ Endpoint URL (for cache key)
+                => CachePath -> String
                 -> ResponseProvider req BSL.ByteString
-playbackModeRaw cachePath endpoint req = do
+playbackModeRaw cachePath endpoint _isExpected req = do
   cached <- lookupRawResponse cachePath endpoint req
   case cached of
     Just response -> return response
     Nothing -> do
       pendingWith $ "Cache miss: No cached response for request hash: " ++ hashRequest endpoint req
-      error "unreachable"  -- pendingWith throws, but GHC doesn't know that
+      error "unreachable"
 
--- Raw record mode with filter and custom message
--- Note: Checks cache FIRST before applying filter (record = use cache if available, otherwise make request)
--- Only caches responses with status code 200
 recordModeRawWithFilterMsg :: HasCodec req
-                           => CachePath
-                           -> String  -- ^ Endpoint URL (for cache key)
-                           -> (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
-                           -> (req -> IO (Int, BSL.ByteString))  -- API call returns (status code, response)
+                           => CachePath -> String -> IsTransient BSL.ByteString
+                           -> (req -> (Bool, String)) -> (req -> IO (Int, BSL.ByteString))
                            -> ResponseProvider req BSL.ByteString
-recordModeRawWithFilterMsg cachePath endpoint filterFn apiCall req = do
-  -- Check cache first
+recordModeRawWithFilterMsg cachePath endpoint isTransient filterFn apiCall isExpected req = do
   cached <- lookupRawResponse cachePath endpoint req
   case cached of
-    Just response -> return response  -- Cache hit, use it
-    Nothing ->  -- Cache miss, check filter
-      case filterFn req of
-        (True, _) -> do
-          (statusCode, response) <- apiCall req
-          -- Only cache successful responses (HTTP 200)
-          if statusCode == 200
-            then recordRawResponse cachePath endpoint req response
-            else return ()  -- Don't cache non-200 responses
-          return response
-        (False, msg) -> do
-          pendingWith msg
-          error "unreachable"
+    Just response -> return response
+    Nothing -> case filterFn req of
+      (True, _)    -> do
+        (statusCode, response) <- apiCall req
+        handleRawResponse cachePath endpoint isTransient isExpected req statusCode response
+      (False, msg) -> pendingWith msg >> error "unreachable"
 
--- Raw update mode with filter and custom message
--- Only caches responses with status code 200
 updateModeRawWithFilterMsg :: HasCodec req
-                           => CachePath
-                           -> String  -- ^ Endpoint URL (for cache key)
-                           -> (req -> (Bool, String))  -- ^ Filter: returns (should proceed, error message)
-                           -> (req -> IO (Int, BSL.ByteString))  -- API call returns (status code, response)
+                           => CachePath -> String -> IsTransient BSL.ByteString
+                           -> (req -> (Bool, String)) -> (req -> IO (Int, BSL.ByteString))
                            -> ResponseProvider req BSL.ByteString
-updateModeRawWithFilterMsg cachePath endpoint filterFn apiCall req =
+updateModeRawWithFilterMsg cachePath endpoint isTransient filterFn apiCall isExpected req =
   case filterFn req of
-    (True, _) -> updateModeRaw cachePath endpoint apiCall req
-    (False, msg) -> do
-      pendingWith msg
-      error "unreachable"
+    (True, _)    -> do
+      (statusCode, response) <- apiCall req
+      handleRawResponse cachePath endpoint isTransient isExpected req statusCode response
+    (False, msg) -> pendingWith msg >> error "unreachable"

@@ -45,6 +45,7 @@ Probes test __protocol behavior__, NOT our abstractions:
 
 In a model-specific test suite:
 @
+import TestCache (request, ResponseProvider)
 import Protocol.AnthropicTests
 
 modelTests :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
@@ -67,6 +68,7 @@ reasoning provider           -- ✓ passes (if model supports it)
 
 module Protocol.AnthropicTests where
 
+import TestCache (request, ResponseProvider)
 import UniversalLLM.Protocols.Anthropic
 import Protocol.Anthropic  -- unqualified - we mainly call these
 import Data.Text (Text)
@@ -87,11 +89,11 @@ import TestFixtures (glassbottlePng, glassbottleMirroredJpeg)
 -- __Checks:__ Response contains non-empty assistant text
 --
 -- __Expected to pass:__ All Anthropic models
-basicText :: HasCallStack => (AnthropicRequest -> IO AnthropicResponse) -> Spec
+basicText :: HasCallStack => ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 basicText makeRequest = do
   it "returns assistant text for simple question" $ do
     let req = simpleUserRequest "What is 2+2?"
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasAssistantText resp
 
 -- | Probe: Tool calling support
@@ -104,13 +106,13 @@ basicText makeRequest = do
 --
 -- __Note:__ This only tests if the model CAN call tools, not if it does
 -- so correctly or appropriately. Use StandardTests for that.
-toolCalling :: HasCallStack => (AnthropicRequest -> IO AnthropicResponse) -> Spec
+toolCalling :: HasCallStack => ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 toolCalling makeRequest = do
   it "makes tool calls when tools are available" $ do
     let req = (simpleUserRequest "Use the get_weather function to check the weather in London.")
           { tools = Just [weatherTool]
           }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasToolCalls resp
 
 -- | Probe: Reasoning (extended thinking)
@@ -122,11 +124,11 @@ toolCalling makeRequest = do
 -- __Expected to pass:__ Claude models with extended thinking enabled
 --
 -- __Note:__ Requires thinking.type = "enabled" in request
-reasoning :: HasCallStack => (AnthropicRequest -> IO AnthropicResponse) -> Spec
+reasoning :: HasCallStack => ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 reasoning makeRequest = do
   it "returns thinking content when enabled" $ do
     let req = enableReasoning (simpleUserRequest "Think step by step: What is 15 * 23?")
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasReasoning resp
 
 -- | Probe: Reasoning with tools
@@ -136,13 +138,13 @@ reasoning makeRequest = do
 -- __Checks:__ Response contains both thinking blocks AND tool_use blocks
 --
 -- __Expected to pass:__ Claude models with extended thinking + tool support
-toolCallingWithReasoning :: HasCallStack => (AnthropicRequest -> IO AnthropicResponse) -> Spec
+toolCallingWithReasoning :: HasCallStack => ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 toolCallingWithReasoning makeRequest = do
   it "combines reasoning with tool calls" $ do
     let req = enableReasoning (simpleUserRequest "Think carefully, then use get_weather to check London.")
           { tools = Just [weatherTool]
           }
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasReasoning resp
     assertHasToolCalls resp
 
@@ -153,11 +155,11 @@ toolCallingWithReasoning makeRequest = do
 -- __Checks:__ Response contains thinking content blocks when using adaptive mode
 --
 -- __Expected to pass:__ Opus 4.6 and newer models with adaptive thinking
-adaptiveReasoning :: HasCallStack => (AnthropicRequest -> IO AnthropicResponse) -> Spec
+adaptiveReasoning :: HasCallStack => ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 adaptiveReasoning makeRequest = do
   it "returns thinking content when using adaptive mode" $ do
     let req = enableAdaptiveReasoning (simpleUserRequest "Think step by step: What is 17 * 29?")
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasReasoning resp
 
 -- | Probe: Vision / PNG format support
@@ -167,12 +169,12 @@ adaptiveReasoning makeRequest = do
 -- __Checks:__ Response mentions "bottle" when shown the glassbottle image
 --
 -- __Expected to pass:__ All Claude models (all support vision natively)
-visionPng :: HasCallStack => (AnthropicRequest -> IO AnthropicResponse) -> Text -> Spec
+visionPng :: HasCallStack => ResponseProvider AnthropicRequest AnthropicResponse -> Text -> Spec
 visionPng makeRequest modelName = do
   (mediaType, b64Data) <- runIO glassbottlePng
   it "accepts PNG image and identifies subject" $ do
     let req = visionIdentifyRequest modelName mediaType b64Data
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertMentions "bottle" resp
 
 -- | Probe: Vision / JPEG format support
@@ -182,12 +184,12 @@ visionPng makeRequest modelName = do
 -- __Checks:__ Response mentions "bottle" when shown the mirrored glassbottle JPEG
 --
 -- __Expected to pass:__ All Claude models
-visionJpeg :: HasCallStack => (AnthropicRequest -> IO AnthropicResponse) -> Text -> Spec
+visionJpeg :: HasCallStack => ResponseProvider AnthropicRequest AnthropicResponse -> Text -> Spec
 visionJpeg makeRequest modelName = do
   (mediaType, b64Data) <- runIO glassbottleMirroredJpeg
   it "accepts JPEG image and identifies subject" $ do
     let req = visionIdentifyRequest modelName mediaType b64Data
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertMentions "bottle" resp
 
 -- | Probe: Vision / multiple images in one prompt
@@ -197,13 +199,13 @@ visionJpeg makeRequest modelName = do
 -- __Checks:__ Model confirms the second image is a mirrored version of the first
 --
 -- __Expected to pass:__ All Claude models
-visionMultipleImages :: HasCallStack => (AnthropicRequest -> IO AnthropicResponse) -> Text -> Spec
+visionMultipleImages :: HasCallStack => ResponseProvider AnthropicRequest AnthropicResponse -> Text -> Spec
 visionMultipleImages makeRequest modelName = do
   (mt1, b64Png) <- runIO glassbottlePng
   (mt2, b64Jpg) <- runIO glassbottleMirroredJpeg
   it "accepts multiple images and compares them" $ do
     let req = visionCompareRequest modelName mt1 b64Png mt2 b64Jpg
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertConfirmsYes resp
 
 -- | Probe: Consecutive user messages
@@ -213,11 +215,11 @@ visionMultipleImages makeRequest modelName = do
 -- __Checks:__ Request with consecutive user messages succeeds
 --
 -- __Expected to pass:__ Most models (though not recommended practice)
-consecutiveUserMessages :: HasCallStack => (AnthropicRequest -> IO AnthropicResponse) -> Spec
+consecutiveUserMessages :: HasCallStack => ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 consecutiveUserMessages makeRequest = do
   it "accepts consecutive user messages" $ do
     let req = Protocol.Anthropic.consecutiveUserMessages "First message" "Second message"
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasAssistantText resp
 
 -- | Probe: Starts with assistant
@@ -227,9 +229,9 @@ consecutiveUserMessages makeRequest = do
 -- __Checks:__ Request starting with assistant message succeeds
 --
 -- __Expected to pass:__ Most models (used for few-shot prompting)
-startsWithAssistant :: HasCallStack => (AnthropicRequest -> IO AnthropicResponse) -> Spec
+startsWithAssistant :: HasCallStack => ResponseProvider AnthropicRequest AnthropicResponse -> Spec
 startsWithAssistant makeRequest = do
   it "accepts history starting with assistant message" $ do
     let req = Protocol.Anthropic.startsWithAssistant
-    resp <- makeRequest req
+    resp <- request makeRequest req
     assertHasAssistantText resp
