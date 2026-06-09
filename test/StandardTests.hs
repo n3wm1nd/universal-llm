@@ -29,6 +29,7 @@ module StandardTests
   , vision
   , visionJpeg
   , visionMultipleImages
+  , visionMultipleImagesHinted
   ) where
 
 import Test.Hspec
@@ -790,6 +791,30 @@ visionMultipleImages = StandardTest $ \cp model initialState getResponse -> do
     it "compares two images and identifies that the second is a horizontal mirror of the first" $ do
       let configs = [MaxTokens 2048]
           msgs = [ UserText "I am showing you two images. Is the second image a horizontally mirrored version of the first? Answer yes or no, then briefly explain."
+                 , UserImage mt1 b64Png
+                 , UserImage mt2 b64Jpg
+                 ]
+          (_, req) = toProviderRequest cp model configs initialState msgs
+
+      resp <- request getResponse req
+
+      let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs initialState resp
+      length parsedMsgs `shouldSatisfy` (> 0)
+      let responseText = T.toLower $ T.concat [t | AssistantText t <- parsedMsgs]
+      responseText `shouldSatisfy` T.isInfixOf "yes"
+
+visionMultipleImagesHinted :: ( Provider m
+                              , HasVision m
+                              , SupportsMaxTokens (ProviderOf m)
+                              )
+                           => StandardTest m state
+visionMultipleImagesHinted = StandardTest $ \cp model initialState getResponse -> do
+  describe "Vision (multiple images, hinted)" $ do
+    (mt1, b64Png) <- runIO glassbottlePng
+    (mt2, b64Jpg) <- runIO glassbottleMirroredJpeg
+    it "compares two images and identifies that the second is a horizontal mirror of the first" $ do
+      let configs = [MaxTokens 2048]
+          msgs = [ UserText "I am showing you two images. The images are either horizontally mirrored versions of each other, or completely different subjects. Is the second image a horizontally mirrored version of the first? Answer yes or no, then briefly explain."
                  , UserImage mt1 b64Png
                  , UserImage mt2 b64Jpg
                  ]

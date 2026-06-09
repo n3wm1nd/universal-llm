@@ -24,12 +24,12 @@ data Providers = Providers
   , openrouterProvider         :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
   , openrouterStreamingProvider :: TestCache.ResponseProvider OpenAIRequest BSL.ByteString
   , zaiProvider                :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
-  , alibabaCloudProvider       :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
+  , alibabaCloudCodingProvider  :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
   , llamacppProvider           :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
   , llamacppStreamingProvider  :: TestCache.ResponseProvider OpenAIRequest BSL.ByteString
   , openaiCompatProvider       :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
-  , anthropicProvider          :: TestCache.ResponseProvider AnthropicRequest AnthropicResponse
-  , anthropicStreamingProvider :: TestCache.ResponseProvider AnthropicRequest BSL.ByteString
+  , anthropicOAuthProvider          :: TestCache.ResponseProvider AnthropicRequest AnthropicResponse
+  , anthropicOAuthStreamingProvider :: TestCache.ResponseProvider AnthropicRequest BSL.ByteString
   , openaiStreamingProvider    :: TestCache.ResponseProvider OpenAIRequest BSL.ByteString
   , completionProvider         :: TestCache.ResponseProvider OpenAICompletionRequest OpenAICompletionResponse
   , llamacppLoadedModel        :: Maybe [String]
@@ -78,12 +78,12 @@ buildProviders = do
     , openrouterProvider         = buildOpenRouter mode openrouterApiKey cachePath
     , openrouterStreamingProvider = buildOpenRouterStreaming mode openrouterApiKey cachePath
     , zaiProvider                = buildZAI mode zaiApiKey cachePath
-    , alibabaCloudProvider       = buildAlibabaCloud mode alibabaCloudApiKey cachePath
-    , llamacppProvider           = buildLlamaCpp mode llamacppUrl modelMatches cachePath
-    , llamacppStreamingProvider  = buildLlamaCppStreaming mode llamacppUrl modelMatches cachePath
-    , openaiCompatProvider       = buildOpenAICompat mode openaiCompatUrl cachePath
-    , anthropicProvider          = buildAnthropic mode anthropicToken cachePath
-    , anthropicStreamingProvider = buildAnthropicStreaming mode anthropicToken cachePath
+    , alibabaCloudCodingProvider  = buildAlibabaCloud mode alibabaCloudApiKey cachePath
+    , llamacppProvider            = buildLlamaCpp mode llamacppUrl modelMatches cachePath
+    , llamacppStreamingProvider   = buildLlamaCppStreaming mode llamacppUrl modelMatches cachePath
+    , openaiCompatProvider        = buildOpenAICompat mode openaiCompatUrl cachePath
+    , anthropicOAuthProvider          = buildAnthropic mode anthropicToken cachePath
+    , anthropicOAuthStreamingProvider = buildAnthropicStreaming mode anthropicToken cachePath
     , openaiStreamingProvider    = buildOpenAIStreaming mode openaiApiKey cachePath
     , completionProvider         = buildCompletion mode openaiApiKey cachePath
     , llamacppLoadedModel        = loadedModel

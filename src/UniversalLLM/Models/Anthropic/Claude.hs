@@ -17,7 +17,9 @@ These models can be used directly in applications without redefinition.
 * 'ClaudeSonnet45NoReason' - Sonnet 4.5 with tools only, no reasoning state (exception)
 * 'ClaudeSonnet46' - Claude Sonnet 4.6 with reasoning and tool support
 * 'ClaudeHaiku45' - Claude Haiku 4.5 with reasoning and tool support
-* 'ClaudeOpus46' - Claude Opus 4.6 with adaptive reasoning and tool support
+* 'ClaudeOpus46' - Claude Opus 4.6 with adaptive reasoning and tool support (legacy)
+* 'ClaudeOpus48' - Claude Opus 4.8 with adaptive reasoning and tool support
+* 'ClaudeFable5' - Claude Fable 5 with adaptive reasoning and tool support (most capable widely released)
 
 = Usage
 
@@ -52,6 +54,8 @@ module UniversalLLM.Models.Anthropic.Claude
   , ClaudeSonnet46(..)
   , ClaudeHaiku45(..)
   , ClaudeOpus46(..)
+  , ClaudeOpus48(..)
+  , ClaudeFable5(..)
   ) where
 
 import UniversalLLM
@@ -204,6 +208,68 @@ instance Routing (Model ClaudeOpus46 Anthropic) where
   route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus46 Anthropic)
 
 --------------------------------------------------------------------------------
+-- Claude Opus 4.8
+--------------------------------------------------------------------------------
+
+-- | Claude Opus 4.8 - Anthropic's most capable Opus-tier model
+--
+-- Capabilities:
+-- - Adaptive thinking (always-on, via effort parameter)
+-- - Native tool support
+-- - High-quality text generation
+-- - Streaming responses
+-- - Superior reasoning for complex, long-horizon agentic work
+data ClaudeOpus48 = ClaudeOpus48 deriving (Show, Eq)
+
+instance ModelName (Model ClaudeOpus48 Anthropic) where
+  modelName (Model _ _) = "claude-opus-4-8"
+
+instance HasTools (Model ClaudeOpus48 Anthropic) where
+  withTools = Anthropic.anthropicTools
+
+instance HasReasoning (Model ClaudeOpus48 Anthropic) where
+  type ReasoningState (Model ClaudeOpus48 Anthropic) = Anthropic.AnthropicReasoningState
+  withReasoning = Anthropic.anthropicAdaptiveReasoning
+
+instance HasVision (Model ClaudeOpus48 Anthropic) where
+  withVision = Anthropic.anthropicVision
+
+instance Routing (Model ClaudeOpus48 Anthropic) where
+  type RoutingState (Model ClaudeOpus48 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus48 Anthropic)
+
+--------------------------------------------------------------------------------
+-- Claude Fable 5
+--------------------------------------------------------------------------------
+
+-- | Claude Fable 5 - Anthropic's most capable widely released model
+--
+-- Capabilities:
+-- - Adaptive thinking (always-on, via effort parameter)
+-- - Native tool support
+-- - High-quality text generation
+-- - Streaming responses
+-- - Most demanding reasoning and long-horizon agentic work
+data ClaudeFable5 = ClaudeFable5 deriving (Show, Eq)
+
+instance ModelName (Model ClaudeFable5 Anthropic) where
+  modelName (Model _ _) = "claude-fable-5"
+
+instance HasTools (Model ClaudeFable5 Anthropic) where
+  withTools = Anthropic.anthropicTools
+
+instance HasReasoning (Model ClaudeFable5 Anthropic) where
+  type ReasoningState (Model ClaudeFable5 Anthropic) = Anthropic.AnthropicReasoningState
+  withReasoning = Anthropic.anthropicAdaptiveReasoning
+
+instance HasVision (Model ClaudeFable5 Anthropic) where
+  withVision = Anthropic.anthropicVision
+
+instance Routing (Model ClaudeFable5 Anthropic) where
+  type RoutingState (Model ClaudeFable5 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeFable5 Anthropic)
+
+--------------------------------------------------------------------------------
 -- OAuth Versions
 --------------------------------------------------------------------------------
 
@@ -278,6 +344,43 @@ instance HasVision (Model ClaudeHaiku45 AnthropicOAuth) where
 instance Routing (Model ClaudeHaiku45 AnthropicOAuth) where
   type RoutingState (Model ClaudeHaiku45 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ((), ()))))
   route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeHaiku45 AnthropicOAuth)
+
+-- OAuth version for ClaudeOpus48 (with adaptive reasoning)
+-- NOTE: Tool name blacklist workaround removed as of 2025 - API no longer blocks tool names
+instance ModelName (Model ClaudeOpus48 AnthropicOAuth) where
+  modelName (Model _ _) = "claude-opus-4-8"
+
+instance HasTools (Model ClaudeOpus48 AnthropicOAuth) where
+  withTools = Anthropic.anthropicTools
+
+instance HasReasoning (Model ClaudeOpus48 AnthropicOAuth) where
+  type ReasoningState (Model ClaudeOpus48 AnthropicOAuth) = Anthropic.AnthropicReasoningState
+  withReasoning = Anthropic.anthropicAdaptiveReasoning
+
+instance HasVision (Model ClaudeOpus48 AnthropicOAuth) where
+  withVision = Anthropic.anthropicVision
+
+instance Routing (Model ClaudeOpus48 AnthropicOAuth) where
+  type RoutingState (Model ClaudeOpus48 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ((), ()))))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus48 AnthropicOAuth)
+
+-- OAuth version for ClaudeFable5 (with adaptive reasoning)
+instance ModelName (Model ClaudeFable5 AnthropicOAuth) where
+  modelName (Model _ _) = "claude-fable-5"
+
+instance HasTools (Model ClaudeFable5 AnthropicOAuth) where
+  withTools = Anthropic.anthropicTools
+
+instance HasReasoning (Model ClaudeFable5 AnthropicOAuth) where
+  type ReasoningState (Model ClaudeFable5 AnthropicOAuth) = Anthropic.AnthropicReasoningState
+  withReasoning = Anthropic.anthropicAdaptiveReasoning
+
+instance HasVision (Model ClaudeFable5 AnthropicOAuth) where
+  withVision = Anthropic.anthropicVision
+
+instance Routing (Model ClaudeFable5 AnthropicOAuth) where
+  type RoutingState (Model ClaudeFable5 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ((), ()))))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeFable5 AnthropicOAuth)
 
 -- OAuth version for ClaudeOpus46 (with adaptive reasoning)
 -- NOTE: Tool name blacklist workaround removed as of 2025 - API no longer blocks tool names

@@ -208,6 +208,22 @@ visionMultipleImages makeRequest modelName = do
     resp <- request makeRequest req
     assertConfirmsYes resp
 
+-- | Probe: Vision / multiple images with disambiguation hint
+--
+-- __Tests:__ Can the model compare two images when told they are either mirrored or completely different?
+--
+-- __Checks:__ Model confirms the second image is a mirrored version of the first
+--
+-- __Expected to pass:__ All Claude models (more reliable than visionMultipleImages)
+visionMultipleImagesHinted :: HasCallStack => ResponseProvider AnthropicRequest AnthropicResponse -> Text -> Spec
+visionMultipleImagesHinted makeRequest modelName = do
+  (mt1, b64Png) <- runIO glassbottlePng
+  (mt2, b64Jpg) <- runIO glassbottleMirroredJpeg
+  it "accepts multiple images and compares them (with disambiguation hint)" $ do
+    let req = visionCompareRequestHinted modelName mt1 b64Png mt2 b64Jpg
+    resp <- request makeRequest req
+    assertConfirmsYes resp
+
 -- | Probe: Consecutive user messages
 --
 -- __Tests:__ Does the API accept multiple user messages in a row?

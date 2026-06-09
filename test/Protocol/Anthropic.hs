@@ -218,6 +218,21 @@ visionCompareRequest modelName mediaType1 b64Data1 mediaType2 b64Data2 = mempty
   , max_tokens = 4096
   }
 
+-- | Create a multi-image request asking the model to compare two images, with a hint
+-- that the images are either mirrored or completely different (reducing false negatives)
+visionCompareRequestHinted :: Text -> Text -> Text -> Text -> Text -> AnthropicRequest
+visionCompareRequestHinted modelName mediaType1 b64Data1 mediaType2 b64Data2 = mempty
+  { messages =
+      [ AnthropicMessage "user"
+          [ AnthropicTextBlock "I am showing you two images. The images are either horizontally mirrored versions of each other, or completely different subjects. Is the second image a horizontally mirrored version of the first? Answer yes or no, then briefly explain." Nothing
+          , AnthropicImageBlock mediaType1 b64Data1
+          , AnthropicImageBlock mediaType2 b64Data2
+          ]
+      ]
+  , model = modelName
+  , max_tokens = 4096
+  }
+
 -- ============================================================================
 -- Protocol Assertions
 --

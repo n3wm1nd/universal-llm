@@ -30,7 +30,7 @@ __Anthropic API:__
 
 -}
 
-module Models.Anthropic.Claude (testsSonnet45, testsSonnet46, testsHaiku45, testsOpus46) where
+module Models.Anthropic.Claude (testsSonnet45, testsSonnet46, testsHaiku45, testsOpus46, testsOpus48, testsFable5) where
 
 import UniversalLLM (route, via)
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse, model)
@@ -41,6 +41,8 @@ import UniversalLLM.Models.Anthropic.Claude
   , ClaudeSonnet46(..)
   , ClaudeHaiku45(..)
   , ClaudeOpus46(..)
+  , ClaudeOpus48(..)
+  , ClaudeFable5(..)
   )
 import Protocol.AnthropicTests
 import qualified Protocol.AnthropicOAuthBlacklist as Blacklist
@@ -197,4 +199,78 @@ testsOpus46 provider = do
         , ST.toolWithName "grep"      -- Blacklisted, should work via prefix/unprefix
         , ST.toolWithName "read_file" -- Blacklisted, should work via prefix/unprefix
         , ST.toolWithName "echo"      -- Not blacklisted, should work normally
+        ]
+
+-- | Test Claude Opus 4.8 via Anthropic API
+--
+-- Opus 4.8 uses adaptive thinking (always-on) with effort parameter.
+-- Includes both protocol probes (wire format) and standard tests (high-level API).
+testsOpus48 :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
+testsOpus48 provider = do
+  let oauthProvider isExpected req = provider isExpected (Anthropic.withMagicSystemPrompt req { model = "claude-opus-4-8" })
+  describe "Claude Opus 4.8 via Anthropic" $ do
+    describe "Protocol" $ do
+      basicText oauthProvider
+      toolCalling oauthProvider
+      consecutiveUserMessages oauthProvider
+      startsWithAssistant oauthProvider
+      adaptiveReasoning oauthProvider
+      toolCallingWithReasoning oauthProvider
+      visionPng oauthProvider "claude-opus-4-8"
+      visionJpeg oauthProvider "claude-opus-4-8"
+      visionMultipleImages oauthProvider "claude-opus-4-8"
+
+    -- NOTE: Blacklist removed as of 2025 - keeping test structure for potential future use
+    describe "OAuth Tool Name Blacklist" $ do
+      -- Blacklist.blacklistProbes oauthProvider
+      return ()
+
+    describe "Standard Tests" $
+      testModel route (ClaudeOpus48 `via` AnthropicOAuth) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.vision, ST.visionJpeg, ST.visionMultipleImagesHinted ]
+
+    describe "OAuth Provider Tests" $
+      testModel route (ClaudeOpus48 `via` AnthropicOAuth) provider
+        [ ST.text
+        , ST.tools
+        , ST.toolWithName "grep"
+        , ST.toolWithName "read_file"
+        , ST.toolWithName "echo"
+        ]
+
+-- | Test Claude Fable 5 via Anthropic API
+--
+-- Fable 5 uses adaptive thinking (always-on) and is Anthropic's most capable widely released model.
+-- Includes both protocol probes (wire format) and standard tests (high-level API).
+testsFable5 :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
+testsFable5 provider = do
+  let oauthProvider isExpected req = provider isExpected (Anthropic.withMagicSystemPrompt req { model = "claude-fable-5" })
+  describe "Claude Fable 5 via Anthropic" $ do
+    describe "Protocol" $ do
+      basicText oauthProvider
+      toolCalling oauthProvider
+      consecutiveUserMessages oauthProvider
+      startsWithAssistant oauthProvider
+      adaptiveReasoning oauthProvider
+      toolCallingWithReasoning oauthProvider
+      visionPng oauthProvider "claude-fable-5"
+      visionJpeg oauthProvider "claude-fable-5"
+      visionMultipleImagesHinted oauthProvider "claude-fable-5"
+
+    -- NOTE: Blacklist removed as of 2025 - keeping test structure for potential future use
+    describe "OAuth Tool Name Blacklist" $ do
+      -- Blacklist.blacklistProbes oauthProvider
+      return ()
+
+    describe "Standard Tests" $
+      testModel route (ClaudeFable5 `via` AnthropicOAuth) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.vision, ST.visionJpeg, ST.visionMultipleImagesHinted ]
+
+    describe "OAuth Provider Tests" $
+      testModel route (ClaudeFable5 `via` AnthropicOAuth) provider
+        [ ST.text
+        , ST.tools
+        , ST.toolWithName "grep"
+        , ST.toolWithName "read_file"
+        , ST.toolWithName "echo"
         ]
