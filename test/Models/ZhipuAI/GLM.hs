@@ -15,6 +15,7 @@ Test suites for Zhipu AI's GLM model family.
 * GLM 4.7 (ZAI)
 * GLM 5 (ZAI)
 * GLM 5.1 (ZAI)
+* GLM 5.2 (ZAI)
 * GLM 5-Turbo (ZAI)
 
 = GLM 4.5 Air Provider-Specific Quirks
@@ -41,6 +42,7 @@ module Models.ZhipuAI.GLM
   , testsGLM5ZAI
   , testsGLM5AlibabaCloud
   , testsGLM51ZAI
+  , testsGLM52ZAI
   , testsGLM5TurboZAI
   ) where
 
@@ -54,6 +56,7 @@ import UniversalLLM.Models.ZhipuAI.GLM
   , GLM47(..)
   , GLM5(..)
   , GLM51(..)
+  , GLM52(..)
   , GLM5Turbo(..)
   , ZAI(..)
   )
@@ -215,6 +218,15 @@ testsGLM51ZAI provider = do
   describe "GLM 5.1 via ZAI" $ do
     describe "Standard Tests" $
       testModel route (GLM51 `via` ZAI) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+
+-- | Test GLM 5.2 via ZAI
+-- Note: ZAI accepts the request but the model cannot see image_url content (reports no image attached).
+testsGLM52ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsGLM52ZAI provider = do
+  describe "GLM 5.2 via ZAI" $ do
+    describe "Standard Tests" $
+      testModel route (GLM52 `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
 -- | Test GLM 5-Turbo via ZAI

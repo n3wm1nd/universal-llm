@@ -70,6 +70,7 @@ module UniversalLLM.Models.ZhipuAI.GLM
   , GLM47(..)
   , GLM5(..)
   , GLM51(..)
+  , GLM52(..)
   , GLM5Turbo(..)
   , ZAI(..)
     -- * Workaround Combinators
@@ -357,6 +358,35 @@ instance HasJSON (Model GLM5 ZAI) where
 instance Routing (Model GLM5 ZAI) where
   type RoutingState (Model GLM5 ZAI) = ((), ((), ((), ())))
   route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM5 ZAI)
+
+--------------------------------------------------------------------------------
+-- GLM-5.2
+--------------------------------------------------------------------------------
+
+-- | GLM-5.2 - Latest GLM model (ZAI only)
+data GLM52 = GLM52 deriving (Show, Eq)
+
+instance Provider (Model GLM52 ZAI) where
+  type ProviderRequest (Model GLM52 ZAI) = OpenAIRequest
+  type ProviderResponse (Model GLM52 ZAI) = OpenAIResponse
+
+instance EnableStreaming (Model GLM52 ZAI) where enableStreamingForProtocol = enableOpenAIStreaming
+
+instance ModelName (Model GLM52 ZAI) where
+  modelName (Model _ _) = "glm-5.2"
+
+instance HasTools (Model GLM52 ZAI) where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning (Model GLM52 ZAI) where
+  withReasoning = OpenAI.openAIReasoning
+
+instance HasJSON (Model GLM52 ZAI) where
+  withJSON = OpenAI.openAIJSON
+
+instance Routing (Model GLM52 ZAI) where
+  type RoutingState (Model GLM52 ZAI) = ((), ((), ((), ())))
+  route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM52 ZAI)
 
 --------------------------------------------------------------------------------
 -- GLM-5.1

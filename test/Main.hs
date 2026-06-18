@@ -49,6 +49,7 @@ main = do
       Models.ZhipuAI.GLM.testsGLM5ZAI (zaiProvider p)
       Models.ZhipuAI.GLM.testsGLM5AlibabaCloud (alibabaCloudCodingProvider p)
       Models.ZhipuAI.GLM.testsGLM51ZAI (zaiProvider p)
+      Models.ZhipuAI.GLM.testsGLM52ZAI (zaiProvider p)
       Models.ZhipuAI.GLM.testsGLM5TurboZAI (zaiProvider p)
       Models.Alibaba.Qwen.testsQwen35_122BOpenRouter (openrouterProvider p)
       Models.Alibaba.Qwen.testsQwen35_122BLlamaCpp (llamacppProvider p) "Qwen3.5-122B"
