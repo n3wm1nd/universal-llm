@@ -45,7 +45,12 @@ main = do
       Models.ZhipuAI.GLM.testsGLM45ZAI (zaiProvider p)
       Models.ZhipuAI.GLM.testsGLM46ZAI (zaiProvider p)
       Models.ZhipuAI.GLM.testsGLM47ZAI (zaiProvider p)
+      Models.ZhipuAI.GLM.testsGLM47OpenRouter (openrouterProvider p)
       Models.ZhipuAI.GLM.testsGLM47AlibabaCloud (alibabaCloudCodingProvider p)
+      Models.ZhipuAI.GLM.testsGLM47FlashZAI (zaiProvider p)
+      Models.ZhipuAI.GLM.testsGLM47FlashOpenRouter (openrouterProvider p)
+      Models.ZhipuAI.GLM.testsGLM47FlashLlamaCpp (llamacppProvider p) "GLM-4.7-Flash"
+
       Models.ZhipuAI.GLM.testsGLM5ZAI (zaiProvider p)
       Models.ZhipuAI.GLM.testsGLM5AlibabaCloud (alibabaCloudCodingProvider p)
       Models.ZhipuAI.GLM.testsGLM51ZAI (zaiProvider p)

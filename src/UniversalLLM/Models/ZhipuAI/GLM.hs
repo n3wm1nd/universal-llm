@@ -15,11 +15,14 @@ These models can be accessed through multiple providers (llama.cpp, OpenRouter, 
 
 = Available Models
 
-* 'GLM45Air' - GLM-4.5-Air, a fast and capable model with tool support
+* 'GLM45Air' - GLM-4.5-Air, fast capable model with tool support
 * 'GLM46' - GLM-4.6, improved version via ZAI API
-* 'GLM47' - GLM-4.7, previous version via ZAI API
-* 'GLM5' - GLM-5, previous version via ZAI API
-* 'GLM51' - GLM-5.1, latest version via ZAI API
+* 'GLM47' - GLM-4.7, via ZAI, OpenRouter, AlibabaCloud, and llama.cpp
+* 'GLM47Flash' - GLM-4.7-Flash, fast low-cost variant via ZAI, OpenRouter, and llama.cpp
+
+* 'GLM5' - GLM-5, via ZAI API and AlibabaCloud
+* 'GLM51' - GLM-5.1, via ZAI API
+* 'GLM52' - GLM-5.2, via ZAI API
 * 'GLM5Turbo' - GLM-5-Turbo, fast variant via ZAI API
 
 = Provider Support
@@ -27,7 +30,7 @@ These models can be accessed through multiple providers (llama.cpp, OpenRouter, 
 GLM models are available through multiple providers:
 
 - __llama.cpp__: Local inference (llama.cpp handles tool call extraction)
-- __OpenRouter__: Cloud inference via z-ai/glm-4.5-air:free
+- __OpenRouter__: Cloud inference (z-ai/glm-4.5-air:free, z-ai/glm-4.7, z-ai/glm-4.7-flash)
 - __ZAI__: Official Zhipu AI API (api.z.ai)
 - __AlibabaCloud__: Via Alibaba's model marketplace
 
@@ -68,6 +71,8 @@ module UniversalLLM.Models.ZhipuAI.GLM
   , GLM45Air(..)
   , GLM46(..)
   , GLM47(..)
+  , GLM47Flash(..)
+
   , GLM5(..)
   , GLM51(..)
   , GLM52(..)
@@ -447,6 +452,27 @@ instance Routing (Model GLM5Turbo ZAI) where
   route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM5Turbo ZAI)
 
 --------------------------------------------------------------------------------
+-- GLM-4.7 via OpenRouter
+--------------------------------------------------------------------------------
+
+instance ModelName (Model GLM47 OpenRouter) where
+  modelName (Model _ _) = "z-ai/glm-4.7"
+
+instance HasTools (Model GLM47 OpenRouter) where
+  withTools = OpenAI.openAITools
+
+instance HasJSON (Model GLM47 OpenRouter) where
+  withJSON = OpenAI.openAIJSON
+
+instance HasReasoning (Model GLM47 OpenRouter) where
+  type ReasoningState (Model GLM47 OpenRouter) = OpenAI.OpenRouterReasoningState
+  withReasoning = OpenAI.openRouterReasoning
+
+instance Routing (Model GLM47 OpenRouter) where
+  type RoutingState (Model GLM47 OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47 OpenRouter)
+
+--------------------------------------------------------------------------------
 -- GLM-4.7 via AlibabaCloud
 --------------------------------------------------------------------------------
 
@@ -465,6 +491,74 @@ instance HasReasoning (Model GLM47 AlibabaCloud) where
 instance Routing (Model GLM47 AlibabaCloud) where
   type RoutingState (Model GLM47 AlibabaCloud) = ((), ((), ((), ())))
   route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47 AlibabaCloud)
+
+--------------------------------------------------------------------------------
+-- GLM-4.7-Flash
+--------------------------------------------------------------------------------
+
+-- | GLM-4.7-Flash - Fast, low-cost variant of GLM-4.7
+--
+-- Available via ZAI, OpenRouter, and llama.cpp.
+data GLM47Flash = GLM47Flash deriving (Show, Eq)
+
+-- ZAI provider
+instance Provider (Model GLM47Flash ZAI) where
+  type ProviderRequest (Model GLM47Flash ZAI) = OpenAIRequest
+  type ProviderResponse (Model GLM47Flash ZAI) = OpenAIResponse
+
+instance EnableStreaming (Model GLM47Flash ZAI) where enableStreamingForProtocol = enableOpenAIStreaming
+
+instance ModelName (Model GLM47Flash ZAI) where
+  modelName (Model _ _) = "glm-4.7-flash"
+
+instance HasTools (Model GLM47Flash ZAI) where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning (Model GLM47Flash ZAI) where
+  withReasoning = OpenAI.openAIReasoning
+
+instance HasJSON (Model GLM47Flash ZAI) where
+  withJSON = OpenAI.openAIJSON
+
+instance Routing (Model GLM47Flash ZAI) where
+  type RoutingState (Model GLM47Flash ZAI) = ((), ((), ((), ())))
+  route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47Flash ZAI)
+
+-- OpenRouter provider
+instance ModelName (Model GLM47Flash OpenRouter) where
+  modelName (Model _ _) = "z-ai/glm-4.7-flash"
+
+instance HasTools (Model GLM47Flash OpenRouter) where
+  withTools = OpenAI.openAITools
+
+instance HasJSON (Model GLM47Flash OpenRouter) where
+  withJSON = OpenAI.openAIJSON
+
+instance HasReasoning (Model GLM47Flash OpenRouter) where
+  type ReasoningState (Model GLM47Flash OpenRouter) = OpenAI.OpenRouterReasoningState
+  withReasoning = OpenAI.openRouterReasoning
+
+instance Routing (Model GLM47Flash OpenRouter) where
+  type RoutingState (Model GLM47Flash OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47Flash OpenRouter)
+
+-- LlamaCpp provider
+instance ModelName (Model GLM47Flash LlamaCpp) where
+  modelName (Model _ _) = "GLM-4.7-Flash"
+
+instance HasTools (Model GLM47Flash LlamaCpp) where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning (Model GLM47Flash LlamaCpp) where
+  withReasoning = OpenAI.openAIReasoning
+
+instance HasJSON (Model GLM47Flash LlamaCpp) where
+  withJSON = OpenAI.openAIJSON
+
+instance Routing (Model GLM47Flash LlamaCpp) where
+  type RoutingState (Model GLM47Flash LlamaCpp) = ((), ((), ((), ())))
+  route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47Flash LlamaCpp)
+
 
 --------------------------------------------------------------------------------
 -- GLM-5 via AlibabaCloud

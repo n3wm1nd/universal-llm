@@ -12,8 +12,10 @@ Test suites for Zhipu AI's GLM model family.
 * GLM 4.5 Air (OpenRouter, llama.cpp, ZAI)
 * GLM 4.5 (ZAI)
 * GLM 4.6 (ZAI)
-* GLM 4.7 (ZAI)
-* GLM 5 (ZAI)
+* GLM 4.7 (ZAI, OpenRouter, AlibabaCloud)
+* GLM 4.7 Flash (ZAI, OpenRouter, llama.cpp)
+
+* GLM 5 (ZAI, AlibabaCloud)
 * GLM 5.1 (ZAI)
 * GLM 5.2 (ZAI)
 * GLM 5-Turbo (ZAI)
@@ -38,7 +40,12 @@ module Models.ZhipuAI.GLM
   , testsGLM45ZAI
   , testsGLM46ZAI
   , testsGLM47ZAI
+  , testsGLM47OpenRouter
   , testsGLM47AlibabaCloud
+  , testsGLM47FlashZAI
+  , testsGLM47FlashOpenRouter
+  , testsGLM47FlashLlamaCpp
+
   , testsGLM5ZAI
   , testsGLM5AlibabaCloud
   , testsGLM51ZAI
@@ -54,6 +61,8 @@ import UniversalLLM.Models.ZhipuAI.GLM
   , GLM45Air(..)
   , GLM46(..)
   , GLM47(..)
+  , GLM47Flash(..)
+
   , GLM5(..)
   , GLM51(..)
   , GLM52(..)
@@ -161,6 +170,80 @@ testsGLM47ZAI provider = do
     describe "Standard Tests" $
       testModel route (GLM47 `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+
+-- | Test GLM 4.7 via OpenRouter
+testsGLM47OpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsGLM47OpenRouter provider = do
+  describe "GLM 4.7 via OpenRouter" $ do
+    describe "Protocol" $ do
+      basicText provider "z-ai/glm-4.7"
+      toolCalling provider "z-ai/glm-4.7"
+      acceptsToolResults provider "z-ai/glm-4.7"
+      acceptsToolResultNoTools provider "z-ai/glm-4.7"
+      acceptsToolResultToolGone provider "z-ai/glm-4.7"
+      acceptsStaleToolInHistory provider "z-ai/glm-4.7"
+      acceptsOldToolCallStillAvailable provider "z-ai/glm-4.7"
+      consecutiveUserMessages provider "z-ai/glm-4.7"
+      startsWithAssistant provider "z-ai/glm-4.7"
+      reasoningViaDetails provider "z-ai/glm-4.7"
+      providerErrorResponse provider
+
+    describe "Standard Tests" $
+      testModel route (GLM47 `via` OpenRouter) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+
+-- | Test GLM 4.7 Flash via ZAI
+-- Note: ZAI rejects image_url content blocks with "Invalid API parameter" for this model ID.
+testsGLM47FlashZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsGLM47FlashZAI provider = do
+  describe "GLM 4.7 Flash via ZAI" $ do
+    describe "Standard Tests" $
+      testModel route (GLM47Flash `via` ZAI) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+
+-- | Test GLM 4.7 Flash via OpenRouter
+testsGLM47FlashOpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsGLM47FlashOpenRouter provider = do
+  describe "GLM 4.7 Flash via OpenRouter" $ do
+    describe "Protocol" $ do
+      basicText provider "z-ai/glm-4.7-flash"
+      toolCalling provider "z-ai/glm-4.7-flash"
+      acceptsToolResults provider "z-ai/glm-4.7-flash"
+      acceptsToolResultNoTools provider "z-ai/glm-4.7-flash"
+      acceptsToolResultToolGone provider "z-ai/glm-4.7-flash"
+      acceptsStaleToolInHistory provider "z-ai/glm-4.7-flash"
+      acceptsOldToolCallStillAvailable provider "z-ai/glm-4.7-flash"
+      consecutiveUserMessages provider "z-ai/glm-4.7-flash"
+      startsWithAssistant provider "z-ai/glm-4.7-flash"
+      reasoningViaDetails provider "z-ai/glm-4.7-flash"
+      providerErrorResponse provider
+
+    describe "Standard Tests" $
+      testModel route (GLM47Flash `via` OpenRouter) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+
+-- | Test GLM 4.7 Flash via llama.cpp
+--
+-- Takes the canonicalized model name as determined by querying the llama.cpp server.
+testsGLM47FlashLlamaCpp :: ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+testsGLM47FlashLlamaCpp provider modelName = do
+  describe ("GLM 4.7 Flash via llama.cpp with " <> T.unpack modelName) $ do
+    describe "Protocol" $ do
+      basicText provider modelName
+      toolCalling provider modelName
+      acceptsToolResults provider modelName
+      acceptsToolResultNoTools provider modelName
+      acceptsToolResultToolGone provider modelName
+      acceptsStaleToolInHistory provider modelName
+      acceptsOldToolCallStillAvailable provider modelName
+      consecutiveUserMessages provider modelName
+      startsWithAssistant provider modelName
+      reasoning provider modelName
+
+    describe "Standard Tests" $
+      testModel route (GLM47Flash `via` LlamaCpp) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+
 
 -- | Test GLM 5 via ZAI
 --
