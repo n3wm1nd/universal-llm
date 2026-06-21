@@ -20,9 +20,10 @@ module UniversalLLM where
 
 import Data.Text (Text)
 import Data.Aeson (Value)
+import Data.Aeson.Types (parseEither)
 import qualified Data.ByteString as BS
 import Control.Applicative ((<|>))
-import Autodocodec (HasCodec)
+import Autodocodec (HasCodec, parseJSONViaCodec, toJSONViaCodec)
 
 -- ============================================================================
 -- Core Model Type
@@ -537,6 +538,10 @@ class StreamingProtocol response where
   extractStreamingContent :: ProtocolDelta response -> [StreamingContent]
   -- | Full Value-based delta merge (for complete accumulation including tool calls)
   mergeStreamingDelta :: response -> Value -> response
+  -- | Fold a list of JSON-decoded SSE event values into a complete response.
+  -- Default implementation uses mergeStreamingDelta over emptyStreamingResponse.
+  reassembleChunks :: [Value] -> response
+  reassembleChunks = foldl mergeStreamingDelta emptyStreamingResponse
 
 -- | Augment a request to enable SSE streaming mode.
 --
@@ -548,3 +553,17 @@ class ( Provider m
       , StreamingProtocol (ProviderResponse m)
       ) => EnableStreaming m where
   enableStreamingForProtocol :: ProviderRequest m -> ProviderRequest m
+  -- | Decide whether an already-decoded request should use SSE streaming transport.
+  isStreamingRequest :: ProviderRequest m -> Bool
+
+-- | Decode a JSON value as a provider request and check if it is a streaming request.
+-- Fails silently to False on decode error (non-streaming is the safe fallback).
+isStreamingRequestJSON :: forall m. EnableStreaming m => Value -> Bool
+isStreamingRequestJSON v = case parseEither parseJSONViaCodec v of
+  Right req -> isStreamingRequest @m req
+  Left _    -> False
+
+-- | Reassemble SSE event JSON values into a serialised response body.
+-- Used by the streaming RestAPI interceptor to produce a normal-looking HTTP body.
+reassembleToJSON :: forall m. EnableStreaming m => [Value] -> Value
+reassembleToJSON = toJSONViaCodec . reassembleChunks @(ProviderResponse m)

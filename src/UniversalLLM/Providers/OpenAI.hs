@@ -273,14 +273,14 @@ instance Provider (Model aiModel AlibabaCloud) where
   type ProviderRequest (Model aiModel AlibabaCloud) = OpenAIRequest
   type ProviderResponse (Model aiModel AlibabaCloud) = OpenAIResponse
 
-instance EnableStreaming (Model aiModel OpenAI)          where enableStreamingForProtocol = enableOpenAIStreaming
-instance EnableStreaming (Model aiModel OpenAICompatible) where enableStreamingForProtocol = enableOpenAIStreaming
-instance EnableStreaming (Model aiModel OpenRouter)       where enableStreamingForProtocol = enableOpenAIStreaming
-instance EnableStreaming (Model aiModel LlamaCpp)         where enableStreamingForProtocol = enableOpenAIStreaming
-instance EnableStreaming (Model aiModel Ollama)           where enableStreamingForProtocol = enableOpenAIStreaming
-instance EnableStreaming (Model aiModel VLLM)             where enableStreamingForProtocol = enableOpenAIStreaming
-instance EnableStreaming (Model aiModel LiteLLM)          where enableStreamingForProtocol = enableOpenAIStreaming
-instance EnableStreaming (Model aiModel AlibabaCloud)     where enableStreamingForProtocol = enableOpenAIStreaming
+instance EnableStreaming (Model aiModel OpenAI)          where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
+instance EnableStreaming (Model aiModel OpenAICompatible) where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
+instance EnableStreaming (Model aiModel OpenRouter)       where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
+instance EnableStreaming (Model aiModel LlamaCpp)         where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
+instance EnableStreaming (Model aiModel Ollama)           where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
+instance EnableStreaming (Model aiModel VLLM)             where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
+instance EnableStreaming (Model aiModel LiteLLM)          where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
+instance EnableStreaming (Model aiModel AlibabaCloud)     where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
 
 -- Helper: Get last message from request
 lastMessage :: OpenAIRequest -> Maybe OpenAIMessage

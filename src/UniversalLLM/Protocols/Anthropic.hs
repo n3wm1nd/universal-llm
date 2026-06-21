@@ -398,6 +398,10 @@ withToolCacheControl tools = init tools ++ [lastTool { anthropicToolCacheControl
 enableAnthropicStreaming :: AnthropicRequest -> AnthropicRequest
 enableAnthropicStreaming req = req { stream = Just True }
 
+-- | Check whether an Anthropic request has streaming enabled
+isStreamingAnthropicRequest :: AnthropicRequest -> Bool
+isStreamingAnthropicRequest req = stream req == Just True
+
 -- ============================================================================
 -- Streaming Support - Delta Merger for SSE
 -- ============================================================================

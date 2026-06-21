@@ -450,6 +450,10 @@ convertFromToolCall (InvalidToolCall tcId tcName _tcArgs _err) = OpenAIToolCall
 enableOpenAIStreaming :: OpenAIRequest -> OpenAIRequest
 enableOpenAIStreaming req = req { stream = Just True }
 
+-- | Check whether an OpenAI request has streaming enabled
+isStreamingOpenAIRequest :: OpenAIRequest -> Bool
+isStreamingOpenAIRequest req = stream req == Just True
+
 -- ============================================================================
 -- OpenAI Completion API (Legacy /v1/completions endpoint)
 -- ============================================================================

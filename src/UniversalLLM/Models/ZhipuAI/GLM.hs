@@ -86,7 +86,7 @@ module UniversalLLM.Models.ZhipuAI.GLM
 import UniversalLLM
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud(..))
-import UniversalLLM.Protocols.OpenAI (OpenAIRequest(..), OpenAIMessage(..), OpenAIMessageContent(..), OpenAIResponse, enableOpenAIStreaming)
+import UniversalLLM.Protocols.OpenAI (OpenAIRequest(..), OpenAIMessage(..), OpenAIMessageContent(..), OpenAIResponse, enableOpenAIStreaming, isStreamingOpenAIRequest)
 import Data.Text (Text)
 import qualified Data.Text as T
 
@@ -178,7 +178,7 @@ instance Provider (Model GLM45 ZAI) where
   type ProviderRequest (Model GLM45 ZAI) = OpenAIRequest
   type ProviderResponse (Model GLM45 ZAI) = OpenAIResponse
 
-instance EnableStreaming (Model GLM45 ZAI) where enableStreamingForProtocol = enableOpenAIStreaming
+instance EnableStreaming (Model GLM45 ZAI) where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
 
 instance ModelName (Model GLM45 ZAI) where
   modelName (Model _ _) = "glm-4.5"
@@ -259,7 +259,7 @@ instance Provider (Model GLM45Air ZAI) where
   type ProviderRequest (Model GLM45Air ZAI) = OpenAIRequest
   type ProviderResponse (Model GLM45Air ZAI) = OpenAIResponse
 
-instance EnableStreaming (Model GLM45Air ZAI) where enableStreamingForProtocol = enableOpenAIStreaming
+instance EnableStreaming (Model GLM45Air ZAI) where enableStreamingForProtocol = enableOpenAIStreaming ; isStreamingRequest = isStreamingOpenAIRequest
 
 instance ModelName (Model GLM45Air ZAI) where
   modelName (Model _ _) = "GLM-4.5-Air"
@@ -288,7 +288,7 @@ instance Provider (Model GLM46 ZAI) where
   type ProviderRequest (Model GLM46 ZAI) = OpenAIRequest
   type ProviderResponse (Model GLM46 ZAI) = OpenAIResponse
 
-instance EnableStreaming (Model GLM46 ZAI) where enableStreamingForProtocol = enableOpenAIStreaming
+instance EnableStreaming (Model GLM46 ZAI) where enableStreamingForProtocol = enableOpenAIStreaming ; isStreamingRequest = isStreamingOpenAIRequest
 
 instance ModelName (Model GLM46 ZAI) where
   modelName (Model _ _) = "glm-4.6"
@@ -317,7 +317,7 @@ instance Provider (Model GLM47 ZAI) where
   type ProviderRequest (Model GLM47 ZAI) = OpenAIRequest
   type ProviderResponse (Model GLM47 ZAI) = OpenAIResponse
 
-instance EnableStreaming (Model GLM47 ZAI) where enableStreamingForProtocol = enableOpenAIStreaming
+instance EnableStreaming (Model GLM47 ZAI) where enableStreamingForProtocol = enableOpenAIStreaming ; isStreamingRequest = isStreamingOpenAIRequest
 
 instance ModelName (Model GLM47 ZAI) where
   modelName (Model _ _) = "glm-4.7"
@@ -346,7 +346,7 @@ instance Provider (Model GLM5 ZAI) where
   type ProviderRequest (Model GLM5 ZAI) = OpenAIRequest
   type ProviderResponse (Model GLM5 ZAI) = OpenAIResponse
 
-instance EnableStreaming (Model GLM5 ZAI) where enableStreamingForProtocol = enableOpenAIStreaming
+instance EnableStreaming (Model GLM5 ZAI) where enableStreamingForProtocol = enableOpenAIStreaming ; isStreamingRequest = isStreamingOpenAIRequest
 
 instance ModelName (Model GLM5 ZAI) where
   modelName (Model _ _) = "glm-5"
@@ -375,7 +375,7 @@ instance Provider (Model GLM52 ZAI) where
   type ProviderRequest (Model GLM52 ZAI) = OpenAIRequest
   type ProviderResponse (Model GLM52 ZAI) = OpenAIResponse
 
-instance EnableStreaming (Model GLM52 ZAI) where enableStreamingForProtocol = enableOpenAIStreaming
+instance EnableStreaming (Model GLM52 ZAI) where enableStreamingForProtocol = enableOpenAIStreaming ; isStreamingRequest = isStreamingOpenAIRequest
 
 instance ModelName (Model GLM52 ZAI) where
   modelName (Model _ _) = "glm-5.2"
@@ -404,7 +404,7 @@ instance Provider (Model GLM51 ZAI) where
   type ProviderRequest (Model GLM51 ZAI) = OpenAIRequest
   type ProviderResponse (Model GLM51 ZAI) = OpenAIResponse
 
-instance EnableStreaming (Model GLM51 ZAI) where enableStreamingForProtocol = enableOpenAIStreaming
+instance EnableStreaming (Model GLM51 ZAI) where enableStreamingForProtocol = enableOpenAIStreaming ; isStreamingRequest = isStreamingOpenAIRequest
 
 instance ModelName (Model GLM51 ZAI) where
   modelName (Model _ _) = "glm-5.1"
@@ -433,7 +433,7 @@ instance Provider (Model GLM5Turbo ZAI) where
   type ProviderRequest (Model GLM5Turbo ZAI) = OpenAIRequest
   type ProviderResponse (Model GLM5Turbo ZAI) = OpenAIResponse
 
-instance EnableStreaming (Model GLM5Turbo ZAI) where enableStreamingForProtocol = enableOpenAIStreaming
+instance EnableStreaming (Model GLM5Turbo ZAI) where enableStreamingForProtocol = enableOpenAIStreaming ; isStreamingRequest = isStreamingOpenAIRequest
 
 instance ModelName (Model GLM5Turbo ZAI) where
   modelName (Model _ _) = "glm-5-turbo"
@@ -506,7 +506,7 @@ instance Provider (Model GLM47Flash ZAI) where
   type ProviderRequest (Model GLM47Flash ZAI) = OpenAIRequest
   type ProviderResponse (Model GLM47Flash ZAI) = OpenAIResponse
 
-instance EnableStreaming (Model GLM47Flash ZAI) where enableStreamingForProtocol = enableOpenAIStreaming
+instance EnableStreaming (Model GLM47Flash ZAI) where enableStreamingForProtocol = enableOpenAIStreaming ; isStreamingRequest = isStreamingOpenAIRequest
 
 instance ModelName (Model GLM47Flash ZAI) where
   modelName (Model _ _) = "glm-4.7-flash"
