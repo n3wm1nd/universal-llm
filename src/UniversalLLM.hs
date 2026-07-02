@@ -563,6 +563,14 @@ isStreamingRequestJSON v = case parseEither parseJSONViaCodec v of
   Right req -> isStreamingRequest @m req
   Left _    -> False
 
+-- | Decode a JSON value as a provider request, apply 'enableStreamingForProtocol',
+-- and re-encode. Leaves the value untouched on decode failure (safe fallback —
+-- the request just won't be recognised as streaming by 'isStreamingRequestJSON').
+enableStreamingJSON :: forall m. EnableStreaming m => Value -> Value
+enableStreamingJSON v = case parseEither parseJSONViaCodec v of
+  Right req -> toJSONViaCodec (enableStreamingForProtocol @m req)
+  Left _    -> v
+
 -- | Reassemble SSE event JSON values into a serialised response body.
 -- Used by the streaming RestAPI interceptor to produce a normal-looking HTTP body.
 reassembleToJSON :: forall m. EnableStreaming m => [Value] -> Value
