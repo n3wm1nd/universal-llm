@@ -62,6 +62,7 @@ import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
 -- Capabilities:
 -- - Tool calling
 -- - Reasoning
+-- - JSON mode (llama.cpp only; not verified via OpenRouter)
 data GPTOSS = GPTOSS deriving (Show, Eq)
 
 -- | GPT-5.3-Codex - Specialized for code generation
@@ -69,6 +70,7 @@ data GPTOSS = GPTOSS deriving (Show, Eq)
 -- Capabilities:
 -- - Tool calling
 -- - Reasoning
+-- - JSON mode
 data GPT53Codex = GPT53Codex deriving (Show, Eq)
 
 -- | GPT-5.4-Pro - Advanced capabilities
@@ -76,6 +78,7 @@ data GPT53Codex = GPT53Codex deriving (Show, Eq)
 -- Capabilities:
 -- - Tool calling
 -- - Reasoning
+-- - JSON mode
 data GPT54Pro = GPT54Pro deriving (Show, Eq)
 
 -- | GPT-5.4 - Latest generation
@@ -83,12 +86,14 @@ data GPT54Pro = GPT54Pro deriving (Show, Eq)
 -- Capabilities:
 -- - Tool calling
 -- - Reasoning
+-- - JSON mode
 data GPT54 = GPT54 deriving (Show, Eq)
 
 -- | GPT-5.3-Chat - Optimized for conversation
 --
 -- Capabilities:
 -- - Tool calling
+-- - JSON mode
 -- - No reasoning support (via OpenRouter)
 data GPT53Chat = GPT53Chat deriving (Show, Eq)
 
@@ -123,9 +128,12 @@ instance HasTools (Model GPTOSS LlamaCpp) where
 instance HasReasoning (Model GPTOSS LlamaCpp) where
   withReasoning = OpenAI.openAIReasoning
 
+instance HasJSON (Model GPTOSS LlamaCpp) where
+  withJSON = OpenAI.openAIJSON
+
 instance Routing (Model GPTOSS LlamaCpp) where
-  type RoutingState (Model GPTOSS LlamaCpp) = ((), ((), ()))
-  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GPTOSS LlamaCpp)
+  type RoutingState (Model GPTOSS LlamaCpp) = ((), ((), ((), ())))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GPTOSS LlamaCpp)
 
 --------------------------------------------------------------------------------
 -- GPT-5.3-Codex via OpenRouter
@@ -144,9 +152,12 @@ instance HasReasoning (Model GPT53Codex OpenRouter) where
 instance HasVision (Model GPT53Codex OpenRouter) where
   withVision = OpenAI.openAIVision
 
+instance HasJSON (Model GPT53Codex OpenRouter) where
+  withJSON = OpenAI.openAIJSON
+
 instance Routing (Model GPT53Codex OpenRouter) where
-  type RoutingState (Model GPT53Codex OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
-  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model GPT53Codex OpenRouter)
+  type RoutingState (Model GPT53Codex OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ((), ()))))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model GPT53Codex OpenRouter)
 
 --------------------------------------------------------------------------------
 -- GPT-5.4-Pro via OpenRouter
@@ -165,9 +176,12 @@ instance HasReasoning (Model GPT54Pro OpenRouter) where
 instance HasVision (Model GPT54Pro OpenRouter) where
   withVision = OpenAI.openAIVision
 
+instance HasJSON (Model GPT54Pro OpenRouter) where
+  withJSON = OpenAI.openAIJSON
+
 instance Routing (Model GPT54Pro OpenRouter) where
-  type RoutingState (Model GPT54Pro OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
-  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model GPT54Pro OpenRouter)
+  type RoutingState (Model GPT54Pro OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ((), ()))))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model GPT54Pro OpenRouter)
 
 --------------------------------------------------------------------------------
 -- GPT-5.4 via OpenRouter
@@ -186,9 +200,12 @@ instance HasReasoning (Model GPT54 OpenRouter) where
 instance HasVision (Model GPT54 OpenRouter) where
   withVision = OpenAI.openAIVision
 
+instance HasJSON (Model GPT54 OpenRouter) where
+  withJSON = OpenAI.openAIJSON
+
 instance Routing (Model GPT54 OpenRouter) where
-  type RoutingState (Model GPT54 OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
-  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model GPT54 OpenRouter)
+  type RoutingState (Model GPT54 OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ((), ()))))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model GPT54 OpenRouter)
 
 --------------------------------------------------------------------------------
 -- GPT-5.3-Chat via OpenRouter
@@ -206,6 +223,9 @@ instance HasTools (Model GPT53Chat OpenRouter) where
 instance HasVision (Model GPT53Chat OpenRouter) where
   withVision = OpenAI.openAIVision
 
+instance HasJSON (Model GPT53Chat OpenRouter) where
+  withJSON = OpenAI.openAIJSON
+
 instance Routing (Model GPT53Chat OpenRouter) where
-  type RoutingState (Model GPT53Chat OpenRouter) = ((), ((), ()))
-  route = withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model GPT53Chat OpenRouter)
+  type RoutingState (Model GPT53Chat OpenRouter) = ((), ((), ((), ())))
+  route = withJSON `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model GPT53Chat OpenRouter)

@@ -96,7 +96,7 @@ testsQwen35_122BLlamaCpp provider modelName = do
 
     describe "Standard Tests" $
       testModel route (Qwen35_122B `via` LlamaCpp) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.json ]
 
 testsQwen35_122BOpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsQwen35_122BOpenRouter provider = do
@@ -119,7 +119,7 @@ testsQwen35_122BOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel route (Qwen35_122B `via` OpenRouter) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation, ST.json ]
 
     describe "Composable Provider Tests" $
       testModelOffline route (Qwen35_122B `via` OpenRouter)
@@ -164,7 +164,7 @@ testsQwen35_40BLlamaCpp provider modelName = do
 
     describe "Standard Tests" $
       testModel route (Qwen35_40B `via` LlamaCpp) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningDisabled, ST.reasoningWithTools, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningDisabled, ST.reasoningWithTools, ST.vision, ST.visionJpeg, ST.visionMultipleImages, ST.json ]
 
 --------------------------------------------------------------------------------
 -- Qwen 3.5 Plus (AlibabaCloud)
@@ -192,7 +192,7 @@ testsQwen35PlusAlibabaCloud provider = do
 
     describe "Standard Tests" $
       testModel route (Qwen35Plus `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.vision, ST.visionJpeg ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.vision, ST.visionJpeg, ST.json ]
 
 --------------------------------------------------------------------------------
 -- Qwen 3.6 Plus (AlibabaCloud + OpenRouter)
@@ -220,7 +220,7 @@ testsQwen36PlusAlibabaCloud provider = do
 
     describe "Standard Tests" $
       testModel route (Qwen36Plus `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.vision, ST.visionJpeg ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.vision, ST.visionJpeg, ST.json ]
 
 testsQwen36PlusOpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsQwen36PlusOpenRouter provider = do
@@ -243,7 +243,7 @@ testsQwen36PlusOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel route (Qwen36Plus `via` OpenRouter) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation, ST.json ]
 
     describe "Composable Provider Tests" $
       testModelOffline route (Qwen36Plus `via` OpenRouter)
@@ -274,7 +274,7 @@ testsQwen37MaxOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel route (Qwen37Max `via` OpenRouter) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation, ST.json ]
 
     describe "Composable Provider Tests" $
       testModelOffline route (Qwen37Max `via` OpenRouter)
@@ -300,7 +300,7 @@ testsQwen3CoderNextLlamaCpp provider modelName = do
 
     describe "Standard Tests" $
       testModel route (Qwen3CoderNext `via` LlamaCpp) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.json ]
 
     describe "Composable Provider Tests" $
       testModelOffline route (Qwen3CoderNext `via` LlamaCpp)
@@ -325,7 +325,7 @@ testsQwen3CoderNextAlibabaCloud provider = do
 
     describe "Standard Tests" $
       testModel route (Qwen3CoderNext `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.json ]
 
 --------------------------------------------------------------------------------
 -- Qwen 3 Coder 30B Instruct (llama.cpp)
@@ -347,7 +347,7 @@ testsQwen3Coder30bInstructLlamaCpp provider modelName = do
 
     describe "Standard Tests" $
       testModel route (Qwen3Coder30bInstruct `via` LlamaCpp) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.json ]
 
 --------------------------------------------------------------------------------
 -- Qwen 3 Coder Plus (AlibabaCloud)
@@ -372,4 +372,4 @@ testsQwen3CoderPlusAlibabaCloud provider = do
 
     describe "Standard Tests" $
       testModel route (Qwen3CoderPlus `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.json ]

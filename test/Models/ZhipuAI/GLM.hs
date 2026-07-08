@@ -85,22 +85,22 @@ testsGLM45AirOpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM45AirOpenRouter provider = do
   describe "GLM 4.5 Air via OpenRouter" $ do
     describe "Protocol" $ do
-      basicText provider "z-ai/glm-4.5-air:free"
-      toolCalling provider "z-ai/glm-4.5-air:free"
-      acceptsToolResults provider "z-ai/glm-4.5-air:free"
-      acceptsToolResultNoTools provider "z-ai/glm-4.5-air:free"
-      acceptsToolResultToolGone provider "z-ai/glm-4.5-air:free"
-      acceptsStaleToolInHistory provider "z-ai/glm-4.5-air:free"
-      acceptsOldToolCallStillAvailable provider "z-ai/glm-4.5-air:free"
-      consecutiveUserMessages provider "z-ai/glm-4.5-air:free"
-      startsWithAssistant provider "z-ai/glm-4.5-air:free"
-      reasoningViaDetails provider "z-ai/glm-4.5-air:free"
+      basicText provider "z-ai/glm-4.5-air"
+      toolCalling provider "z-ai/glm-4.5-air"
+      acceptsToolResults provider "z-ai/glm-4.5-air"
+      acceptsToolResultNoTools provider "z-ai/glm-4.5-air"
+      acceptsToolResultToolGone provider "z-ai/glm-4.5-air"
+      acceptsStaleToolInHistory provider "z-ai/glm-4.5-air"
+      acceptsOldToolCallStillAvailable provider "z-ai/glm-4.5-air"
+      consecutiveUserMessages provider "z-ai/glm-4.5-air"
+      startsWithAssistant provider "z-ai/glm-4.5-air"
+      reasoningViaDetails provider "z-ai/glm-4.5-air"
       providerErrorResponse provider
       -- Note: OpenRouter reports no vision-capable endpoints for this model (404).
 
     describe "Standard Tests" $
       testModel route (GLM45Air `via` OpenRouter) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.json ]
 
     describe "Composable Provider Tests" $
       testModelOffline route (GLM45Air `via` OpenRouter)
@@ -130,7 +130,7 @@ testsGLM45AirLlamaCpp provider modelName = do
 
     describe "Standard Tests" $
       testModel route (GLM45Air `via` LlamaCpp) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.json ]
 
 -- | Test GLM 4.5 Air via ZAI
 --
@@ -242,7 +242,7 @@ testsGLM47FlashLlamaCpp provider modelName = do
 
     describe "Standard Tests" $
       testModel route (GLM47Flash `via` LlamaCpp) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.json ]
 
 
 -- | Test GLM 5 via ZAI
@@ -292,7 +292,7 @@ testsGLM47AlibabaCloud provider = do
 
     describe "Standard Tests" $
       testModel route (GLM47 `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.json ]
 
 -- | Test GLM 5.1 via ZAI
 -- Note: ZAI accepts the request but the model cannot see image_url content (reports no image attached).
@@ -344,4 +344,4 @@ testsGLM5AlibabaCloud provider = do
 
     describe "Standard Tests" $
       testModel route (GLM5 `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.json ]

@@ -58,7 +58,7 @@ testsDeepSeekV4FlashOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel route (DeepSeekV4Flash `via` OpenRouter) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation, ST.json ]
 
     describe "Composable Provider Tests" $
       testModelOffline route (DeepSeekV4Flash `via` OpenRouter)
@@ -86,7 +86,7 @@ testsDeepSeekV4ProOpenRouter provider = do
 
     describe "Standard Tests" $
       testModel route (DeepSeekV4Pro `via` OpenRouter) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation, ST.json ]
 
     describe "Composable Provider Tests" $
       testModelOffline route (DeepSeekV4Pro `via` OpenRouter)

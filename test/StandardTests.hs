@@ -20,6 +20,7 @@ module StandardTests
   , multipleSystemPrompts
   , tools
   , toolWithName
+  , json
   , reasoning
   , reasoningDisabled
   , hiddenReasoning
@@ -36,6 +37,8 @@ import Test.Hspec
 import qualified Data.Text as T
 import Data.Text (Text)
 import Data.Aeson (object, (.=), Value)
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KM
 import Autodocodec (toJSONVia, codec, HasCodec(..))
 import qualified Autodocodec
 import Control.Monad (when)
@@ -396,6 +399,50 @@ toolWithName toolName = StandardTest $ \cp model initialState getResponse -> do
 
           -- Should get a response after tool execution
           length parsedMsgs2 `shouldSatisfy` (> 0)
+
+-- ============================================================================
+-- JSON Mode Tests
+-- ============================================================================
+
+-- | Test that the model can return structured JSON output matching a schema.
+--
+-- Sends a 'UserRequestJSON' message with a schema requesting a "colors" array,
+-- and verifies the response contains an 'AssistantJSON' message whose value
+-- matches the requested shape.
+json :: ( Provider m
+        , SupportsMaxTokens (ProviderOf m)
+        , HasJSON m
+        )
+     => StandardTest m state
+json = StandardTest $ \cp model initialState getResponse -> do
+  describe "JSON Mode" $ do
+    it "returns structured JSON matching the requested schema" $ do
+      let schema = object
+            [ "type" .= ("object" :: Text)
+            , "properties" .= object
+                [ "colors" .= object
+                    [ "type" .= ("array" :: Text)
+                    , "items" .= object ["type" .= ("string" :: Text)]
+                    ]
+                ]
+            , "required" .= (["colors"] :: [Text])
+            ]
+          configs = [MaxTokens 500]
+          msgs = [UserRequestJSON "List 3 primary colors as a JSON object with a 'colors' array." schema]
+          (_, req) = toProviderRequest cp model configs initialState msgs
+
+      resp <- request getResponse req
+
+      let parsedMsgs = either (error . show) snd $ fromProviderResponse cp model configs initialState resp
+
+      let jsonMsgs = [v | AssistantJSON v <- parsedMsgs]
+      length jsonMsgs `shouldSatisfy` (> 0)
+      case head jsonMsgs of
+        Aeson.Object obj ->
+          case KM.lookup "colors" obj of
+            Just (Aeson.Array arr) -> length arr `shouldSatisfy` (>= 3)
+            _ -> expectationFailure "JSON missing 'colors' array"
+        _ -> expectationFailure "Response not a JSON object"
 
 -- ============================================================================
 -- Reasoning Tests
