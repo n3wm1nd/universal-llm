@@ -76,6 +76,9 @@ module UniversalLLM.Models
     -- * OpenAI Models
     -- | OpenAI open-weight models
   , module UniversalLLM.Models.OpenAI.GPT
+    -- * DeepSeek Models
+    -- | DeepSeek V4 models
+  , module UniversalLLM.Models.DeepSeek.DeepSeek
     -- * OpenRouter Parametric Models
     -- | Catch-all parametric models for OpenRouter
   , module UniversalLLM.Models.OpenRouter
@@ -89,4 +92,5 @@ import UniversalLLM.Models.Alibaba.Qwen
 import UniversalLLM.Models.Moonshot.Kimi
 import UniversalLLM.Models.Minimax.M
 import UniversalLLM.Models.OpenAI.GPT
+import UniversalLLM.Models.DeepSeek.DeepSeek
 import UniversalLLM.Models.OpenRouter

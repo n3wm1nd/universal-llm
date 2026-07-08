@@ -29,6 +29,7 @@ import qualified Models.Anthropic.Claude
 import qualified Models.Moonshot.KimiK25
 import qualified Models.Minimax.MinimaxM25
 import qualified Models.OpenAI.GPT
+import qualified Models.DeepSeek.DeepSeek
 import GGUFNames (canonicalizationTests)
 import TestProviders (Providers(..), buildProviders)
 
@@ -87,6 +88,8 @@ main = do
       Models.OpenAI.GPT.testsGPT53ChatOpenRouter (openrouterProvider p)
       Models.OpenAI.GPT.testsGPT54ProOpenRouter (openrouterProvider p)
       Models.OpenAI.GPT.testsGPT54OpenRouter (openrouterProvider p)
+      Models.DeepSeek.DeepSeek.testsDeepSeekV4FlashOpenRouter (openrouterProvider p)
+      Models.DeepSeek.DeepSeek.testsDeepSeekV4ProOpenRouter (openrouterProvider p)
 
     describe "Delta" DeltaSpec.spec
     describe "Composable Handlers" ComposableHandlersSpec.spec

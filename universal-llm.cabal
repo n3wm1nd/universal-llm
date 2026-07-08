@@ -50,6 +50,7 @@ library
     UniversalLLM.Models.Moonshot.Kimi
     UniversalLLM.Models.Minimax.M
     UniversalLLM.Models.OpenAI.GPT
+    UniversalLLM.Models.DeepSeek.DeepSeek
     UniversalLLM.Models.OpenRouter
     UniversalLLM.Protocols.OpenAI
     UniversalLLM.Protocols.OpenAI.Delta
@@ -140,6 +141,7 @@ test-suite universal-llm-tests
     Models.Moonshot.KimiK25
     Models.Minimax.MinimaxM25
     Models.OpenAI.GPT
+    Models.DeepSeek.DeepSeek
   autogen-modules: Paths_universal_llm
   other-modules:
     Paths_universal_llm
