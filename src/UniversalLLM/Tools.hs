@@ -65,7 +65,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Types (parseEither)
-import Data.List (find)
+import Data.List (find, foldl')
 import Data.Functor.Identity (Identity(..))
 import UniversalLLM.SchemaCoercion (coerceWithCodec)
 
