@@ -57,7 +57,7 @@ compareResponses (OpenAISuccess (OpenAISuccessResponse streamedChoices))
 
   where
     compareChoice :: OpenAIChoice -> OpenAIChoice -> Either String ()
-    compareChoice (OpenAIChoice streamedMsg) (OpenAIChoice nonStreamedMsg) = do
+    compareChoice (OpenAIChoice streamedMsg _) (OpenAIChoice nonStreamedMsg _) = do
       -- Compare role
       when (role streamedMsg /= role nonStreamedMsg) $
         Left $ "Different roles: streamed=" ++ T.unpack (role streamedMsg) ++

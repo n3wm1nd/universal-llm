@@ -427,7 +427,11 @@ json = StandardTest $ \cp model initialState getResponse -> do
                 ]
             , "required" .= (["colors"] :: [Text])
             ]
-          configs = [MaxTokens 500]
+          -- 4096 (not e.g. 500): reasoning models can spend several hundred tokens on
+          -- reasoning_content/reasoning_details before ever emitting the JSON body, so a
+          -- tight budget risks the response getting cut off mid-reasoning with content:
+          -- null (see 'Protocol.OpenAITests.jsonMode' for the wire-level version of this).
+          configs = [MaxTokens 4096]
           msgs = [UserRequestJSON "List 3 primary colors as a JSON object with a 'colors' array." schema]
           (_, req) = toProviderRequest cp model configs initialState msgs
 
@@ -714,12 +718,12 @@ openAIReasoningDetailsPreservation = StandardTest $ \cp model initialState getRe
       -- Extract the raw assistant messages from resp1 for preservation checking
       let resp1RawMsgs = case resp1 of
             OpenAISuccess (OpenAISuccessResponse choices) ->
-              [msg | OpenAIChoice msg <- choices]
+              [msg | OpenAIChoice msg _ <- choices]
             _ -> []
 
       -- Extract reasoning_details from first response
       let (hasReasoningDetails, hasReasoningContent, firstMsg) = case resp1 of
-            OpenAISuccess (OpenAISuccessResponse (OpenAIChoice msg:_)) ->
+            OpenAISuccess (OpenAISuccessResponse (OpenAIChoice msg _:_)) ->
               (case reasoning_details msg of { Just _ -> True; Nothing -> False }
               ,case reasoning_content msg of { Just _ -> True; Nothing -> False }
               ,Just msg)

@@ -40,11 +40,21 @@ GLM models have some unique requirements:
 
 1. __Null content handling__: GLM's Jinja2 template crashes on null content in messages
 2. __Minimum tokens__: Need sufficient max_tokens when reasoning to avoid mid-block cutoff
-3. __JSON mode via ZAI__: ZAI's @response_format@/@json_schema@ handling isn't quite
-   OpenAI-compatible - requests are accepted but no structured output comes back.
-   Not claiming 'HasJSON' for any ZAI-routed model (or for GLM-4.7/GLM-4.7-Flash via
-   OpenRouter, which appear to hit the same backend) until this is root-caused.
-   JSON mode does work via llama.cpp and AlibabaCloud.
+3. __No real JSON schema support via the ZAI backend__: ZAI's @response_format@/
+   @json_schema@ handling accepts @strict: true@ and a schema, but the schema is never
+   actually consulted by the model - confirmed by probing with a deliberately unusual,
+   nested schema (@{"result": {"hue_list": [...]}}@ instead of the obvious
+   @{"colors": [...]}@ for a "list 3 colors" prompt): the model ignores it and returns
+   whatever shape it naturally guesses (a bare array, or its own object shape), wrapped
+   in a markdown fence or not depending on whether the prompt happens to mention "json".
+   See 'Protocol.OpenAITests.jsonSchemaShapeCompliance' for the probe and
+   'Protocol.OpenAITests.wrapsJSONInFence' / 'Protocol.OpenAITests.jsonStaysInReasoningDetails'
+   for the surface symptoms (fenced content on GLM-4.5-Air, content swallowed into
+   reasoning_details on GLM-4.7/GLM-4.7-Flash). Because the schema itself is never
+   honored, none of the GLM models routed through ZAI (directly or via OpenRouter) claim
+   'HasJSON' - claiming it would mean "you get JSON," which is true, but callers of
+   'HasJSON' expect "you get JSON matching your schema," which is false here. JSON mode
+   with real, grammar-enforced schema-following works via llama.cpp and AlibabaCloud.
 
 These quirks are handled automatically by the composable providers when needed.
 
@@ -194,10 +204,7 @@ instance HasTools (Model GLM45 ZAI) where
 instance HasReasoning (Model GLM45 ZAI) where
   withReasoning = OpenAI.openAIReasoning
 
--- Note: no HasJSON instance. ZAI's response_format/json_schema handling isn't
--- quite OpenAI-compatible (probe got no structured output back) - see GLM-Specific
--- Quirks at the top of this module.
-
+-- Note: no HasJSON instance - see GLM-Specific Quirks at the top of this module.
 instance Routing (Model GLM45 ZAI) where
   type RoutingState (Model GLM45 ZAI) = ((), ((), ()))
   route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45 ZAI)
@@ -247,12 +254,10 @@ instance HasReasoning (Model GLM45Air OpenRouter) where
   type ReasoningState (Model GLM45Air OpenRouter) = OpenAI.OpenRouterReasoningState
   withReasoning = OpenAI.openRouterReasoning
 
-instance HasJSON (Model GLM45Air OpenRouter) where
-  withJSON = OpenAI.openAIJSON
-
+-- Note: no HasJSON instance - see GLM-Specific Quirks at the top of this module.
 instance Routing (Model GLM45Air OpenRouter) where
-  type RoutingState (Model GLM45Air OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
-  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45Air OpenRouter)
+  type RoutingState (Model GLM45Air OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ()))
+  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45Air OpenRouter)
 
 -- ZAI provider (official API)
 -- Define ZAI as a provider
@@ -280,6 +285,7 @@ instance HasTools (Model GLM45Air ZAI) where
 instance HasReasoning (Model GLM45Air ZAI) where
   withReasoning = OpenAI.openAIReasoning
 
+-- Note: no HasJSON instance - see GLM-Specific Quirks at the top of this module.
 instance Routing (Model GLM45Air ZAI) where
   type RoutingState (Model GLM45Air ZAI) = ((), ((), ()))
   route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM45Air ZAI)
@@ -306,6 +312,7 @@ instance HasTools (Model GLM46 ZAI) where
 instance HasReasoning (Model GLM46 ZAI) where
   withReasoning = OpenAI.openAIReasoning
 
+-- Note: no HasJSON instance - see GLM-Specific Quirks at the top of this module.
 instance Routing (Model GLM46 ZAI) where
   type RoutingState (Model GLM46 ZAI) = ((), ((), ()))
   route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM46 ZAI)
@@ -332,6 +339,7 @@ instance HasTools (Model GLM47 ZAI) where
 instance HasReasoning (Model GLM47 ZAI) where
   withReasoning = OpenAI.openAIReasoning
 
+-- Note: no HasJSON instance - see GLM-Specific Quirks at the top of this module.
 instance Routing (Model GLM47 ZAI) where
   type RoutingState (Model GLM47 ZAI) = ((), ((), ()))
   route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47 ZAI)
@@ -358,6 +366,7 @@ instance HasTools (Model GLM5 ZAI) where
 instance HasReasoning (Model GLM5 ZAI) where
   withReasoning = OpenAI.openAIReasoning
 
+-- Note: no HasJSON instance - see GLM-Specific Quirks at the top of this module.
 instance Routing (Model GLM5 ZAI) where
   type RoutingState (Model GLM5 ZAI) = ((), ((), ()))
   route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM5 ZAI)
@@ -384,6 +393,7 @@ instance HasTools (Model GLM52 ZAI) where
 instance HasReasoning (Model GLM52 ZAI) where
   withReasoning = OpenAI.openAIReasoning
 
+-- Note: no HasJSON instance - see GLM-Specific Quirks at the top of this module.
 instance Routing (Model GLM52 ZAI) where
   type RoutingState (Model GLM52 ZAI) = ((), ((), ()))
   route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM52 ZAI)
@@ -410,6 +420,7 @@ instance HasTools (Model GLM51 ZAI) where
 instance HasReasoning (Model GLM51 ZAI) where
   withReasoning = OpenAI.openAIReasoning
 
+-- Note: no HasJSON instance - see GLM-Specific Quirks at the top of this module.
 instance Routing (Model GLM51 ZAI) where
   type RoutingState (Model GLM51 ZAI) = ((), ((), ()))
   route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM51 ZAI)
@@ -436,6 +447,7 @@ instance HasTools (Model GLM5Turbo ZAI) where
 instance HasReasoning (Model GLM5Turbo ZAI) where
   withReasoning = OpenAI.openAIReasoning
 
+-- Note: no HasJSON instance - see GLM-Specific Quirks at the top of this module.
 instance Routing (Model GLM5Turbo ZAI) where
   type RoutingState (Model GLM5Turbo ZAI) = ((), ((), ()))
   route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM5Turbo ZAI)
@@ -453,6 +465,13 @@ instance HasTools (Model GLM47 OpenRouter) where
 instance HasReasoning (Model GLM47 OpenRouter) where
   type ReasoningState (Model GLM47 OpenRouter) = OpenAI.OpenRouterReasoningState
   withReasoning = OpenAI.openRouterReasoning
+
+-- Note: no HasJSON instance. Unlike GLM-4.5-Air (fenced content), GLM-4.7 via
+-- OpenRouter puts the entire JSON answer in reasoning_details and never populates
+-- content - confirmed at finish_reason: "stop", so it isn't token-budget truncation
+-- either. There's no AssistantText to unwrap, so openAIJSONWithFencedFallback can't
+-- recover it. See GLM-Specific Quirks at the top of this module and
+-- Protocol.OpenAITests.jsonStaysInReasoningDetails for the probe.
 
 instance Routing (Model GLM47 OpenRouter) where
   type RoutingState (Model GLM47 OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ()))
@@ -503,6 +522,7 @@ instance HasTools (Model GLM47Flash ZAI) where
 instance HasReasoning (Model GLM47Flash ZAI) where
   withReasoning = OpenAI.openAIReasoning
 
+-- Note: no HasJSON instance - see GLM-Specific Quirks at the top of this module.
 instance Routing (Model GLM47Flash ZAI) where
   type RoutingState (Model GLM47Flash ZAI) = ((), ((), ()))
   route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47Flash ZAI)
@@ -517,6 +537,10 @@ instance HasTools (Model GLM47Flash OpenRouter) where
 instance HasReasoning (Model GLM47Flash OpenRouter) where
   type ReasoningState (Model GLM47Flash OpenRouter) = OpenAI.OpenRouterReasoningState
   withReasoning = OpenAI.openRouterReasoning
+
+-- Note: no HasJSON instance - same "JSON stays in reasoning_details, content: null at
+-- finish_reason: stop" quirk as GLM-4.7 via OpenRouter (see GLM-Specific Quirks at the
+-- top of this module and Protocol.OpenAITests.jsonStaysInReasoningDetails).
 
 instance Routing (Model GLM47Flash OpenRouter) where
   type RoutingState (Model GLM47Flash OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ()))

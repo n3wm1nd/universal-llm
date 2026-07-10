@@ -88,6 +88,7 @@ testsGLM45AirOpenRouter provider = do
       basicText provider "z-ai/glm-4.5-air"
       toolCalling provider "z-ai/glm-4.5-air"
       acceptsToolResults provider "z-ai/glm-4.5-air"
+      acceptsToolResultsUnderTightBudget provider "z-ai/glm-4.5-air"
       acceptsToolResultNoTools provider "z-ai/glm-4.5-air"
       acceptsToolResultToolGone provider "z-ai/glm-4.5-air"
       acceptsStaleToolInHistory provider "z-ai/glm-4.5-air"
@@ -95,12 +96,14 @@ testsGLM45AirOpenRouter provider = do
       consecutiveUserMessages provider "z-ai/glm-4.5-air"
       startsWithAssistant provider "z-ai/glm-4.5-air"
       reasoningViaDetails provider "z-ai/glm-4.5-air"
+      wrapsJSONInFence provider "z-ai/glm-4.5-air"
+      ignoresJSONSchemaShape provider "z-ai/glm-4.5-air"
       providerErrorResponse provider
       -- Note: OpenRouter reports no vision-capable endpoints for this model (404).
 
     describe "Standard Tests" $
       testModel route (GLM45Air `via` OpenRouter) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.json ]
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
     describe "Composable Provider Tests" $
       testModelOffline route (GLM45Air `via` OpenRouter)
@@ -140,6 +143,8 @@ testsGLM45AirLlamaCpp provider modelName = do
 testsGLM45AirZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM45AirZAI provider = do
   describe "GLM 4.5 Air via ZAI" $ do
+    describe "Protocol" $ do
+      wrapsJSONInFence provider "GLM-4.5-Air"
     describe "Standard Tests" $
       testModel route (GLM45Air `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning ]
@@ -149,6 +154,8 @@ testsGLM45AirZAI provider = do
 testsGLM45ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM45ZAI provider = do
   describe "GLM 4.5 via ZAI" $ do
+    describe "Protocol" $ do
+      wrapsJSONInFence provider "glm-4.5"
     describe "Standard Tests" $
       testModel route (GLM45 `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
@@ -158,6 +165,8 @@ testsGLM45ZAI provider = do
 testsGLM46ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM46ZAI provider = do
   describe "GLM 4.6 via ZAI" $ do
+    describe "Protocol" $ do
+      wrapsJSONInFence provider "glm-4.6"
     describe "Standard Tests" $
       testModel route (GLM46 `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
@@ -167,6 +176,8 @@ testsGLM46ZAI provider = do
 testsGLM47ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM47ZAI provider = do
   describe "GLM 4.7 via ZAI" $ do
+    describe "Protocol" $ do
+      wrapsJSONInFence provider "glm-4.7"
     describe "Standard Tests" $
       testModel route (GLM47 `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
@@ -186,8 +197,11 @@ testsGLM47OpenRouter provider = do
       consecutiveUserMessages provider "z-ai/glm-4.7"
       startsWithAssistant provider "z-ai/glm-4.7"
       reasoningViaDetails provider "z-ai/glm-4.7"
+      jsonStaysInReasoningDetails provider "z-ai/glm-4.7"
       providerErrorResponse provider
 
+    -- Note: no ST.json - see jsonStaysInReasoningDetails quirk above / GLM-Specific
+    -- Quirks at the top of UniversalLLM.Models.ZhipuAI.GLM.
     describe "Standard Tests" $
       testModel route (GLM47 `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
@@ -197,6 +211,8 @@ testsGLM47OpenRouter provider = do
 testsGLM47FlashZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM47FlashZAI provider = do
   describe "GLM 4.7 Flash via ZAI" $ do
+    describe "Protocol" $ do
+      wrapsJSONInFence provider "glm-4.7-flash"
     describe "Standard Tests" $
       testModel route (GLM47Flash `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
@@ -216,8 +232,11 @@ testsGLM47FlashOpenRouter provider = do
       consecutiveUserMessages provider "z-ai/glm-4.7-flash"
       startsWithAssistant provider "z-ai/glm-4.7-flash"
       reasoningViaDetails provider "z-ai/glm-4.7-flash"
+      jsonStaysInReasoningDetails provider "z-ai/glm-4.7-flash"
       providerErrorResponse provider
 
+    -- Note: no ST.json - see jsonStaysInReasoningDetails quirk above / GLM-Specific
+    -- Quirks at the top of UniversalLLM.Models.ZhipuAI.GLM.
     describe "Standard Tests" $
       testModel route (GLM47Flash `via` OpenRouter) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
@@ -262,6 +281,7 @@ testsGLM5ZAI provider = do
       consecutiveUserMessages provider "glm-5"
       startsWithAssistant provider "glm-5"
       reasoning provider "glm-5"
+      wrapsJSONInFence provider "glm-5"
       -- Note: ZAI accepts the request but the model cannot see image_url content (reports no image attached).
       -- Vision likely requires a dedicated multimodal model variant.
 
@@ -299,6 +319,8 @@ testsGLM47AlibabaCloud provider = do
 testsGLM51ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM51ZAI provider = do
   describe "GLM 5.1 via ZAI" $ do
+    describe "Protocol" $ do
+      wrapsJSONInFence provider "glm-5.1"
     describe "Standard Tests" $
       testModel route (GLM51 `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
@@ -308,6 +330,8 @@ testsGLM51ZAI provider = do
 testsGLM52ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM52ZAI provider = do
   describe "GLM 5.2 via ZAI" $ do
+    describe "Protocol" $ do
+      wrapsJSONInFence provider "glm-5.2"
     describe "Standard Tests" $
       testModel route (GLM52 `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
@@ -317,6 +341,8 @@ testsGLM52ZAI provider = do
 testsGLM5TurboZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsGLM5TurboZAI provider = do
   describe "GLM 5-Turbo via ZAI" $ do
+    describe "Protocol" $ do
+      wrapsJSONInFence provider "glm-5-turbo"
     describe "Standard Tests" $
       testModel route (GLM5Turbo `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]

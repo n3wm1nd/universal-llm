@@ -89,7 +89,7 @@ buildOpenAIResponse msgs = do
   let lastMsg = last msgs
   oaiMsg <- messageToOpenAI lastMsg
   return $ OpenAISuccess $ OpenAISuccessResponse
-    { choices = [OpenAIChoice { message = oaiMsg }]
+    { choices = [OpenAIChoice { message = oaiMsg, finishReason = Just "stop" }]
     }
 
 -- | Convert a universal message to OpenAI format

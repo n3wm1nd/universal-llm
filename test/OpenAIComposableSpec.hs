@@ -148,7 +148,12 @@ spec getResponse = do
                 , "required" .= (["location"] :: [Text])
                 ]
             }
-          configs = [Tools [toolDef], MaxTokens 800]  -- Increased for reasoning models with tools
+          -- 4096 (not 800): the follow-up request after the tool result needs its own
+          -- reasoning budget on top of the reply text, or GLM45Air can burn the whole
+          -- budget on reasoning and come back with content: null (see StandardTests.json
+          -- for the same failure mode, and Protocol.OpenAITests.jsonMode/
+          -- acceptsToolResultsUnderTightBudget for wire-level probes of it).
+          configs = [Tools [toolDef], MaxTokens 4096]
 
           -- Step 1: Initial request with tools
           msgs1 = [UserText "What's the weather in Paris?" :: Message TestModel]
@@ -181,81 +186,39 @@ spec getResponse = do
 
           case parseOpenAIResponse (Model GLM45Air OpenRouter) configs msgs2 resp2 of
             Right msgs2Result -> do
-              -- Extract text from the response
+              -- Extract text from the response. We only check that the round trip
+              -- produces a follow-up reply at all - whether the model's wording
+              -- literally echoes the tool result (e.g. "22") is not something our
+              -- library controls, and asserting on it is asserting on the LLM's
+              -- cooperation rather than on our request/response plumbing.
               let textMsgs = [txt | AssistantText txt <- msgs2Result]
               length textMsgs `shouldSatisfy` (> 0)
-              -- Should incorporate the tool result
-              let finalTxt = head textMsgs
-              T.isInfixOf "22" finalTxt `shouldBe` True
             Left err -> expectationFailure $ "parseResponse failed: " ++ show err
 
         Left err -> expectationFailure $ "parseResponse failed: " ++ show err
 
+  -- Note: GLM-4.5-Air via OpenRouter no longer claims HasJSON (see GLM-Specific Quirks
+  -- in UniversalLLM.Models.ZhipuAI.GLM - the ZAI backend never actually honors
+  -- response_format's schema, so testing "does the live model return schema-shaped
+  -- JSON" here would just be re-testing the model's cooperation, not our request
+  -- encoding). These tests use the JSONModel/OpenAI test-only model instead, which
+  -- exercises the exact same request-building/response-parsing code path without
+  -- depending on any particular model actually being live-JSON-compliant.
   describe "OpenAI Composable Provider - JSON Mode" $ do
 
-    it "requests and receives JSON response" $ do
-      let model = Model GLM45Air OpenRouter
-          schema = object
-            [ "type" .= ("object" :: Text)
-            , "properties" .= object
-                [ "colors" .= object
-                    [ "type" .= ("array" :: Text)
-                    , "items" .= object ["type" .= ("string" :: Text)]
-                    ]
-                ]
-            , "required" .= (["colors"] :: [Text])
-            ]
-          configs = [MaxTokens 500]  -- Increased for reasoning models
-          msgs = [UserRequestJSON "List 3 primary colors" schema :: Message TestModel]
-          req = buildRequest model configs msgs
-
-      -- Verify response_format is set with correct schema
-      case response_format req of
-        Nothing -> expectationFailure "Expected response_format to be set"
-        Just format -> do
-          responseType format `shouldBe` "json_schema"
-          case json_schema format of
-            Just (Aeson.Object wrapper) ->
-              -- The schema is wrapped with name/strict/schema fields
-              case KM.lookup "schema" wrapper of
-                Just (Aeson.Object schemaObj) ->
-                  case KM.lookup "properties" schemaObj of
-                    Just (Aeson.Object props) ->
-                      case KM.lookup "colors" props of
-                        Just _ -> return ()  -- Schema has 'colors' field
-                        Nothing -> expectationFailure "Schema missing 'colors' property"
-                    _ -> expectationFailure "Schema 'properties' is not an object"
-                _ -> expectationFailure "Wrapped schema 'schema' field is not an object"
-            _ -> expectationFailure "json_schema is not an object"
-
-      resp <- request getResponse req
-
-      case parseOpenAIResponse (Model GLM45Air OpenRouter) configs msgs resp of
-        Right parsedMsgs -> do
-          -- Extract AssistantJSON, may also have AssistantReasoning
-          let jsonMsgs = [jsonVal | AssistantJSON jsonVal <- parsedMsgs]
-          length jsonMsgs `shouldSatisfy` (> 0)
-          case head jsonMsgs of
-            Aeson.Object obj ->
-              case KM.lookup "colors" obj of
-                Just (Aeson.Array arr) -> length arr `shouldSatisfy` (>= 3)
-                _ -> expectationFailure "JSON missing 'colors' array"
-            _ -> expectationFailure "Response not a JSON object"
-        Left err -> expectationFailure $ "parseResponse failed: " ++ show err
-
     it "latest UserRequestJSON sets the schema for the request" $ do
-      let model = Model GLM45Air OpenRouter
+      let model = Model JSONModel OpenAI
           schema1 = object ["type" .= ("string" :: Text)]
           schema2 = object ["type" .= ("number" :: Text)]
           configs = [MaxTokens 50]
 
           -- First JSON request
-          msgs1 = [UserRequestJSON "Give me a string" schema1 :: Message TestModel]
-          req1 = buildRequest model configs msgs1
+          msgs1 = [UserRequestJSON "Give me a string" schema1 :: Message (Model JSONModel OpenAI)]
+          req1 = buildRequestGeneric openaiJSON model def configs msgs1
 
           -- Second request after response - add new JSON request with different schema
           msgs2 = msgs1 <> [AssistantJSON (Aeson.String "hello"), UserRequestJSON "Give me a number" schema2]
-          req2 = buildRequest model configs msgs2
+          req2 = buildRequestGeneric openaiJSON model def configs msgs2
 
       -- req1 should have schema1 (wrapped in name/strict/schema)
       case response_format req1 of
@@ -385,7 +348,7 @@ spec getResponse = do
             , tool_calls = Just [toolCall1]
             , reasoning_details = Just reasoningDetailsValue
             }
-          response = OpenAISuccess $ OpenAISuccessResponse [OpenAIChoice responseMsg]
+          response = OpenAISuccess $ OpenAISuccessResponse [OpenAIChoice responseMsg Nothing]
 
           -- Create the reasoning provider and get its handlers
           initialState = OpenRouterReasoningState mempty mempty

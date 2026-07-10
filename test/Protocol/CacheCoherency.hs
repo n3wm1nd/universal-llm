@@ -198,7 +198,7 @@ instance SimulateResponse OP.OpenAIResponse where
               ([],  [])  -> Nothing
           , OP.tool_calls = case toolCalls of { [] -> Nothing; tcs -> Just tcs }
           }
-    in OP.OpenAISuccess (OP.OpenAISuccessResponse [OP.OpenAIChoice assistantMsg])
+    in OP.OpenAISuccess (OP.OpenAISuccessResponse [OP.OpenAIChoice assistantMsg Nothing])
 
 instance SimulateResponse AP.AnthropicResponse where
   simulateResponse msgs =

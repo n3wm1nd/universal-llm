@@ -30,17 +30,65 @@ Results inform:
 
 = What Probes Test
 
-Probes test __protocol behavior__, NOT our abstractions:
+Probes test __protocol and feature support__, NOT model performance:
 - ✓ "Does the wire protocol return tool_calls in the response?"
 - ✗ "Does our Message type conversion work?" (that's StandardTests)
+- ✗ "Is the model smart enough to pick the right tool / write correct code / phrase a
+  good answer?" (never - that's not our library's concern, and it isn't testable
+  reliably anyway)
+
+A probe answers "does this model/provider combination support X," not "how good is
+this model at X." The two are easy to conflate because both are checked by sending a
+request and looking at the response - the discipline is in what the assertion checks
+for, and how the prompt is worded.
+
+= Probes Must Be Straightforward, Not Tricky
+
+The prompt and setup in a probe should be as easy as reasonably possible for a
+__genuinely capable__ model to satisfy - a probe is not an obstacle course, and a weak
+but honestly-supporting model should still pass it reliably. Don't handicap a probe with
+convoluted phrasing, adversarial framing, or unnecessary constraints "to make sure it's
+really working" - if the feature is supported, a plain, direct prompt should be enough.
+(Composable-provider implementations, by contrast, are free and encouraged to add
+compliance hints, restated schemas, etc. to get the most out of a model in practice -
+see 'UniversalLLM.Providers.OpenAI.handleJSONMessageWithComplianceHint'. That's a
+different concern from what a probe should test.)
+
+At the same time, a probe __must not be guessable__: it must be impossible (or as close
+to it as practical) for a model that does NOT support the feature to produce a passing
+result by hallucination, pattern-matching the prompt, or coincidence. If a model can
+"pass" a probe just by confabulating plausible-looking output without actually
+exercising the capability being probed, the probe isn't testing anything. Concretely:
+
+* __Vision probes__ - ask what's distinctively IN the image (a specific object, a
+  count, an unusual color) rather than asking the model to describe/interpret it in
+  depth. The point is to tell "the model saw something" from "the model is
+  hallucinating a plausible-sounding description," not to grade how well it describes
+  what it sees.
+* __JSON schema probes__ - use a schema shape that has nothing to do with the natural
+  phrasing of the prompt (see 'oddShapeColorsSchema' / 'jsonSchemaShapeCompliance'). A
+  schema like @{"colors": [...]}@ for "list 3 colors" is guessable even by a model with
+  zero real schema-following capability, because it's also the obvious freeform answer.
+  A schema like @{"result": {"hue_list": [...]}}@ is not guessable - matching it is only
+  possible by actually reading @response_format@.
+* __Tool-calling probes__ - check that a tool call was made with recognizably-derived
+  arguments, not that the tool choice or argument phrasing was "good."
 
 = Design Guidelines for Probes
 
 * __Focus__ - Test ONE thing. Name clearly states what.
-* __Simple__ - Minimal setup. No complex logic.
+* __Simple__ - Minimal setup. No complex logic. Prompt should be the easiest reasonable
+  ask for a model that genuinely supports the feature (see above).
+* __Unguessable__ - A model without the capability must not be able to pass by luck,
+  hallucination, or pattern-matching the prompt (see above).
 * __Direct__ - Call assertions from Protocol.OpenAI, don't implement inline
 * __Clear failure__ - When it fails, immediately obvious what's missing
 * __Quirk discovery__ - Variants for provider-specific behaviors (e.g., reasoningViaDetails)
+* __Negative probes__ - When a quirk or missing capability is confirmed, encode it as a
+  probe that asserts the quirk is still present (e.g. 'wrapsJSONInFence',
+  'ignoresJSONSchemaShape') rather than leaving a probe permanently red. This keeps
+  cabal test green while still flagging it automatically if the provider's behavior
+  ever changes - see each probe's haddock for what "the provider fixed it" looks like.
 
 = Usage
 
@@ -75,6 +123,10 @@ import UniversalLLM.Protocols.OpenAI
 import Protocol.OpenAI  -- unqualified - we mainly call these
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import qualified Data.ByteString.Lazy as BSL
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KM
 import Test.Hspec (Spec, describe, it, shouldSatisfy, HasCallStack, runIO)
 import TestFixtures (loadImageBase64, glassbottlePng, glassbottleMirroredJpeg)
 
@@ -118,6 +170,124 @@ toolCalling makeRequest modelName = do
           }
     resp <- request makeRequest req
     assertHasToolCalls resp
+
+-- | Probe: JSON mode support
+--
+-- __Tests:__ Does the model return bare, valid JSON when @response_format: json_schema@
+-- is requested?
+--
+-- __Checks:__ Response content parses directly as a JSON object (no markdown fences,
+-- no preamble text)
+--
+-- __Expected to fail:__ Providers/models that accept the request but wrap structured
+-- output in prose or code fences - use 'wrapsJSONInFence' to document that quirk
+-- explicitly instead of leaving this probe red.
+jsonMode :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+jsonMode makeRequest modelName = do
+  it "returns bare JSON content when JSON mode requested" $ do
+    let req = (jsonRequest "List 3 primary colors as a JSON object with a 'colors' array." colorsSchema)
+          { model = modelName, max_tokens = Just 4096 }
+    resp <- request makeRequest req
+    assertHasValidJSONContent resp
+
+-- | Probe: real JSON schema-following, not just "the model's natural answer happened
+-- to look plausible"
+--
+-- __Tests:__ Does the backend actually enforce/follow an arbitrary @response_format@
+-- schema, or does it just produce a "natural" answer to the prompt that happens to
+-- satisfy an obvious schema? Uses a deliberately unusual, nested schema
+-- ('oddShapeColorsSchema') that nothing in the prompt text suggests - the only way to
+-- match it is to actually read @response_format@.
+--
+-- __No compliance hint__: this probe intentionally does NOT restate the schema in the
+-- prompt text (that's a job for the composable-provider implementation, not for a
+-- protocol probe - see 'UniversalLLM.Providers.OpenAI.handleJSONMessageWithComplianceHint').
+-- It tests the raw protocol/backend capability in isolation.
+--
+-- __Expected to pass:__ Backends with real grammar-enforced structured output
+-- (llama.cpp, AlibabaCloud)
+--
+-- __Expected to fail:__ Backends where @response_format@/@strict: true@ is accepted but
+-- not actually enforced - failing here means the model has no real schema-following
+-- capability at the protocol level, regardless of how well-behaved it looks on an
+-- obvious schema like 'colorsSchema'.
+jsonSchemaShapeCompliance :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+jsonSchemaShapeCompliance makeRequest modelName = do
+  it "follows an unusual, nested response_format schema (not just a guessable shape)" $ do
+    let req = (jsonRequest "List 3 primary colors, output in json." oddShapeColorsSchema)
+          { model = modelName, max_tokens = Just 4096 }
+    resp <- request makeRequest req
+    assertMatchesOddShapeSchema resp
+
+-- | Negative probe: the backend accepts response_format/schema but never follows it
+--
+-- __Tests:__ Does the backend still ignore an arbitrary, unusual @response_format@
+-- schema and answer with its own guessed shape instead?
+--
+-- __Expected to pass:__ GLM-4.5-Air (and other GLM models) via the ZAI backend
+-- (directly or via OpenRouter) - confirmed by 'jsonSchemaShapeCompliance': the model
+-- returns its own natural JSON shape (e.g. a bare array), not the requested nested
+-- @{"result": {"hue_list": [...]}}@ shape. This is why these models don't claim
+-- 'UniversalLLM.HasJSON' - see GLM-Specific Quirks in
+-- "UniversalLLM.Models.ZhipuAI.GLM".
+--
+-- __Expected to fail:__ If this probe fails, the backend started honoring
+-- @response_format@'s schema and 'UniversalLLM.HasJSON' could potentially be
+-- re-enabled for this model.
+ignoresJSONSchemaShape :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+ignoresJSONSchemaShape makeRequest modelName = do
+  it "ignores an unusual, nested response_format schema (known lack of JSON support)" $ do
+    let req = (jsonRequest "List 3 primary colors, output in json." oddShapeColorsSchema)
+          { model = modelName, max_tokens = Just 4096 }
+    resp <- request makeRequest req
+    let result = expectSuccess resp
+    -- Should fail to match the odd schema - if it succeeds, the backend actually
+    -- honored response_format and we have real JSON support to reconsider.
+    (case Aeson.decode (BSL.fromStrict (TE.encodeUtf8 (T.strip (getAssistantText result)))) of
+      Just (Aeson.Object obj) | Just (Aeson.Object resultObj) <- KM.lookup "result" obj
+                              , Just (Aeson.Array _) <- KM.lookup "hue_list" resultObj ->
+        error "Expected the odd schema to be ignored (known quirk) but it was matched - backend may have gained real JSON schema support"
+      _ -> return ())
+
+-- | Negative probe: JSON mode output arrives wrapped in a markdown code fence
+--
+-- __Tests:__ Does the model still fail to return bare JSON in response to
+-- @response_format: json_schema@ with @strict: true@?
+--
+-- __Expected to pass:__ GLM-4.5-Air via OpenRouter (paid slug) - confirmed quirk,
+-- worked around by 'UniversalLLM.Providers.OpenAI.openAIJSONWithFencedFallback'
+--
+-- __Expected to fail:__ If this probe fails, the provider started returning bare JSON
+-- and the fenced-fallback workaround for this model may no longer be needed - drop it
+-- and switch the model back to plain 'UniversalLLM.Providers.OpenAI.openAIJSON'.
+wrapsJSONInFence :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+wrapsJSONInFence makeRequest modelName = do
+  it "wraps JSON-mode output in a markdown code fence (known quirk)" $ do
+    let req = (jsonRequest "List 3 primary colors as a JSON object with a 'colors' array." colorsSchema)
+          { model = modelName, max_tokens = Just 4096 }
+    resp <- request makeRequest req
+    assertHasFencedJSONContent resp
+
+-- | Negative probe: JSON mode output stays in reasoning_details, content never populated
+--
+-- __Tests:__ Does the model still leave @content: null@ and put the whole JSON answer
+-- in @reasoning_details@ in response to @response_format: json_schema@?
+--
+-- __Expected to pass:__ GLM-4.7 and GLM-4.7-Flash via OpenRouter - confirmed quirk,
+-- distinct from GLM-4.5-Air's fenced-content quirk (see 'wrapsJSONInFence'). Not caused
+-- by token-budget truncation (finish_reason is "stop", verified with TEST_MODE=update
+-- to rule out a one-off sampling fluke).
+--
+-- __Expected to fail:__ If this probe fails, the provider started populating content
+-- and 'UniversalLLM.Providers.OpenAI.HasJSON' could potentially be re-enabled for this
+-- model.
+jsonStaysInReasoningDetails :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+jsonStaysInReasoningDetails makeRequest modelName = do
+  it "leaves content empty and puts JSON-mode output in reasoning_details (known quirk)" $ do
+    let req = (jsonRequest "List 3 primary colors as a JSON object with a 'colors' array." colorsSchema)
+          { model = modelName, max_tokens = Just 4096 }
+    resp <- request makeRequest req
+    assertJSONStaysInReasoningDetails resp
 
 -- | Probe: Reasoning content (standard field)
 --
@@ -385,6 +555,27 @@ acceptsToolResults :: HasCallStack => ResponseProvider OpenAIRequest OpenAIRespo
 acceptsToolResults makeRequest modelName = do
   it "accepts tool results in conversation history" $ do
     let req = requestWithToolCallHistory { model = modelName }
+    resp <- request makeRequest req
+    assertHasAssistantText resp
+
+-- | Probe: Tool result follow-up completes within a modest token budget
+--
+-- __Tests:__ Does the model still produce assistant text after a tool result when
+-- @max_tokens@ is capped (800), rather than left unbounded?
+--
+-- __Checks:__ Response contains non-empty assistant text
+--
+-- __Expected to pass:__ Non-reasoning models, or reasoning models with cheap reasoning
+--
+-- __Expected to fail:__ Reasoning models that spend the entire token budget on
+-- reasoning_content/reasoning_details before emitting any content - the response comes
+-- back with content: null. This is a capacity problem (budget too small for this model's
+-- reasoning verbosity), not a parsing bug - see 'jsonMode' for the same failure mode in
+-- JSON output.
+acceptsToolResultsUnderTightBudget :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+acceptsToolResultsUnderTightBudget makeRequest modelName = do
+  it "produces assistant text after tool result within an 800 token budget" $ do
+    let req = requestWithToolCallHistory { model = modelName, max_tokens = Just 800 }
     resp <- request makeRequest req
     assertHasAssistantText resp
 

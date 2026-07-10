@@ -211,6 +211,7 @@ data OpenAISuccessResponse = OpenAISuccessResponse
 
 data OpenAIChoice = OpenAIChoice
   { message :: OpenAIMessage
+  , finishReason :: Maybe Text
   } deriving (Generic, Show, Eq)
 
 data OpenAIErrorResponse = OpenAIErrorResponse
@@ -297,6 +298,7 @@ instance HasCodec OpenAIChoice where
   codec = object "OpenAIChoice" $
     OpenAIChoice
       <$> requiredField "message" "Message" .= message
+      <*> optionalField "finish_reason" "Reason the model stopped generating (e.g. stop, length)" .= finishReason
 
 instance HasCodec OpenAIErrorResponse where
   codec = object "OpenAIErrorResponse" $
@@ -404,6 +406,7 @@ defaultOpenAISuccessResponse = OpenAISuccessResponse
 defaultOpenAIChoice :: OpenAIChoice
 defaultOpenAIChoice = OpenAIChoice
   { message = defaultOpenAIMessage
+  , finishReason = Nothing
   }
 
 -- Helper: Convert OpenAI tool call to generic ToolCall
@@ -613,8 +616,8 @@ mergeOpenAIDelta acc chunk =
     normaliseResponse r = r
 
     normaliseChoice :: OpenAIChoice -> OpenAIChoice
-    normaliseChoice (OpenAIChoice msg) =
-      OpenAIChoice msg { content = content msg <|> Just (TextContent "") }
+    normaliseChoice (OpenAIChoice msg fr) =
+      OpenAIChoice msg { content = content msg <|> Just (TextContent "") } fr
 
 -- ============================================================================
 -- ProtocolEndpoint / StreamingProtocol / EnableStreaming instances

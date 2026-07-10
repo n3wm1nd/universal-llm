@@ -335,6 +335,23 @@ handleJSONMessage msg req = case msg of
   where
     (&) = flip ($)
 
+-- | Same as 'handleJSONMessage', but appends an explicit compliance instruction to the
+-- user's text on top of @response_format@/@strict: true@.
+--
+-- For backends that accept structured-output requests without actually enforcing a
+-- constraining grammar (see 'openAIJSONWithFencedFallback'), the request parameters
+-- alone aren't a reliable signal to the model - restating the requirement in-band
+-- measurably improves compliance. This should not be needed for backends that
+-- grammar-enforce @response_format@ (llama.cpp, AlibabaCloud use 'handleJSONMessage'
+-- directly), so it's kept separate rather than folded into the shared encoder.
+handleJSONMessageWithComplianceHint :: forall m. (ProviderRequest m ~ OpenAIRequest) => MessageEncoder m
+handleJSONMessageWithComplianceHint msg req = case msg of
+  UserRequestJSON txt schema ->
+    handleJSONMessage @m (UserRequestJSON (txt <> jsonComplianceHint) schema) req
+  _ -> handleJSONMessage @m msg req
+  where
+    jsonComplianceHint = "\n\nRespond with JSON only, matching the schema exactly. Do not include any other text, explanation, or markdown formatting."
+
 -- Reasoning message encoder
 handleReasoningMessage :: forall m. (ProviderRequest m ~ OpenAIRequest) => MessageEncoder m
 handleReasoningMessage msg req = case msg of
@@ -371,13 +388,13 @@ baseComposableProvider modelProxy configs _s = noopHandler
       Left $ ModelError $ errorMessage (errorDetail err)
     parseTextResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
-        (OpenAIChoice msg:rest) ->
+        (OpenAIChoice msg fr:rest) ->
           case contentText (content msg) of
             Just txt | not (T.null txt) ->
               -- Extract text but preserve reasoning_content and other fields in the choice
               -- Skip empty content entirely (prevents duplicate assistant messages)
               let updatedMsg = msg { content = Nothing }
-                  newChoices = OpenAIChoice updatedMsg : rest
+                  newChoices = OpenAIChoice updatedMsg fr : rest
               in Right (Just (AssistantText txt, OpenAISuccess (OpenAISuccessResponse newChoices)))
             _ -> Right Nothing
         [] -> Right Nothing
@@ -477,13 +494,13 @@ openAIReasoning _m configs _s = noopHandler
       Left $ ModelError $ errorMessage (errorDetail err)
     parseReasoningResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
-        (OpenAIChoice msg:rest) ->
+        (OpenAIChoice msg fr:rest) ->
           case reasoning_content msg of
             Just txt | not (T.null txt) ->
               -- Extract reasoning but preserve content and other fields in the choice
               -- Skip empty reasoning (prevents empty AssistantReasoning messages)
               let updatedMsg = msg { reasoning_content = Nothing }
-                  newChoices = OpenAIChoice updatedMsg : rest
+                  newChoices = OpenAIChoice updatedMsg fr : rest
               in Right (Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse newChoices)))
             _ -> Right Nothing
         [] -> Right Nothing
@@ -538,11 +555,11 @@ llamaCppReasoning _m configs _s = noopHandler
       Left $ ModelError $ errorMessage (errorDetail err)
     parseReasoningResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
-        (OpenAIChoice msg:rest) ->
+        (OpenAIChoice msg fr:rest) ->
           case reasoning_content msg of
             Just txt | not (T.null txt) ->
               let updatedMsg = msg { reasoning_content = Nothing }
-                  newChoices = OpenAIChoice updatedMsg : rest
+                  newChoices = OpenAIChoice updatedMsg fr : rest
               in Right (Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse newChoices)))
             _ -> Right Nothing
         [] -> Right Nothing
@@ -644,14 +661,14 @@ openRouterReasoning _m configs state = noopHandler
       Left $ ModelError $ errorMessage (errorDetail err)
     parseReasoningResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
-        (OpenAIChoice msg:rest) ->
+        (OpenAIChoice msg fr:rest) ->
           -- Try reasoning_content first (OpenAI format)
           case reasoning_content msg of
             Just txt | not (T.null txt) ->
               -- Extract reasoning but preserve content and other fields in the choice
               -- Skip empty reasoning (prevents empty AssistantReasoning messages)
               let updatedMsg = msg { reasoning_content = Nothing }
-                  newChoices = OpenAIChoice updatedMsg : rest
+                  newChoices = OpenAIChoice updatedMsg fr : rest
               in Right (Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse newChoices)))
             _ ->
               -- Try reasoning_details (OpenRouter format)
@@ -661,7 +678,7 @@ openRouterReasoning _m configs state = noopHandler
                   -- (State preservation happens in cpPostResponse via storeReasoningDetailsFromResponse)
                   -- Skip empty reasoning (prevents empty AssistantReasoning messages)
                   let updatedMsg = msg { reasoning_details = Nothing }
-                      newChoices = OpenAIChoice updatedMsg : rest
+                      newChoices = OpenAIChoice updatedMsg fr : rest
                   in Right (Just (AssistantReasoning txt, OpenAISuccess (OpenAISuccessResponse newChoices)))
                 _ -> Right Nothing
         [] -> Right Nothing
@@ -684,7 +701,7 @@ openRouterReasoning _m configs state = noopHandler
     storeReasoningDetailsFromResponse (OpenAIError _) st = st
     storeReasoningDetailsFromResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) st =
       case respChoices of
-        (OpenAIChoice msg:_) ->
+        (OpenAIChoice msg fr:_) ->
           case reasoning_details msg of
             Just details ->
               let -- Extract reasoning text from either reasoning_content (OpenAI) or reasoning_details (OpenRouter)
@@ -840,12 +857,12 @@ openAITools _m configs _s = noopHandler
       Left $ ModelError $ errorMessage (errorDetail err)
     parseToolResponse (OpenAISuccess (OpenAISuccessResponse respChoices)) =
       case respChoices of
-        (OpenAIChoice msg:rest) ->
+        (OpenAIChoice msg fr:rest) ->
           case tool_calls msg of
             Just (tc:remainingTCs) ->
               -- Extract first tool call but preserve remaining tool calls and other fields
               let updatedMsg = msg { tool_calls = if null remainingTCs then Nothing else Just remainingTCs }
-                  newChoices = OpenAIChoice updatedMsg : rest
+                  newChoices = OpenAIChoice updatedMsg fr : rest
               in Right (Just (AssistantTool (convertToolCall tc), OpenAISuccess (OpenAISuccessResponse newChoices)))
             _ -> Right Nothing
         [] -> Right Nothing
@@ -894,6 +911,57 @@ openAIJSON _m _configs _s = noopHandler
             Just jsonVal -> AssistantJSON jsonVal
             Nothing -> AssistantText txt  -- Keep as text if not valid JSON
         convertMessage msg = msg
+
+-- | JSON provider variant for models that wrap JSON-mode output in a markdown code
+-- fence (and often trailing prose) instead of returning bare JSON, even when a strict
+-- schema was requested.
+--
+-- __Not a guarantee of valid structured output.__ @strict: true@ is accepted but not
+-- grammar-enforced on the affected backend - the model just usually complies and wraps
+-- the result in a fence. This unwraps that specific, observed shape; it is not a general
+-- JSON repair layer, and a sufficiently uncooperative response will still fail to parse
+-- and fall back to 'AssistantText'. Claiming 'HasJSON' with this variant means "works in
+-- practice for the shapes we've seen," not "the provider enforces the schema."
+--
+-- Confirmed via live probe on GLM-4.5-Air via OpenRouter (paid slug): the response is
+-- consistently @```json\n{...}\n```@ followed by an unsolicited explanation, regardless
+-- of @strict: true@. This is a model/provider quirk, not something to bake into
+-- 'openAIJSON' for every provider - see 'Protocol.OpenAITests.jsonMode' for the probe.
+-- Also appends an in-band compliance instruction to the user's text (see
+-- 'handleJSONMessageWithComplianceHint') - @strict: true@ alone isn't reliably
+-- honored on this backend, and restating the requirement measurably helps.
+openAIJSONWithFencedFallback :: forall m . (HasJSON m, ProviderRequest m ~ OpenAIRequest, ProviderResponse m ~ OpenAIResponse) => ComposableProvider m ()
+openAIJSONWithFencedFallback m configs s = (openAIJSON m configs s)
+  { cpToRequest = handleJSONMessageWithComplianceHint
+  , cpPureMessageResponse = convertTextToJSON
+  }
+  where
+    convertTextToJSON :: [Message m] -> [Message m]
+    convertTextToJSON = map convertMessage
+      where
+        convertMessage (AssistantText txt) =
+          case extractJSON txt of
+            Just jsonVal -> AssistantJSON jsonVal
+            Nothing -> AssistantText txt  -- Keep as text if not valid/fenced JSON
+        convertMessage msg = msg
+
+    extractJSON :: Text -> Maybe Value
+    extractJSON txt =
+      decodeJSON (T.strip txt) <|> (stripCodeFence (T.strip txt) >>= decodeJSON)
+      where
+        decodeJSON t = Aeson.decode (BSL.fromStrict (TE.encodeUtf8 t))
+
+    -- Finds the first fenced block anywhere in the text (not just at the start) - models
+    -- often prefix the fence with a sentence of preamble ("Here's the JSON:\n```json...").
+    stripCodeFence :: Text -> Maybe Text
+    stripCodeFence t =
+      case T.breakOn "```" t of
+        (_, afterOpen) | not (T.null afterOpen) ->
+          let body = T.drop 1 . T.dropWhile (/= '\n') . T.drop 3 $ afterOpen
+          in case T.breakOn "```" body of
+               (inner, rest) | not (T.null rest) -> Just (T.strip inner)
+               _ -> Nothing
+        _ -> Nothing
 
 -- These are removed - use the typeclass methods withTools, withReasoning, etc. instead
 -- They're defined in the HasTools/HasReasoning/HasJSON instances

@@ -47,6 +47,8 @@ module Protocol.OpenAI where
 import UniversalLLM.Protocols.OpenAI
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
@@ -152,6 +154,81 @@ simpleTool name description params = OpenAIToolDefinition
 weatherTool :: OpenAIToolDefinition
 weatherTool = simpleTool "get_weather" "Get current weather for a location"
   [("location", "string", "City name")]
+
+-- | Create a request asking for structured JSON output matching a schema
+--
+-- Wraps the schema the same way 'UniversalLLM.Providers.OpenAI.handleJSONMessage' does
+-- (name/strict/schema wrapper), so the wire request matches what the real JSON message
+-- encoder produces.
+jsonRequest :: Text -> Aeson.Value -> OpenAIRequest
+jsonRequest txt schema = mempty
+  { messages = [userMessage txt]
+  , response_format = Just (OpenAIResponseFormat "json_schema" (Just wrappedSchema))
+  }
+  where
+    wrappedSchema = Aeson.object
+      [ "name" Aeson..= ("response" :: Text)
+      , "strict" Aeson..= True
+      , "schema" Aeson..= schema
+      ]
+
+-- | A minimal object schema requesting a "colors" array - reused by JSON mode probes
+colorsSchema :: Aeson.Value
+colorsSchema = Aeson.object
+  [ "type" Aeson..= ("object" :: Text)
+  , "properties" Aeson..= Aeson.object
+      [ "colors" Aeson..= Aeson.object
+          [ "type" Aeson..= ("array" :: Text)
+          , "items" Aeson..= Aeson.object ["type" Aeson..= ("string" :: Text)]
+          ]
+      ]
+  , "required" Aeson..= (["colors"] :: [Text])
+  ]
+
+-- | A deliberately unusual, nested schema for a "list some colors" style prompt
+--
+-- The obvious/guessable shape for "list 3 primary colors" is @{"colors": [...]}@ -
+-- 'colorsSchema' can't tell real schema-following apart from a model just producing
+-- its "natural" answer that happens to satisfy a plausible-looking schema. This schema
+-- uses unrelated key names and a nesting level nothing in the prompt suggests, so
+-- matching it is only possible if the model (or backend) actually reads and follows
+-- @response_format@ rather than pattern-matching the prompt.
+oddShapeColorsSchema :: Aeson.Value
+oddShapeColorsSchema = Aeson.object
+  [ "type" Aeson..= ("object" :: Text)
+  , "properties" Aeson..= Aeson.object
+      [ "result" Aeson..= Aeson.object
+          [ "type" Aeson..= ("object" :: Text)
+          , "properties" Aeson..= Aeson.object
+              [ "hue_list" Aeson..= Aeson.object
+                  [ "type" Aeson..= ("array" :: Text)
+                  , "items" Aeson..= Aeson.object ["type" Aeson..= ("string" :: Text)]
+                  ]
+              ]
+          , "required" Aeson..= (["hue_list"] :: [Text])
+          ]
+      ]
+  , "required" Aeson..= (["result"] :: [Text])
+  ]
+
+-- | Assert that response content is bare JSON matching 'oddShapeColorsSchema' exactly:
+-- @{"result": {"hue_list": [...]}}@ with at least 3 entries
+--
+-- Used by 'Protocol.OpenAITests.jsonSchemaShapeCompliance' to distinguish real
+-- schema-following from a model just producing its guessable "natural" answer for a
+-- prompt like "list 3 colors" - see 'oddShapeColorsSchema'.
+assertMatchesOddShapeSchema :: HasCallStack => OpenAIResponse -> Expectation
+assertMatchesOddShapeSchema resp = do
+  let text = getAssistantText . expectSuccess $ resp
+  case Aeson.decode (BSL.fromStrict (TE.encodeUtf8 (T.strip text))) of
+    Just (Aeson.Object obj) ->
+      case KM.lookup "result" obj of
+        Just (Aeson.Object resultObj) ->
+          case KM.lookup "hue_list" resultObj of
+            Just (Aeson.Array arr) -> length arr `shouldSatisfy` (>= 3)
+            _ -> error $ "\"result\" object missing \"hue_list\" array, raw content: " <> T.unpack text
+        _ -> error $ "Response missing nested \"result\" object (schema not followed), raw content: " <> T.unpack text
+    _ -> error $ "Content is not bare JSON matching the schema, raw content: " <> T.unpack text
 
 -- | Enable reasoning on a request
 enableReasoning :: OpenAIRequest -> OpenAIRequest
@@ -412,9 +489,17 @@ checkError resp = OpenAISuccess (expectSuccess resp)
 getFirstMessage :: OpenAISuccessResponse -> OpenAIMessage
 getFirstMessage (OpenAISuccessResponse []) =
   error "No choices in response"
-getFirstMessage (OpenAISuccessResponse [OpenAIChoice msg]) = msg
+getFirstMessage (OpenAISuccessResponse [OpenAIChoice msg _]) = msg
 getFirstMessage (OpenAISuccessResponse choices) =
   error $ "Expected exactly one choice, got " ++ show (length choices)
+
+-- | Extract the finish_reason of the single choice ("stop", "length", etc.)
+--
+-- Use this to distinguish a natural stop from truncation when a probe gets less
+-- content than expected - "length" means the token budget ran out mid-generation.
+getFinishReason :: OpenAISuccessResponse -> Maybe Text
+getFinishReason (OpenAISuccessResponse [OpenAIChoice _ fr]) = fr
+getFinishReason _ = Nothing
 
 -- | Extract assistant text from success response
 --
@@ -422,9 +507,11 @@ getFirstMessage (OpenAISuccessResponse choices) =
 -- >>> getAssistantText . expectSuccess $ resp
 getAssistantText :: OpenAISuccessResponse -> Text
 getAssistantText success =
-  case contentText (getFirstMessage success).content of
+  let msg = getFirstMessage success
+      fr = getFinishReason success
+  in case contentText msg.content of
     Just txt -> txt
-    Nothing -> error "Assistant message has no content"
+    Nothing -> error $ "Assistant message has no content (finish_reason: " ++ show fr ++ "), full message: " ++ show msg
 
 -- | Extract error details from error response
 --
@@ -548,6 +635,68 @@ assertHasXMLToolCall functionName resp = do
     Just txt | T.isInfixOf ("<tool_call>" <> functionName) txt -> return ()
     Just txt -> error $ "Message content does not contain <tool_call>" <> T.unpack functionName <> ", got: " <> T.unpack txt
     Nothing -> error "Message has no content field"
+
+-- | Assert that response content is valid JSON matching the requested shape
+--
+-- Checks the RAW wire content (not our AssistantJSON abstraction). Providers that wrap
+-- structured output in markdown fences, add a preamble, or otherwise deviate from bare
+-- JSON will fail this even though they returned "JSON mode" content - that distinction
+-- is exactly what this probe exists to surface.
+assertHasValidJSONContent :: HasCallStack => OpenAIResponse -> Expectation
+assertHasValidJSONContent resp = do
+  let text = getAssistantText . expectSuccess $ resp
+  case Aeson.decode (BSL.fromStrict (TE.encodeUtf8 text)) of
+    Just (Aeson.Object _) -> return ()
+    Just _ -> error $ "Content parsed as JSON but wasn't an object, raw content: " <> T.unpack text
+    Nothing -> error $ "Content is not valid JSON (wire-level), raw content: " <> T.unpack text
+
+-- | Assert that response content is fenced/wrapped JSON, NOT bare JSON
+--
+-- This is the inverse of 'assertHasValidJSONContent' - used as a negative probe
+-- (see 'Protocol.OpenAITests.wrapsJSONInFence') to document and continuously verify a
+-- known provider quirk: JSON-mode output arrives wrapped in a markdown code fence
+-- (and often trailing prose) despite a strict schema being requested. If this ever
+-- starts failing, the provider has fixed its JSON-mode output and the
+-- 'UniversalLLM.Providers.OpenAI.openAIJSONWithFencedFallback' workaround may no
+-- longer be needed for that model.
+assertHasFencedJSONContent :: HasCallStack => OpenAIResponse -> Expectation
+assertHasFencedJSONContent resp = do
+  let success = expectSuccess resp
+      text = getAssistantText success
+  case Aeson.decode (BSL.fromStrict (TE.encodeUtf8 (T.strip text))) of
+    Just (Aeson.Object _) ->
+      error $ "Expected fenced/wrapped JSON (known quirk) but got bare JSON - provider may have fixed JSON mode, raw content: " <> T.unpack text
+    _ ->
+      if "```" `T.isInfixOf` text
+        then return ()
+        else error $ "Expected a markdown code fence (known quirk) but found neither bare nor fenced JSON, finish_reason: "
+               <> show (getFinishReason success) <> ", raw content: " <> T.unpack text
+
+-- | Assert that JSON-mode output landed entirely in reasoning_details, with content
+-- staying empty even at a clean finish_reason: "stop"
+--
+-- Negative probe (see 'Protocol.OpenAITests.jsonStaysInReasoningDetails') documenting a
+-- GLM-4.7/GLM-4.7-Flash-via-OpenRouter-specific quirk, distinct from the fenced-content
+-- quirk on GLM-4.5-Air (see 'assertHasFencedJSONContent'): the model never emits final
+-- content for JSON-schema requests at all. Confirmed not to be token-budget truncation
+-- by checking finish_reason is "stop", not "length". If this ever starts failing, the
+-- provider may have started populating content and 'UniversalLLM.Providers.OpenAI.HasJSON'
+-- could potentially be re-enabled for these models (pending a fix that can read the
+-- answer out of reasoning_details, or the provider populating content directly).
+assertJSONStaysInReasoningDetails :: HasCallStack => OpenAIResponse -> Expectation
+assertJSONStaysInReasoningDetails resp = do
+  let success = expectSuccess resp
+      msg = getFirstMessage success
+      fr = getFinishReason success
+  case (msg.content, msg.reasoning_details) of
+    (Nothing, Just _) ->
+      if fr == Just "stop"
+        then return ()
+        else error $ "Expected finish_reason: stop (to rule out truncation) but got: " <> show fr
+    (Just _, _) ->
+      error $ "Expected content: null (known quirk) but got content - provider may have fixed this, full message: " <> show msg
+    (Nothing, Nothing) ->
+      error $ "Expected the answer in reasoning_details (known quirk) but found neither content nor reasoning_details, finish_reason: " <> show fr
 
 -- | Create a vision request with a user message containing a base64-encoded image
 visionRequest :: Text -> Text -> Text -> OpenAIRequest
