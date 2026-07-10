@@ -37,6 +37,7 @@ __llama.cpp:__
 
 module Models.OpenAI.GPT
   ( testsGPTOSSOpenRouter
+  , testsGPTOSS20BOpenRouter
   , testsGPTOSSLlamaCpp
   , testsGPT53CodexOpenRouter
   , testsGPT53ChatOpenRouter
@@ -49,7 +50,7 @@ import qualified Data.Text as T
 import UniversalLLM (route, via)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
-import UniversalLLM.Models.OpenAI.GPT (GPTOSS(..), GPT53Codex(..), GPT53Chat(..), GPT54Pro(..), GPT54(..))
+import UniversalLLM.Models.OpenAI.GPT (GPTOSS(..), GPTOSS20B(..), GPT53Codex(..), GPT53Chat(..), GPT54Pro(..), GPT54(..))
 import Protocol.OpenAITests
 import qualified StandardTests as ST
 import qualified ComposableProviderTests as CPT
@@ -83,6 +84,48 @@ testsGPTOSSOpenRouter provider = do
 
     describe "Composable Provider Tests" $
       testModelOffline route (GPTOSS `via` OpenRouter)
+        [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
+
+-- | Test GPT-OSS-20B via OpenRouter -- the smaller model in the same
+-- family as 'GPTOSS' (120B). Unlike 'GPTOSS' via OpenRouter, this claims
+-- 'UniversalLLM.HasJSON' (added alongside 'UniversalLLM.Models.OpenAI.GPT.GPTOSS20B'
+-- itself specifically so it could be verified, not left unclaimed like the
+-- 120B OpenRouter instance) -- 'ST.json' below is what verifies that claim.
+--
+-- Includes both protocol probes (wire format) and standard tests (high-level API).
+testsGPTOSS20BOpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsGPTOSS20BOpenRouter provider = do
+  describe "GPT-OSS-20B via OpenRouter" $ do
+    describe "Protocol" $ do
+      basicText provider "openai/gpt-oss-20b"
+      toolCalling provider "openai/gpt-oss-20b"
+      acceptsToolResults provider "openai/gpt-oss-20b"
+      acceptsToolResultNoTools provider "openai/gpt-oss-20b"
+      acceptsToolResultToolGone provider "openai/gpt-oss-20b"
+      acceptsStaleToolInHistory provider "openai/gpt-oss-20b"
+      acceptsOldToolCallStillAvailable provider "openai/gpt-oss-20b"
+      consecutiveUserMessages provider "openai/gpt-oss-20b"
+      startsWithAssistant provider "openai/gpt-oss-20b"
+      reasoningViaDetails provider "openai/gpt-oss-20b"
+      toolCallingWithReasoning provider "openai/gpt-oss-20b"
+      -- Note: GPT-OSS does not support vision (no official multimodal weights, no mmproj).
+      -- Diagnosing 'ST.json's StandardTests failure (returned valid JSON,
+      -- but only 1 of 3 requested colors): jsonMode confirms the wire-level
+      -- shape is fine; jsonSchemaShapeCompliance/ignoresJSONSchemaShape
+      -- distinguish "doesn't really honor response_format's schema" (like
+      -- GLM, see 'ignoresJSONSchemaShape's Haddock) from "honors the schema
+      -- but under-delivers on requested content," which point at very
+      -- different fixes (drop 'UniversalLLM.HasJSON' entirely vs. a content
+      -- quality caveat).
+      jsonMode provider "openai/gpt-oss-20b"
+      jsonSchemaShapeCompliance provider "openai/gpt-oss-20b"
+
+    describe "Standard Tests" $
+      testModel route (GPTOSS20B `via` OpenRouter) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation, ST.json ]
+
+    describe "Composable Provider Tests" $
+      testModelOffline route (GPTOSS20B `via` OpenRouter)
         [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
 
 -- | Test GPT-OSS via llama.cpp

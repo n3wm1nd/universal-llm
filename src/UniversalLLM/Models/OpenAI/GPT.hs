@@ -13,7 +13,8 @@ accessed through OpenRouter or a local llama.cpp server.
 
 = Available Models
 
-* 'GPTOSS' - GPT-OSS, OpenAI's open-weight model
+* 'GPTOSS' - GPT-OSS-120B, OpenAI's open-weight model
+* 'GPTOSS20B' - GPT-OSS-20B, the smaller model in the same family (OpenRouter only)
 * 'GPT53Codex' - GPT-5.3-Codex, specialized for code generation
 * 'GPT54Pro' - GPT-5.4-Pro, advanced capabilities
 * 'GPT54' - GPT-5.4, latest generation
@@ -43,6 +44,7 @@ LlamaCpp: Set @LLAMACPP_URL@ environment variable.
 module UniversalLLM.Models.OpenAI.GPT
   ( -- * Model Types
     GPTOSS(..)
+  , GPTOSS20B(..)
   , GPT53Codex(..)
   , GPT54Pro(..)
   , GPT54(..)
@@ -64,6 +66,16 @@ import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
 -- - Reasoning
 -- - JSON mode (llama.cpp only; not verified via OpenRouter)
 data GPTOSS = GPTOSS deriving (Show, Eq)
+
+-- | GPT-OSS-20B - the smaller open-weight model in the same family as
+-- 'GPTOSS' (120B). A distinct type, not a parameter, matching how every
+-- other model in this module is one dedicated type per size\/variant.
+--
+-- Capabilities (via OpenRouter):
+-- - Tool calling
+-- - Reasoning
+-- - JSON mode
+data GPTOSS20B = GPTOSS20B deriving (Show, Eq)
 
 -- | GPT-5.3-Codex - Specialized for code generation
 --
@@ -114,6 +126,27 @@ instance HasReasoning (Model GPTOSS OpenRouter) where
 instance Routing (Model GPTOSS OpenRouter) where
   type RoutingState (Model GPTOSS OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ()))
   route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GPTOSS OpenRouter)
+
+--------------------------------------------------------------------------------
+-- GPT-OSS-20B via OpenRouter
+--------------------------------------------------------------------------------
+
+instance ModelName (Model GPTOSS20B OpenRouter) where
+  modelName (Model _ _) = "openai/gpt-oss-20b"
+
+instance HasTools (Model GPTOSS20B OpenRouter) where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning (Model GPTOSS20B OpenRouter) where
+  type ReasoningState (Model GPTOSS20B OpenRouter) = OpenAI.OpenRouterReasoningState
+  withReasoning = OpenAI.openRouterReasoning
+
+instance HasJSON (Model GPTOSS20B OpenRouter) where
+  withJSON = OpenAI.openAIJSON
+
+instance Routing (Model GPTOSS20B OpenRouter) where
+  type RoutingState (Model GPTOSS20B OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GPTOSS20B OpenRouter)
 
 --------------------------------------------------------------------------------
 -- GPT-OSS via LlamaCpp

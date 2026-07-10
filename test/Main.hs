@@ -83,6 +83,7 @@ main = do
       Models.Minimax.MinimaxM25.testsLlamaCpp (llamacppProvider p) "MiniMax-M2.5"
       Models.Minimax.MinimaxM25.testsAlibabaCloud (alibabaCloudCodingProvider p)
       Models.OpenAI.GPT.testsGPTOSSOpenRouter (openrouterProvider p)
+      Models.OpenAI.GPT.testsGPTOSS20BOpenRouter (openrouterProvider p)
       Models.OpenAI.GPT.testsGPTOSSLlamaCpp (llamacppProvider p) "gpt-oss-120b"
       Models.OpenAI.GPT.testsGPT53CodexOpenRouter (openrouterProvider p)
       Models.OpenAI.GPT.testsGPT53ChatOpenRouter (openrouterProvider p)
