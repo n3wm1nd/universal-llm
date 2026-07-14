@@ -16,6 +16,7 @@ These models can be used directly in applications without redefinition.
 * 'ClaudeSonnet45' - Claude Sonnet 4.5 with reasoning and tool support (default)
 * 'ClaudeSonnet45NoReason' - Sonnet 4.5 with tools only, no reasoning state (exception)
 * 'ClaudeSonnet46' - Claude Sonnet 4.6 with reasoning and tool support
+* 'ClaudeSonnet5' - Claude Sonnet 5 with reasoning and tool support
 * 'ClaudeHaiku45' - Claude Haiku 4.5 with reasoning and tool support
 * 'ClaudeOpus46' - Claude Opus 4.6 with adaptive reasoning and tool support (legacy)
 * 'ClaudeOpus48' - Claude Opus 4.8 with adaptive reasoning and tool support
@@ -52,6 +53,7 @@ module UniversalLLM.Models.Anthropic.Claude
     ClaudeSonnet45(..)
   , ClaudeSonnet45NoReason(..)
   , ClaudeSonnet46(..)
+  , ClaudeSonnet5(..)
   , ClaudeHaiku45(..)
   , ClaudeOpus46(..)
   , ClaudeOpus48(..)
@@ -61,6 +63,8 @@ module UniversalLLM.Models.Anthropic.Claude
 import UniversalLLM
 import qualified UniversalLLM.Providers.Anthropic as Anthropic
 import UniversalLLM.Providers.Anthropic (Anthropic(..), AnthropicOAuth(..))
+import qualified UniversalLLM.Providers.OpenAI as OpenAI
+import UniversalLLM.Providers.OpenAI (OpenRouter(..))
 
 --------------------------------------------------------------------------------
 -- Claude Sonnet 4.5
@@ -145,6 +149,36 @@ instance HasVision (Model ClaudeSonnet46 Anthropic) where
 instance Routing (Model ClaudeSonnet46 Anthropic) where
   type RoutingState (Model ClaudeSonnet46 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
   route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet46 Anthropic)
+
+--------------------------------------------------------------------------------
+-- Claude Sonnet 5
+--------------------------------------------------------------------------------
+
+-- | Claude Sonnet 5 - Anthropic's latest Sonnet model
+--
+-- Capabilities:
+-- - Extended thinking via reasoning blocks
+-- - Native tool support
+-- - High-quality text generation
+-- - Streaming responses
+data ClaudeSonnet5 = ClaudeSonnet5 deriving (Show, Eq)
+
+instance ModelName (Model ClaudeSonnet5 Anthropic) where
+  modelName (Model _ _) = "claude-sonnet-5"
+
+instance HasTools (Model ClaudeSonnet5 Anthropic) where
+  withTools = Anthropic.anthropicTools
+
+instance HasReasoning (Model ClaudeSonnet5 Anthropic) where
+  type ReasoningState (Model ClaudeSonnet5 Anthropic) = Anthropic.AnthropicReasoningState
+  withReasoning = Anthropic.anthropicReasoning
+
+instance HasVision (Model ClaudeSonnet5 Anthropic) where
+  withVision = Anthropic.anthropicVision
+
+instance Routing (Model ClaudeSonnet5 Anthropic) where
+  type RoutingState (Model ClaudeSonnet5 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet5 Anthropic)
 
 --------------------------------------------------------------------------------
 -- Claude Haiku 4.5
@@ -326,6 +360,24 @@ instance Routing (Model ClaudeSonnet46 AnthropicOAuth) where
   type RoutingState (Model ClaudeSonnet46 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ((), ()))))
   route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet46 AnthropicOAuth)
 
+-- OAuth version for ClaudeSonnet5 (with reasoning)
+instance ModelName (Model ClaudeSonnet5 AnthropicOAuth) where
+  modelName (Model _ _) = "claude-sonnet-5"
+
+instance HasTools (Model ClaudeSonnet5 AnthropicOAuth) where
+  withTools = Anthropic.anthropicTools
+
+instance HasReasoning (Model ClaudeSonnet5 AnthropicOAuth) where
+  type ReasoningState (Model ClaudeSonnet5 AnthropicOAuth) = Anthropic.AnthropicReasoningState
+  withReasoning = Anthropic.anthropicReasoning
+
+instance HasVision (Model ClaudeSonnet5 AnthropicOAuth) where
+  withVision = Anthropic.anthropicVision
+
+instance Routing (Model ClaudeSonnet5 AnthropicOAuth) where
+  type RoutingState (Model ClaudeSonnet5 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ((), ()))))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeSonnet5 AnthropicOAuth)
+
 -- OAuth version for ClaudeHaiku45 (with reasoning and vision)
 -- NOTE: Tool name blacklist workaround removed as of 2025 - API no longer blocks tool names
 instance ModelName (Model ClaudeHaiku45 AnthropicOAuth) where
@@ -400,3 +452,77 @@ instance HasVision (Model ClaudeOpus46 AnthropicOAuth) where
 instance Routing (Model ClaudeOpus46 AnthropicOAuth) where
   type RoutingState (Model ClaudeOpus46 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ((), ()))))
   route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus46 AnthropicOAuth)
+
+--------------------------------------------------------------------------------
+-- OpenRouter Versions
+--------------------------------------------------------------------------------
+
+-- No 'HasJSON' instance for either OpenRouter combo below, matching the
+-- native 'Anthropic' provider: Claude has no native JSON mode, and nothing
+-- here has verified OpenRouter normalizing one on top for these models --
+-- see the native instances above, which have the same omission for the
+-- same reason.
+
+-- OpenRouter version for ClaudeSonnet46 (with reasoning)
+instance ModelName (Model ClaudeSonnet46 OpenRouter) where
+  modelName (Model _ _) = "anthropic/claude-sonnet-4-6"
+
+instance HasTools (Model ClaudeSonnet46 OpenRouter) where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning (Model ClaudeSonnet46 OpenRouter) where
+  type ReasoningState (Model ClaudeSonnet46 OpenRouter) = OpenAI.OpenRouterReasoningState
+  withReasoning = OpenAI.openRouterReasoning
+
+instance HasVision (Model ClaudeSonnet46 OpenRouter) where
+  withVision = OpenAI.openAIVision
+
+instance Routing (Model ClaudeSonnet46 OpenRouter) where
+  type RoutingState (Model ClaudeSonnet46 OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model ClaudeSonnet46 OpenRouter)
+
+-- OpenRouter version for ClaudeSonnet5 (with reasoning)
+instance ModelName (Model ClaudeSonnet5 OpenRouter) where
+  modelName (Model _ _) = "anthropic/claude-sonnet-5"
+
+instance HasTools (Model ClaudeSonnet5 OpenRouter) where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning (Model ClaudeSonnet5 OpenRouter) where
+  type ReasoningState (Model ClaudeSonnet5 OpenRouter) = OpenAI.OpenRouterReasoningState
+  withReasoning = OpenAI.openRouterReasoning
+
+instance HasVision (Model ClaudeSonnet5 OpenRouter) where
+  withVision = OpenAI.openAIVision
+
+instance Routing (Model ClaudeSonnet5 OpenRouter) where
+  -- systemMessagesFirst: unlike Sonnet 4.6, Claude Sonnet 5 (via OpenRouter)
+  -- rejects a system message placed directly after a plain assistant turn --
+  -- see 'Protocol.OpenAITests.rejectsSystemMessageMidConversationAnthropic'.
+  -- Hoisting all system messages to the front keeps 'SystemText' placement
+  -- (anywhere in the message list) working transparently for callers.
+  type RoutingState (Model ClaudeSonnet5 OpenRouter) = ((), (OpenAI.OpenRouterReasoningState, ((), ((), ()))))
+  route = OpenAI.systemMessagesFirst `chainProviders` withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model ClaudeSonnet5 OpenRouter)
+
+-- OpenRouter version for ClaudeOpus48 (with adaptive reasoning)
+instance ModelName (Model ClaudeOpus48 OpenRouter) where
+  modelName (Model _ _) = "anthropic/claude-opus-4-8"
+
+instance HasTools (Model ClaudeOpus48 OpenRouter) where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning (Model ClaudeOpus48 OpenRouter) where
+  type ReasoningState (Model ClaudeOpus48 OpenRouter) = OpenAI.OpenRouterReasoningState
+  withReasoning = OpenAI.openRouterReasoning
+
+instance HasVision (Model ClaudeOpus48 OpenRouter) where
+  withVision = OpenAI.openAIVision
+
+instance Routing (Model ClaudeOpus48 OpenRouter) where
+  -- systemMessagesFirst: Claude Opus 4.8 (via OpenRouter) rejects a system
+  -- message placed directly after a plain assistant turn -- see
+  -- 'Protocol.OpenAITests.rejectsSystemMessageMidConversationAnthropic'.
+  -- Hoisting all system messages to the front keeps 'SystemText' placement
+  -- (anywhere in the message list) working transparently for callers.
+  type RoutingState (Model ClaudeOpus48 OpenRouter) = ((), (OpenAI.OpenRouterReasoningState, ((), ((), ()))))
+  route = OpenAI.systemMessagesFirst `chainProviders` withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model ClaudeOpus48 OpenRouter)

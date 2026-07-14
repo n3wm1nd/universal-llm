@@ -521,6 +521,26 @@ getAssistantText success =
 getErrorDetail :: OpenAIErrorResponse -> OpenAIErrorDetail
 getErrorDetail (OpenAIErrorResponse details) = details
 
+-- | Extract the underlying upstream provider's raw error message from
+-- OpenRouter's @error.metadata.raw@ field.
+--
+-- OpenRouter wraps every upstream error behind a generic @errorMessage@
+-- (usually the unhelpful \"Provider returned error\"). The real reason lives
+-- in @metadata.raw@, itself a JSON string containing the upstream provider's
+-- own error body. Returns 'Nothing' if there's no metadata, or if @raw@
+-- isn't present/parseable -- callers should fall back to 'errorMessage' then.
+errorMetadataRawMessage :: OpenAIErrorDetail -> Maybe Text
+errorMetadataRawMessage detail = do
+  Aeson.Object metaObj <- errorMetadata detail
+  Aeson.String rawStr <- KM.lookup "raw" metaObj
+  rawValue <- Aeson.decode (BSL.fromStrict (TE.encodeUtf8 rawStr))
+  case rawValue of
+    Aeson.Object rawObj -> do
+      Aeson.Object errObj <- KM.lookup "error" rawObj
+      Aeson.String msg <- KM.lookup "message" errObj
+      return msg
+    _ -> Nothing
+
 -- ============================================================================
 -- Protocol Assertions
 --
@@ -579,7 +599,11 @@ assertHasReasoningDetails resp = do
   let msg = getFirstMessage . expectSuccess $ resp
   case msg.reasoning_details of
     Just _ -> return ()  -- It's a Value, just check it exists
-    Nothing -> error "Message has no reasoning_details field"
+    Nothing -> error $
+      "Message has no reasoning_details field. Diagnostic -- reasoning_content: "
+      ++ show msg.reasoning_content
+      ++ ", tool_calls: " ++ show (length <$> msg.tool_calls)
+      ++ ", content: " ++ show (contentText msg.content)
 
 -- | Assert that response has NO reasoning data (neither reasoning_content nor reasoning_details)
 --

@@ -1076,6 +1076,46 @@ rejectsMultipleSystemMessages makeRequest modelName = do
       OpenAIError err -> "System message must be at the beginning" `T.isInfixOf` errorMessage (getErrorDetail err)
       OpenAISuccess _ -> False
 
+-- | True if the response is Anthropic's mid-conversation system-message
+-- positioning rejection (routed through OpenRouter): HTTP 400,
+-- invalid_request_error, and the upstream error (unwrapped from
+-- OpenRouter's @metadata.raw@, since @errorMessage@ itself is just the
+-- generic "Provider returned error") says a 'system' message must follow
+-- a 'user' turn (or a tool-result-terminated assistant turn).
+isAnthropicSystemMessagePositionRejection :: Int -> OpenAIResponse -> Bool
+isAnthropicSystemMessagePositionRejection _ (OpenAISuccess _) = False
+isAnthropicSystemMessagePositionRejection sc (OpenAIError err) =
+  let d = getErrorDetail err
+  in sc == 400
+  && code d == 400
+  && maybe False ("must follow a 'user' message" `T.isInfixOf`) (errorMetadataRawMessage d)
+
+-- | Negative probe: Anthropic rejects a system message that doesn't
+-- immediately follow a user turn
+--
+-- __Tests:__ Does Anthropic (via OpenRouter) reject a system-role message
+-- inserted after a plain assistant turn, mid-conversation?
+--
+-- __Checks:__ Unlike 'rejectsSystemMessageMidConversation' (Qwen's chat
+-- template constraint, HTTP 500), this is Anthropic's own positional rule:
+-- a mid-conversation @role: "system"@ message must directly follow a
+-- @user@ turn (or an assistant turn ending in a server tool result) --
+-- see Anthropic's @mid-conversation-system-2026-04-07@ beta. Placing it
+-- after a plain assistant turn (as our composable providers' naive
+-- "insert anywhere" semantics would) gets a 400.
+--
+-- __Expected to pass:__ Claude models via OpenRouter (Anthropic backend)
+--
+-- __Expected to fail:__ If this probe fails, Anthropic now accepts a
+-- system message directly after any assistant turn -- the model definition
+-- can drop its @ST.systemMessageMidConversation@ exclusion.
+rejectsSystemMessageMidConversationAnthropic :: HasCallStack => ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+rejectsSystemMessageMidConversationAnthropic makeRequest modelName = do
+  it "rejects system message directly after a plain assistant turn (Anthropic positioning rule)" $ do
+    let req = requestWithSystemMidConversation { model = modelName }
+    resp <- makeRequest isAnthropicSystemMessagePositionRejection req
+    resp `shouldSatisfy` isAnthropicSystemMessagePositionRejection 400
+
 -- | Negative probe: reasoning_enabled=false does not suppress reasoning
 --
 -- __Tests:__ Does the model ignore reasoning_enabled=false and still return reasoning?

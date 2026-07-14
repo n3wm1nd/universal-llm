@@ -222,6 +222,7 @@ data OpenAIErrorDetail = OpenAIErrorDetail
   { code :: Int
   , errorMessage :: Text
   , errorType :: Maybe Text  -- Optional: OpenRouter doesn't include this field
+  , errorMetadata :: Maybe Value  -- OpenRouter-only: wraps the underlying upstream provider's raw error (metadata.raw), otherwise errorMessage is just OpenRouter's generic "Provider returned error"
   } deriving (Generic, Show, Eq)
 
 instance HasCodec OpenAIRequest where
@@ -311,6 +312,7 @@ instance HasCodec OpenAIErrorDetail where
       <$> requiredFieldWith "code" errorCodeCodec "Error code (int or string)" .= code
       <*> requiredField "message" "Error message" .= errorMessage
       <*> optionalField "type" "Error type (not included by all providers)" .= errorType
+      <*> optionalField "metadata" "OpenRouter: raw upstream provider error" .= errorMetadata
     where
       -- Some providers (like ZAI) return error code as string, others as int
       errorCodeCodec = dimapCodec parseCode showCode (eitherCodec codec codec)

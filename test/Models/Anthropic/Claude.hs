@@ -30,15 +30,29 @@ __Anthropic API:__
 
 -}
 
-module Models.Anthropic.Claude (testsSonnet45, testsSonnet46, testsHaiku45, testsOpus46, testsOpus48, testsFable5) where
+module Models.Anthropic.Claude
+  ( testsSonnet45
+  , testsSonnet46
+  , testsSonnet5
+  , testsHaiku45
+  , testsOpus46
+  , testsOpus48
+  , testsFable5
+  , testsSonnet46OpenRouter
+  , testsSonnet5OpenRouter
+  , testsOpus48OpenRouter
+  ) where
 
 import UniversalLLM (route, via)
 import UniversalLLM.Protocols.Anthropic (AnthropicRequest, AnthropicResponse, model)
 import qualified UniversalLLM.Providers.Anthropic as Anthropic
 import UniversalLLM.Providers.Anthropic (Anthropic(..), AnthropicOAuth(..))
+import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
+import UniversalLLM.Providers.OpenAI (OpenRouter(..))
 import UniversalLLM.Models.Anthropic.Claude
   ( ClaudeSonnet45(..)
   , ClaudeSonnet46(..)
+  , ClaudeSonnet5(..)
   , ClaudeHaiku45(..)
   , ClaudeOpus46(..)
   , ClaudeOpus48(..)
@@ -46,6 +60,7 @@ import UniversalLLM.Models.Anthropic.Claude
   )
 import Protocol.AnthropicTests
 import qualified Protocol.AnthropicOAuthBlacklist as Blacklist
+import qualified Protocol.OpenAITests as OAI
 import qualified StandardTests as ST
 import qualified ComposableProviderTests as CPT
 import TestCache (ResponseProvider)
@@ -126,6 +141,37 @@ testsSonnet46 provider = do
         , ST.toolWithName "grep"      -- Blacklisted, should work via prefix/unprefix
         , ST.toolWithName "read_file" -- Blacklisted, should work via prefix/unprefix
         , ST.toolWithName "echo"      -- Not blacklisted, should work normally
+        ]
+
+-- | Test Claude Sonnet 5 via Anthropic API
+--
+-- Includes both protocol probes (wire format) and standard tests (high-level API).
+testsSonnet5 :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
+testsSonnet5 provider = do
+  let oauthProvider isExpected req = provider isExpected (Anthropic.withMagicSystemPrompt req { model = "claude-sonnet-5" })
+  describe "Claude Sonnet 5 via Anthropic" $ do
+    describe "Protocol" $ do
+      basicText oauthProvider
+      toolCalling oauthProvider
+      consecutiveUserMessages oauthProvider
+      startsWithAssistant oauthProvider
+      reasoning oauthProvider
+      toolCallingWithReasoning oauthProvider
+      visionPng oauthProvider "claude-sonnet-5"
+      visionJpeg oauthProvider "claude-sonnet-5"
+      visionMultipleImages oauthProvider "claude-sonnet-5"
+
+    describe "Standard Tests" $
+      testModel route (ClaudeSonnet5 `via` AnthropicOAuth) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
+
+    describe "OAuth Provider Tests" $
+      testModel route (ClaudeSonnet5 `via` AnthropicOAuth) provider
+        [ ST.text
+        , ST.tools
+        , ST.toolWithName "grep"
+        , ST.toolWithName "read_file"
+        , ST.toolWithName "echo"
         ]
 
 -- | Test Claude Haiku 4.5 via Anthropic API
@@ -274,3 +320,122 @@ testsFable5 provider = do
         , ST.toolWithName "read_file"
         , ST.toolWithName "echo"
         ]
+
+-- | Test Claude Sonnet 4.6 via OpenRouter
+--
+-- Unlike the native Anthropic route, this goes over the OpenAI-compatible
+-- protocol, so reasoning is exposed/threaded via reasoning_details (the
+-- same OpenRouter mechanism used by e.g. Gemini and GPT-OSS), not native
+-- thinking content blocks. No 'UniversalLLM.HasJSON' claim -- see the
+-- Haddock above the OpenRouter instances in the model module.
+testsSonnet46OpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsSonnet46OpenRouter provider = do
+  describe "Claude Sonnet 4.6 via OpenRouter" $ do
+    describe "Protocol" $ do
+      OAI.basicText provider "anthropic/claude-sonnet-4-6"
+      OAI.toolCalling provider "anthropic/claude-sonnet-4-6"
+      OAI.acceptsToolResultNoTools provider "anthropic/claude-sonnet-4-6"
+      OAI.acceptsToolResultToolGone provider "anthropic/claude-sonnet-4-6"
+      OAI.acceptsStaleToolInHistory provider "anthropic/claude-sonnet-4-6"
+      OAI.acceptsOldToolCallStillAvailable provider "anthropic/claude-sonnet-4-6"
+      OAI.consecutiveUserMessages provider "anthropic/claude-sonnet-4-6"
+      OAI.startsWithAssistant provider "anthropic/claude-sonnet-4-6"
+      -- No OAI.reasoningViaDetails / OAI.toolCallingWithReasoning. Unlike
+      -- Nova2Lite (OAI.acceptsHiddenReasoning: reasoning_details is
+      -- deterministically NEVER exposed), Claude's adaptive reasoning at
+      -- this library's fixed reasoning_effort="low" (OpenAI.openRouterReasoning)
+      -- sometimes surfaces reasoning_details and sometimes doesn't -- e.g.
+      -- Claude Sonnet 4.6 returned it (9 reasoning tokens) for "Use the
+      -- get_weather function..." while Claude Sonnet 5 skipped reasoning
+      -- entirely (no reasoning_content/reasoning_details/tool_calls, just a
+      -- direct worked answer) on the plain "What is 15*23?" prompt --
+      -- confirmed via assertHasReasoningDetails's diagnostic output. There's
+      -- no fixed "always"/"never" to assert; it's the model's own per-call
+      -- judgment, not a protocol guarantee.
+      OAI.visionPng provider "anthropic/claude-sonnet-4-6"
+      OAI.visionJpeg provider "anthropic/claude-sonnet-4-6"
+      OAI.visionMultipleImages provider "anthropic/claude-sonnet-4-6"
+
+    describe "Standard Tests" $
+      testModel route (ClaudeSonnet46 `via` OpenRouter) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.openAIReasoningDetailsPreservation, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
+
+    describe "Composable Provider Tests" $
+      testModelOffline route (ClaudeSonnet46 `via` OpenRouter)
+        [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
+
+-- | Test Claude Sonnet 5 via OpenRouter
+--
+-- Same OpenAI-compatible reasoning_details mechanism as 'testsSonnet46OpenRouter'.
+-- No 'UniversalLLM.HasJSON' claim -- see the Haddock above the OpenRouter
+-- instances in the model module.
+testsSonnet5OpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsSonnet5OpenRouter provider = do
+  describe "Claude Sonnet 5 via OpenRouter" $ do
+    describe "Protocol" $ do
+      OAI.basicText provider "anthropic/claude-sonnet-5"
+      OAI.toolCalling provider "anthropic/claude-sonnet-5"
+      OAI.acceptsToolResultNoTools provider "anthropic/claude-sonnet-5"
+      OAI.acceptsToolResultToolGone provider "anthropic/claude-sonnet-5"
+      OAI.acceptsStaleToolInHistory provider "anthropic/claude-sonnet-5"
+      OAI.acceptsOldToolCallStillAvailable provider "anthropic/claude-sonnet-5"
+      OAI.consecutiveUserMessages provider "anthropic/claude-sonnet-5"
+      OAI.startsWithAssistant provider "anthropic/claude-sonnet-5"
+      OAI.rejectsSystemMessageMidConversationAnthropic provider "anthropic/claude-sonnet-5"
+      -- No OAI.reasoningViaDetails / OAI.toolCallingWithReasoning: Claude's
+      -- adaptive reasoning is not deterministically exposed -- see the
+      -- comment on 'testsSonnet46OpenRouter'.
+      OAI.visionPng provider "anthropic/claude-sonnet-5"
+      OAI.visionJpeg provider "anthropic/claude-sonnet-5"
+      OAI.visionMultipleImages provider "anthropic/claude-sonnet-5"
+
+    describe "Standard Tests" $
+      -- ST.systemMessageMidConversation passes here via the model's
+      -- systemMessagesFirst hoist (see the 'Routing' instance), not because
+      -- Claude Sonnet 5 natively accepts a system message directly after a
+      -- plain assistant turn -- it doesn't (see the
+      -- rejectsSystemMessageMidConversationAnthropic Protocol probe above).
+      testModel route (ClaudeSonnet5 `via` OpenRouter) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.openAIReasoningDetailsPreservation, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
+
+    describe "Composable Provider Tests" $
+      testModelOffline route (ClaudeSonnet5 `via` OpenRouter)
+        [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
+
+-- | Test Claude Opus 4.8 via OpenRouter
+--
+-- Same OpenAI-compatible reasoning_details mechanism as 'testsSonnet46OpenRouter'.
+-- No 'UniversalLLM.HasJSON' claim -- see the Haddock above the OpenRouter
+-- instances in the model module.
+testsOpus48OpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsOpus48OpenRouter provider = do
+  describe "Claude Opus 4.8 via OpenRouter" $ do
+    describe "Protocol" $ do
+      OAI.basicText provider "anthropic/claude-opus-4-8"
+      OAI.toolCalling provider "anthropic/claude-opus-4-8"
+      OAI.acceptsToolResultNoTools provider "anthropic/claude-opus-4-8"
+      OAI.acceptsToolResultToolGone provider "anthropic/claude-opus-4-8"
+      OAI.acceptsStaleToolInHistory provider "anthropic/claude-opus-4-8"
+      OAI.acceptsOldToolCallStillAvailable provider "anthropic/claude-opus-4-8"
+      OAI.consecutiveUserMessages provider "anthropic/claude-opus-4-8"
+      OAI.startsWithAssistant provider "anthropic/claude-opus-4-8"
+      OAI.rejectsSystemMessageMidConversationAnthropic provider "anthropic/claude-opus-4-8"
+      -- No OAI.reasoningViaDetails / OAI.toolCallingWithReasoning: Claude's
+      -- adaptive reasoning is not deterministically exposed -- see the
+      -- comment on 'testsSonnet46OpenRouter'.
+      OAI.visionPng provider "anthropic/claude-opus-4-8"
+      OAI.visionJpeg provider "anthropic/claude-opus-4-8"
+      OAI.visionMultipleImages provider "anthropic/claude-opus-4-8"
+
+    describe "Standard Tests" $
+      -- ST.systemMessageMidConversation passes here via the model's
+      -- systemMessagesFirst hoist (see the 'Routing' instance), not because
+      -- Claude Opus 4.8 natively accepts a system message directly after a
+      -- plain assistant turn -- it doesn't (see the
+      -- rejectsSystemMessageMidConversationAnthropic Protocol probe above).
+      testModel route (ClaudeOpus48 `via` OpenRouter) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.openAIReasoningDetailsPreservation, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
+
+    describe "Composable Provider Tests" $
+      testModelOffline route (ClaudeOpus48 `via` OpenRouter)
+        [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
