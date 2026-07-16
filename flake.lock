@@ -1,0 +1,50 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1784120854,
+        "narHash": "sha256-KesHgItiZPgGX740axSiQLcIQ8D24MDqNpkKYWIek8k=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "753cc8a3a87467296ddd1fa93f0cc3e81120ee46",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "sse-parser-src": "sse-parser-src"
+      }
+    },
+    "sse-parser-src": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "dir": "libs/sse-parser",
+        "lastModified": 1784213396,
+        "narHash": "sha256-cevkZV9IrZ0ftJ+RbNZGZeoRN3EmGw296Mng9w6y7iI=",
+        "owner": "n3wm1nd",
+        "repo": "runix-project",
+        "rev": "9f84ee7777efeb11cfc9d369dcb7485ddd3e62bf",
+        "type": "github"
+      },
+      "original": {
+        "dir": "libs/sse-parser",
+        "owner": "n3wm1nd",
+        "repo": "runix-project",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
