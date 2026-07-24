@@ -7,6 +7,7 @@ module StreamingReconstructionSpec (spec) where
 
 import Test.Hspec
 import qualified Data.ByteString.Lazy as BSL
+import qualified Data.ByteString.Char8 as BS8
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -24,6 +25,7 @@ import UniversalLLM
 import UniversalLLM.Providers.OpenAI (LlamaCpp(..))
 import UniversalLLM.Protocols.OpenAI
 import qualified UniversalLLM.Protocols.OpenAI as Proto
+import UniversalLLM.Protocols.OpenAI.Delta (Delta(..))
 
 -- | Reconstruct a response from SSE streaming deltas.
 -- Uses the same SSE parser as the actual streaming interpreter.
@@ -229,3 +231,86 @@ spec loadedModel getNonStreamingResponse getStreamingResponse = do
           case compareResponses streamResp nonStreamResp of
             Left diff -> expectationFailure $ "Reasoning reconstruction differs:\n" ++ diff
             Right () -> return ()
+
+    -- llama.cpp-only: emits periodic top-level `prompt_progress` chunks
+    -- during prefill when the request carries `return_progress: true`. This
+    -- has no non-streaming counterpart (prefill has already finished by the
+    -- time a non-streaming response comes back), so unlike the tests above
+    -- there is nothing to reconstruct-and-compare here — we just assert the
+    -- streamed chunks decode into monotonically increasing
+    -- 'StreamingPromptProgress' events bounded by the reported total.
+    --
+    -- Confirmed on a live llama.cpp server (b10088): the plain OpenAI-shaped
+    -- request produces *no* progress/heartbeat events at all during prefill
+    -- (SSE is silent until generation starts); `return_progress: true` is
+    -- required to opt in.
+    it "emits prompt_progress events during prefill when return_progress is enabled" $ do
+      let seed = 789
+          -- A long, unique-but-deterministic filler prompt: long enough that
+          -- prefill takes multiple seconds (llama.cpp reports progress on an
+          -- interval), unique enough it won't already sit in the server's
+          -- prompt cache on a fresh run against a live server.
+          filler = T.unwords
+            [ "token" <> T.pack (show (i :: Int)) <> "_" <> T.pack (show seed)
+            | i <- [1 .. 3000 :: Int]
+            ]
+          configs = [MaxTokens 10, Seed seed]
+          msgs = [UserText (filler <> " Now, in one short sentence, say hello.")]
+
+          model = Model GLM45Air LlamaCpp
+          provider = llamaCppGLM45
+          state = def
+          baseReq = snd $ toProviderRequest provider model configs state msgs
+          streamReq = Proto.enableLlamaCppPromptProgress (Proto.enableOpenAIStreaming baseReq)
+
+      Proto.return_progress streamReq `shouldBe` Just True
+
+      sseBody <- request getStreamingResponse streamReq
+
+      let events = parseSSEComplete (BSL.toStrict sseBody)
+          chunkValues =
+            [ val
+            | ev <- events
+            , sseEventData ev /= "[DONE]"
+            , Right val <- [Aeson.eitherDecodeStrict (sseEventData ev) :: Either String Value]
+            ]
+          progressEvents =
+            [ (processed, total)
+            | val <- chunkValues
+            , delta <- [Delta val]
+            , content <- extractStreamingContent @OpenAIResponse delta
+            , StreamingPromptProgress processed total <- [content]
+            ]
+
+      -- The filler prompt is long enough that prefill spans multiple
+      -- reporting intervals, so at least one prompt_progress event is
+      -- required here, not just tolerated -- an empty list means either the
+      -- server stopped emitting them or extractStreamingContent regressed.
+      progressEvents `shouldNotBe` []
+
+      let totals = map snd progressEvents
+          processedCounts = map fst progressEvents
+      totals `shouldSatisfy` all (== head totals)
+      processedCounts `shouldSatisfy` \ps -> and (zipWith (<=) ps (tail ps))
+      last processedCounts `shouldSatisfy` (<= head totals)
+
+    -- Pure decoder test pinned to the exact chunk shape captured from a live
+    -- llama.cpp server (b10088) with return_progress: true -- independent of
+    -- server/network/timing, so it can't be skipped by a fast/cached prefill.
+    it "decodes a literal llama.cpp prompt_progress chunk" $ do
+      let raw :: BS8.ByteString
+          raw = "{\"choices\":[{\"finish_reason\":null,\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":null}}],\
+                \\"created\":1784866039,\"id\":\"chatcmpl-7eYiMcyUdtXF0UeTN7Q5Fri1NpzyKfIh\",\
+                \\"model\":\"/models/Laguna-S-2.1-UD-Q4_K_XL-00001-of-00003.gguf\",\
+                \\"system_fingerprint\":\"b10088-67b9b0e7f\",\"object\":\"chat.completion.chunk\",\
+                \\"timings\":{\"cache_n\":0,\"prompt_n\":6178,\"prompt_ms\":5374.535,\
+                \\"prompt_per_token_ms\":0.8699473939786339,\"prompt_per_second\":1149.494793503066,\
+                \\"predicted_n\":281,\"predicted_ms\":19218.661,\"predicted_per_token_ms\":68.39381138790036,\
+                \\"predicted_per_second\":14.621205920641403},\
+                \\"prompt_progress\":{\"total\":49740,\"cache\":0,\"processed\":6178,\"time_ms\":11545}}"
+
+      case Aeson.eitherDecodeStrict raw of
+        Left err -> expectationFailure $ "Failed to parse literal chunk: " ++ err
+        Right val ->
+          extractStreamingContent @OpenAIResponse (Delta val)
+            `shouldBe` [StreamingPromptProgress 6178 49740]

@@ -62,6 +62,7 @@ data OpenAIRequest = OpenAIRequest
   , stream :: Maybe Bool
   , reasoning :: Maybe OpenAIReasoningConfig
   , chat_template_kwargs :: Maybe Value  -- llama.cpp: pass extra params to chat template (e.g. enable_thinking)
+  , return_progress :: Maybe Bool  -- llama.cpp: emit prompt_progress events on streamed chunks during prefill
   } deriving (Generic, Show, Eq)
 
 instance Semigroup OpenAIRequest where
@@ -76,6 +77,7 @@ instance Semigroup OpenAIRequest where
     , stream = stream r2 <|> stream r1
     , reasoning = reasoning r2 <|> reasoning r1
     , chat_template_kwargs = chat_template_kwargs r2 <|> chat_template_kwargs r1
+    , return_progress = return_progress r2 <|> return_progress r1
     }
 
 instance Monoid OpenAIRequest where
@@ -90,6 +92,7 @@ instance Monoid OpenAIRequest where
     , stream = Nothing
     , reasoning = Nothing
     , chat_template_kwargs = Nothing
+    , return_progress = Nothing
     }
 
 data OpenAIResponseFormat = OpenAIResponseFormat
@@ -238,6 +241,7 @@ instance HasCodec OpenAIRequest where
       <*> optionalField "stream" "Enable streaming" .= stream
       <*> optionalField "reasoning" "Reasoning configuration (OpenRouter)" .= reasoning
       <*> optionalField "chat_template_kwargs" "llama.cpp: extra params passed to chat template (e.g. enable_thinking)" .= chat_template_kwargs
+      <*> optionalField "return_progress" "llama.cpp: emit prompt_progress events on streamed chunks during prefill" .= return_progress
 
 instance HasCodec OpenAIResponseFormat where
   codec = object "OpenAIResponseFormat" $
@@ -360,6 +364,7 @@ defaultOpenAIRequest = OpenAIRequest
   , stream = Nothing
   , reasoning = Nothing
   , chat_template_kwargs = Nothing
+  , return_progress = Nothing
   }
 
 -- | Default OpenAI message (use record update syntax to set fields)
@@ -455,6 +460,13 @@ convertFromToolCall (InvalidToolCall tcId tcName _tcArgs _err) = OpenAIToolCall
 enableOpenAIStreaming :: OpenAIRequest -> OpenAIRequest
 enableOpenAIStreaming req = req { stream = Just True }
 
+-- | Request llama.cpp's periodic @prompt_progress@ events during prefill.
+--
+-- Ignored (harmless) by any protocol/provider other than llama.cpp, since
+-- @return_progress@ is not a field they inspect.
+enableLlamaCppPromptProgress :: OpenAIRequest -> OpenAIRequest
+enableLlamaCppPromptProgress req = req { return_progress = Just True }
+
 -- | Check whether an OpenAI request has streaming enabled
 isStreamingOpenAIRequest :: OpenAIRequest -> Bool
 isStreamingOpenAIRequest req = stream req == Just True
@@ -541,21 +553,38 @@ instance HasCodec OpenAICompletionSuccessResponse where
 data OpenAIStreamingContent
   = OpenAIStreamingText      Text  -- ^ Increment to @content@
   | OpenAIStreamingReasoning Text  -- ^ Increment to @reasoning_content@ / @reasoning@
+  -- | llama.cpp server extension: prefill/prompt-evaluation progress,
+  -- carried in a top-level @prompt_progress@ object (sibling of @choices@).
+  | OpenAIStreamingPromptProgress { promptProgressProcessed :: Int, promptProgressTotal :: Int }
   deriving (Show, Eq)
 
 -- | Extract display chunks from a delta by inspecting OpenAI-specific field names.
 --
 -- Descends into @choices[].delta@ and collects non-empty, non-null values from
--- @reasoning_content@ (or @reasoning@) and @content@, in that order.
+-- @reasoning_content@ (or @reasoning@) and @content@, in that order. Also
+-- looks for a top-level @prompt_progress@ object (a llama.cpp server
+-- extension, absent from standard OpenAI-shaped chunks).
 extractOpenAIStreamingContent :: Delta -> [OpenAIStreamingContent]
 extractOpenAIStreamingContent (Delta val) =
   case val of
     Aeson.Object obj ->
-      case KM.lookup "choices" obj of
-        Just (Aeson.Array choices) -> concatMap fromChoice (V.toList choices)
-        _                          -> []
+      concatMap fromChoice (choicesOf obj) ++ promptProgressOf obj
     _ -> []
   where
+    choicesOf obj = case KM.lookup "choices" obj of
+      Just (Aeson.Array choices) -> V.toList choices
+      _                          -> []
+
+    promptProgressOf obj = case KM.lookup "prompt_progress" obj of
+      Just (Aeson.Object pp)
+        | Just processed <- intField "processed" pp
+        , Just total     <- intField "total" pp
+        -> [OpenAIStreamingPromptProgress processed total]
+      _ -> []
+
+    intField k m = case KM.lookup k m of
+      Just (Aeson.Number n) -> Just (round n)
+      _                      -> Nothing
     fromChoice (Aeson.Object choice) =
       case KM.lookup "delta" choice of
         Just (Aeson.Object delta) ->
@@ -638,8 +667,10 @@ instance StreamingProtocol OpenAIResponse where
   applyDelta acc delta = mergeOpenAIDelta acc (deltaValue delta)
   extractStreamingContent delta =
       [ case c of
-          OpenAIStreamingText t      -> StreamingText t
-          OpenAIStreamingReasoning t -> StreamingReasoning t
+          OpenAIStreamingText t                    -> StreamingText t
+          OpenAIStreamingReasoning t                -> StreamingReasoning t
+          OpenAIStreamingPromptProgress processed total ->
+            StreamingPromptProgress processed total
       | c <- extractOpenAIStreamingContent delta ]
   mergeStreamingDelta = mergeOpenAIDelta
 

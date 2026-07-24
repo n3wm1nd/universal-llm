@@ -514,8 +514,19 @@ fromCompletionResponse model configs prompt resp =
 -- Wire Protocol Abstraction
 -- ============================================================================
 
--- | Streaming content chunks emitted during SSE streaming
-data StreamingContent = StreamingText Text | StreamingReasoning Text
+-- | Streaming content chunks emitted during SSE streaming.
+--
+-- This is an open-ended, ever-growing set of event kinds: any provider may
+-- introduce a new one (e.g. llama.cpp's prompt-processing progress), and
+-- providers that never emit a given kind simply never produce that
+-- constructor. Consumers should treat unrecognised/irrelevant constructors
+-- as ignorable rather than assuming exhaustiveness matters.
+data StreamingContent
+  = StreamingText Text
+  | StreamingReasoning Text
+  -- | Prompt (prefill) processing progress, as reported by e.g. llama.cpp's
+  -- server while it evaluates the prompt before generation begins.
+  | StreamingPromptProgress { streamingProcessedTokens :: Int, streamingTotalTokens :: Int }
   deriving (Show, Eq)
 
 -- | SSE streaming support for a wire protocol's response type.
