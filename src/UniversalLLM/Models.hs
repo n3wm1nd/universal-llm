@@ -79,6 +79,9 @@ module UniversalLLM.Models
     -- * DeepSeek Models
     -- | DeepSeek V4 models
   , module UniversalLLM.Models.DeepSeek.DeepSeek
+    -- * Poolside Models
+    -- | Laguna models from Poolside
+  , module UniversalLLM.Models.Poolside.Laguna
     -- * OpenRouter Parametric Models
     -- | Catch-all parametric models for OpenRouter
   , module UniversalLLM.Models.OpenRouter
@@ -93,4 +96,5 @@ import UniversalLLM.Models.Moonshot.Kimi
 import UniversalLLM.Models.Minimax.M
 import UniversalLLM.Models.OpenAI.GPT
 import UniversalLLM.Models.DeepSeek.DeepSeek
+import UniversalLLM.Models.Poolside.Laguna
 import UniversalLLM.Models.OpenRouter

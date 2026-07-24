@@ -5,14 +5,14 @@
 {- |
 Module: Models.Alibaba.Qwen
 
-Model test suite for all Qwen models (Qwen 3.5, Qwen 3.6, Qwen 3.7, Qwen 3 Coder)
+Model test suite for all Qwen models (Qwen 3.5, Qwen 3.6, Qwen 3.7, Qwen 3.8, Qwen 3 Coder)
 
 = Discovered Capabilities
 
 ✓ Basic text responses
 ✓ Tool calling (proper tool_calls format, not XML)
-✓ Reasoning (via reasoning_content on llama.cpp/AlibabaCloud, reasoning_details on OpenRouter)
-✓ Vision (Qwen 3.5 40B, Qwen 3.5 Plus, Qwen 3.6 Plus)
+✓ Reasoning (via reasoning_content on llama.cpp/AlibabaCloudTokenPlan, reasoning_details on OpenRouter)
+✓ Vision (Qwen 3.5 40B)
 
 = Provider-Specific Quirks
 
@@ -24,7 +24,7 @@ __llama.cpp:__
 __OpenRouter:__
   Uses reasoning_details field instead of standard reasoning_content
 
-__AlibabaCloud:__
+__AlibabaCloudTokenPlan:__
   Uses standard openAIReasoning (reasoning_content field)
 
 -}
@@ -35,34 +35,38 @@ module Models.Alibaba.Qwen
   , testsQwen35_122BOpenRouter
     -- * Qwen 3.5 40B
   , testsQwen35_40BLlamaCpp
-    -- * Qwen 3.5 Plus
-  , testsQwen35PlusAlibabaCloud
     -- * Qwen 3.6 Plus
-  , testsQwen36PlusAlibabaCloud
   , testsQwen36PlusOpenRouter
+    -- * Qwen 3.6 Flash
+  , testsQwen36FlashOpenRouter
+  , testsQwen36FlashAlibabaCloudTokenPlan
+    -- * Qwen 3.7 Plus
+  , testsQwen37PlusOpenRouter
+  , testsQwen37PlusAlibabaCloudTokenPlan
     -- * Qwen 3.7 Max
   , testsQwen37MaxOpenRouter
+  , testsQwen37MaxAlibabaCloudTokenPlan
+    -- * Qwen 3.8 Max Preview
+  , testsQwen38MaxPreviewAlibabaCloudTokenPlan
     -- * Qwen 3 Coder Next
   , testsQwen3CoderNextLlamaCpp
-  , testsQwen3CoderNextAlibabaCloud
     -- * Qwen 3 Coder 30B Instruct
   , testsQwen3Coder30bInstructLlamaCpp
-    -- * Qwen 3 Coder Plus
-  , testsQwen3CoderPlusAlibabaCloud
   ) where
 
 import UniversalLLM (route, via)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
-import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud(..))
+import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloudTokenPlan(..))
 import UniversalLLM.Models.Alibaba.Qwen
   ( Qwen35_122B(..)
   , Qwen35_40B(..)
   , Qwen36Plus(..)
+  , Qwen36Flash(..)
+  , Qwen37Plus(..)
   , Qwen37Max(..)
+  , Qwen38MaxPreview(..)
   , Qwen3CoderNext(..)
   , Qwen3Coder30bInstruct(..)
-  , Qwen3CoderPlus(..)
-  , Qwen35Plus(..)
   )
 import Protocol.OpenAITests
 import qualified StandardTests as ST
@@ -167,60 +171,8 @@ testsQwen35_40BLlamaCpp provider modelName = do
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningDisabled, ST.reasoningWithTools, ST.vision, ST.visionJpeg, ST.visionMultipleImages, ST.json ]
 
 --------------------------------------------------------------------------------
--- Qwen 3.5 Plus (AlibabaCloud)
+-- Qwen 3.6 Plus (OpenRouter)
 --------------------------------------------------------------------------------
-
-testsQwen35PlusAlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
-testsQwen35PlusAlibabaCloud provider = do
-  describe "Qwen 3.5 Plus via AlibabaCloud" $ do
-    describe "Protocol" $ do
-      basicText provider "qwen3.5-plus"
-      toolCalling provider "qwen3.5-plus"
-      acceptsToolResults provider "qwen3.5-plus"
-      acceptsToolResultNoTools provider "qwen3.5-plus"
-      acceptsToolResultToolGone provider "qwen3.5-plus"
-      acceptsStaleToolInHistory provider "qwen3.5-plus"
-      acceptsOldToolCallStillAvailable provider "qwen3.5-plus"
-      consecutiveUserMessages provider "qwen3.5-plus"
-      startsWithAssistant provider "qwen3.5-plus"
-      systemMessageAtStart provider "qwen3.5-plus"
-      systemMessageMidConversation provider "qwen3.5-plus"
-      multipleSystemMessages provider "qwen3.5-plus"
-      reasoning provider "qwen3.5-plus"
-      visionPng provider "qwen3.5-plus"
-      visionJpeg provider "qwen3.5-plus"
-
-    describe "Standard Tests" $
-      testModel route (Qwen35Plus `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.vision, ST.visionJpeg, ST.json ]
-
---------------------------------------------------------------------------------
--- Qwen 3.6 Plus (AlibabaCloud + OpenRouter)
---------------------------------------------------------------------------------
-
-testsQwen36PlusAlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
-testsQwen36PlusAlibabaCloud provider = do
-  describe "Qwen 3.6 Plus via AlibabaCloud" $ do
-    describe "Protocol" $ do
-      basicText provider "qwen3.6-plus"
-      toolCalling provider "qwen3.6-plus"
-      acceptsToolResults provider "qwen3.6-plus"
-      acceptsToolResultNoTools provider "qwen3.6-plus"
-      acceptsToolResultToolGone provider "qwen3.6-plus"
-      acceptsStaleToolInHistory provider "qwen3.6-plus"
-      acceptsOldToolCallStillAvailable provider "qwen3.6-plus"
-      consecutiveUserMessages provider "qwen3.6-plus"
-      startsWithAssistant provider "qwen3.6-plus"
-      systemMessageAtStart provider "qwen3.6-plus"
-      systemMessageMidConversation provider "qwen3.6-plus"
-      multipleSystemMessages provider "qwen3.6-plus"
-      reasoning provider "qwen3.6-plus"
-      visionPng provider "qwen3.6-plus"
-      visionJpeg provider "qwen3.6-plus"
-
-    describe "Standard Tests" $
-      testModel route (Qwen36Plus `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.vision, ST.visionJpeg, ST.json ]
 
 testsQwen36PlusOpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
 testsQwen36PlusOpenRouter provider = do
@@ -281,7 +233,173 @@ testsQwen37MaxOpenRouter provider = do
         [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
 
 --------------------------------------------------------------------------------
--- Qwen 3 Coder Next (llama.cpp + AlibabaCloud)
+-- Qwen 3.7 Max (AlibabaCloudTokenPlan)
+--------------------------------------------------------------------------------
+
+testsQwen37MaxAlibabaCloudTokenPlan :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsQwen37MaxAlibabaCloudTokenPlan provider = do
+  describe "Qwen 3.7 Max via AlibabaCloudTokenPlan" $ do
+    describe "Protocol" $ do
+      basicText provider "qwen3.7-max"
+      toolCalling provider "qwen3.7-max"
+      acceptsToolResults provider "qwen3.7-max"
+      acceptsToolResultNoTools provider "qwen3.7-max"
+      acceptsToolResultToolGone provider "qwen3.7-max"
+      acceptsStaleToolInHistory provider "qwen3.7-max"
+      acceptsOldToolCallStillAvailable provider "qwen3.7-max"
+      consecutiveUserMessages provider "qwen3.7-max"
+      startsWithAssistant provider "qwen3.7-max"
+      systemMessageAtStart provider "qwen3.7-max"
+      systemMessageMidConversation provider "qwen3.7-max"
+      multipleSystemMessages provider "qwen3.7-max"
+      reasoning provider "qwen3.7-max"
+
+    describe "Standard Tests" $
+      testModel route (Qwen37Max `via` AlibabaCloudTokenPlan) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.json ]
+
+--------------------------------------------------------------------------------
+-- Qwen 3.7 Plus (OpenRouter)
+--------------------------------------------------------------------------------
+
+testsQwen37PlusOpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsQwen37PlusOpenRouter provider = do
+  describe "Qwen 3.7 Plus via OpenRouter" $ do
+    describe "Protocol" $ do
+      basicText provider "qwen/qwen3.7-plus"
+      toolCalling provider "qwen/qwen3.7-plus"
+      acceptsToolResults provider "qwen/qwen3.7-plus"
+      acceptsToolResultNoTools provider "qwen/qwen3.7-plus"
+      acceptsToolResultToolGone provider "qwen/qwen3.7-plus"
+      acceptsStaleToolInHistory provider "qwen/qwen3.7-plus"
+      acceptsOldToolCallStillAvailable provider "qwen/qwen3.7-plus"
+      consecutiveUserMessages provider "qwen/qwen3.7-plus"
+      startsWithAssistant provider "qwen/qwen3.7-plus"
+      reasoningViaDetails provider "qwen/qwen3.7-plus"
+      toolCallingWithReasoning provider "qwen/qwen3.7-plus"
+      systemMessageAtStart provider "qwen/qwen3.7-plus"
+      systemMessageMidConversation provider "qwen/qwen3.7-plus"
+      multipleSystemMessages provider "qwen/qwen3.7-plus"
+
+    describe "Standard Tests" $
+      testModel route (Qwen37Plus `via` OpenRouter) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation, ST.json ]
+
+    describe "Composable Provider Tests" $
+      testModelOffline route (Qwen37Plus `via` OpenRouter)
+        [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
+
+--------------------------------------------------------------------------------
+-- Qwen 3.7 Plus (AlibabaCloudTokenPlan)
+--------------------------------------------------------------------------------
+
+testsQwen37PlusAlibabaCloudTokenPlan :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsQwen37PlusAlibabaCloudTokenPlan provider = do
+  describe "Qwen 3.7 Plus via AlibabaCloudTokenPlan" $ do
+    describe "Protocol" $ do
+      basicText provider "qwen3.7-plus"
+      toolCalling provider "qwen3.7-plus"
+      acceptsToolResults provider "qwen3.7-plus"
+      acceptsToolResultNoTools provider "qwen3.7-plus"
+      acceptsToolResultToolGone provider "qwen3.7-plus"
+      acceptsStaleToolInHistory provider "qwen3.7-plus"
+      acceptsOldToolCallStillAvailable provider "qwen3.7-plus"
+      consecutiveUserMessages provider "qwen3.7-plus"
+      startsWithAssistant provider "qwen3.7-plus"
+      systemMessageAtStart provider "qwen3.7-plus"
+      systemMessageMidConversation provider "qwen3.7-plus"
+      multipleSystemMessages provider "qwen3.7-plus"
+      reasoning provider "qwen3.7-plus"
+
+    describe "Standard Tests" $
+      testModel route (Qwen37Plus `via` AlibabaCloudTokenPlan) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.json ]
+
+--------------------------------------------------------------------------------
+-- Qwen 3.6 Flash (OpenRouter)
+--------------------------------------------------------------------------------
+
+testsQwen36FlashOpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsQwen36FlashOpenRouter provider = do
+  describe "Qwen 3.6 Flash via OpenRouter" $ do
+    describe "Protocol" $ do
+      basicText provider "qwen/qwen3.6-flash"
+      toolCalling provider "qwen/qwen3.6-flash"
+      acceptsToolResults provider "qwen/qwen3.6-flash"
+      acceptsToolResultNoTools provider "qwen/qwen3.6-flash"
+      acceptsToolResultToolGone provider "qwen/qwen3.6-flash"
+      acceptsStaleToolInHistory provider "qwen/qwen3.6-flash"
+      acceptsOldToolCallStillAvailable provider "qwen/qwen3.6-flash"
+      consecutiveUserMessages provider "qwen/qwen3.6-flash"
+      startsWithAssistant provider "qwen/qwen3.6-flash"
+      reasoningViaDetails provider "qwen/qwen3.6-flash"
+      toolCallingWithReasoning provider "qwen/qwen3.6-flash"
+      systemMessageAtStart provider "qwen/qwen3.6-flash"
+      systemMessageMidConversation provider "qwen/qwen3.6-flash"
+      multipleSystemMessages provider "qwen/qwen3.6-flash"
+
+    describe "Standard Tests" $
+      testModel route (Qwen36Flash `via` OpenRouter) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation, ST.json ]
+
+    describe "Composable Provider Tests" $
+      testModelOffline route (Qwen36Flash `via` OpenRouter)
+        [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
+
+--------------------------------------------------------------------------------
+-- Qwen 3.6 Flash (AlibabaCloudTokenPlan)
+--------------------------------------------------------------------------------
+
+testsQwen36FlashAlibabaCloudTokenPlan :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsQwen36FlashAlibabaCloudTokenPlan provider = do
+  describe "Qwen 3.6 Flash via AlibabaCloudTokenPlan" $ do
+    describe "Protocol" $ do
+      basicText provider "qwen3.6-flash"
+      toolCalling provider "qwen3.6-flash"
+      acceptsToolResults provider "qwen3.6-flash"
+      acceptsToolResultNoTools provider "qwen3.6-flash"
+      acceptsToolResultToolGone provider "qwen3.6-flash"
+      acceptsStaleToolInHistory provider "qwen3.6-flash"
+      acceptsOldToolCallStillAvailable provider "qwen3.6-flash"
+      consecutiveUserMessages provider "qwen3.6-flash"
+      startsWithAssistant provider "qwen3.6-flash"
+      systemMessageAtStart provider "qwen3.6-flash"
+      systemMessageMidConversation provider "qwen3.6-flash"
+      multipleSystemMessages provider "qwen3.6-flash"
+      reasoning provider "qwen3.6-flash"
+
+    describe "Standard Tests" $
+      testModel route (Qwen36Flash `via` AlibabaCloudTokenPlan) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.json ]
+
+--------------------------------------------------------------------------------
+-- Qwen 3.8 Max Preview (AlibabaCloudTokenPlan)
+--------------------------------------------------------------------------------
+
+testsQwen38MaxPreviewAlibabaCloudTokenPlan :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsQwen38MaxPreviewAlibabaCloudTokenPlan provider = do
+  describe "Qwen 3.8 Max Preview via AlibabaCloudTokenPlan" $ do
+    describe "Protocol" $ do
+      basicText provider "qwen3.8-max-preview"
+      toolCalling provider "qwen3.8-max-preview"
+      acceptsToolResults provider "qwen3.8-max-preview"
+      acceptsToolResultNoTools provider "qwen3.8-max-preview"
+      acceptsToolResultToolGone provider "qwen3.8-max-preview"
+      acceptsStaleToolInHistory provider "qwen3.8-max-preview"
+      acceptsOldToolCallStillAvailable provider "qwen3.8-max-preview"
+      consecutiveUserMessages provider "qwen3.8-max-preview"
+      startsWithAssistant provider "qwen3.8-max-preview"
+      systemMessageAtStart provider "qwen3.8-max-preview"
+      systemMessageMidConversation provider "qwen3.8-max-preview"
+      multipleSystemMessages provider "qwen3.8-max-preview"
+      reasoning provider "qwen3.8-max-preview"
+
+    describe "Standard Tests" $
+      testModel route (Qwen38MaxPreview `via` AlibabaCloudTokenPlan) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.json ]
+
+--------------------------------------------------------------------------------
+-- Qwen 3 Coder Next (llama.cpp)
 --------------------------------------------------------------------------------
 
 testsQwen3CoderNextLlamaCpp :: ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
@@ -306,27 +424,6 @@ testsQwen3CoderNextLlamaCpp provider modelName = do
       testModelOffline route (Qwen3CoderNext `via` LlamaCpp)
         [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
 
-testsQwen3CoderNextAlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
-testsQwen3CoderNextAlibabaCloud provider = do
-  describe "Qwen 3 Coder Next via AlibabaCloud" $ do
-    describe "Protocol" $ do
-      basicText provider "qwen3-coder-next"
-      toolCalling provider "qwen3-coder-next"
-      acceptsToolResults provider "qwen3-coder-next"
-      acceptsToolResultNoTools provider "qwen3-coder-next"
-      acceptsToolResultToolGone provider "qwen3-coder-next"
-      acceptsStaleToolInHistory provider "qwen3-coder-next"
-      acceptsOldToolCallStillAvailable provider "qwen3-coder-next"
-      consecutiveUserMessages provider "qwen3-coder-next"
-      startsWithAssistant provider "qwen3-coder-next"
-      systemMessageAtStart provider "qwen3-coder-next"
-      systemMessageMidConversation provider "qwen3-coder-next"
-      multipleSystemMessages provider "qwen3-coder-next"
-
-    describe "Standard Tests" $
-      testModel route (Qwen3CoderNext `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.json ]
-
 --------------------------------------------------------------------------------
 -- Qwen 3 Coder 30B Instruct (llama.cpp)
 --------------------------------------------------------------------------------
@@ -347,29 +444,4 @@ testsQwen3Coder30bInstructLlamaCpp provider modelName = do
 
     describe "Standard Tests" $
       testModel route (Qwen3Coder30bInstruct `via` LlamaCpp) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.json ]
-
---------------------------------------------------------------------------------
--- Qwen 3 Coder Plus (AlibabaCloud)
---------------------------------------------------------------------------------
-
-testsQwen3CoderPlusAlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
-testsQwen3CoderPlusAlibabaCloud provider = do
-  describe "Qwen 3 Coder Plus via AlibabaCloud" $ do
-    describe "Protocol" $ do
-      basicText provider "qwen3-coder-plus"
-      toolCalling provider "qwen3-coder-plus"
-      acceptsToolResults provider "qwen3-coder-plus"
-      acceptsToolResultNoTools provider "qwen3-coder-plus"
-      acceptsToolResultToolGone provider "qwen3-coder-plus"
-      acceptsStaleToolInHistory provider "qwen3-coder-plus"
-      acceptsOldToolCallStillAvailable provider "qwen3-coder-plus"
-      consecutiveUserMessages provider "qwen3-coder-plus"
-      startsWithAssistant provider "qwen3-coder-plus"
-      systemMessageAtStart provider "qwen3-coder-plus"
-      systemMessageMidConversation provider "qwen3-coder-plus"
-      multipleSystemMessages provider "qwen3-coder-plus"
-
-    describe "Standard Tests" $
-      testModel route (Qwen3CoderPlus `via` AlibabaCloud) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.json ]

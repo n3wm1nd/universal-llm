@@ -178,7 +178,7 @@ data LlamaCpp = LlamaCpp deriving (Show, Eq)                  -- llama.cpp serve
 data Ollama = Ollama deriving (Show, Eq)                      -- Ollama
 data VLLM = VLLM deriving (Show, Eq)                          -- vLLM
 data LiteLLM = LiteLLM deriving (Show, Eq)                    -- LiteLLM proxy
-data AlibabaCloud = AlibabaCloud deriving (Show, Eq)          -- Alibaba Cloud DashScope
+data AlibabaCloudTokenPlan = AlibabaCloudTokenPlan deriving (Show, Eq)          -- Alibaba Cloud Model Studio (Token Plan)
 
 -- Declare parameter support for all OpenAI-compatible providers
 -- All support the same parameter set (temperature, max_tokens, seed, system_prompt, stop)
@@ -231,12 +231,12 @@ instance SupportsSystemPrompt LiteLLM
 instance SupportsStop LiteLLM
 instance SupportsStreaming LiteLLM
 
-instance SupportsTemperature AlibabaCloud
-instance SupportsMaxTokens AlibabaCloud
-instance SupportsSeed AlibabaCloud
-instance SupportsSystemPrompt AlibabaCloud
-instance SupportsStop AlibabaCloud
-instance SupportsStreaming AlibabaCloud
+instance SupportsTemperature AlibabaCloudTokenPlan
+instance SupportsMaxTokens AlibabaCloudTokenPlan
+instance SupportsSeed AlibabaCloudTokenPlan
+instance SupportsSystemPrompt AlibabaCloudTokenPlan
+instance SupportsStop AlibabaCloudTokenPlan
+instance SupportsStreaming AlibabaCloudTokenPlan
 
 -- OpenAI capabilities are now declared per-model (see model files)
 
@@ -269,9 +269,9 @@ instance Provider (Model aiModel LiteLLM) where
   type ProviderRequest (Model aiModel LiteLLM) = OpenAIRequest
   type ProviderResponse (Model aiModel LiteLLM) = OpenAIResponse
 
-instance Provider (Model aiModel AlibabaCloud) where
-  type ProviderRequest (Model aiModel AlibabaCloud) = OpenAIRequest
-  type ProviderResponse (Model aiModel AlibabaCloud) = OpenAIResponse
+instance Provider (Model aiModel AlibabaCloudTokenPlan) where
+  type ProviderRequest (Model aiModel AlibabaCloudTokenPlan) = OpenAIRequest
+  type ProviderResponse (Model aiModel AlibabaCloudTokenPlan) = OpenAIResponse
 
 instance EnableStreaming (Model aiModel OpenAI)          where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
 instance EnableStreaming (Model aiModel OpenAICompatible) where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
@@ -280,7 +280,7 @@ instance EnableStreaming (Model aiModel LlamaCpp)         where enableStreamingF
 instance EnableStreaming (Model aiModel Ollama)           where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
 instance EnableStreaming (Model aiModel VLLM)             where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
 instance EnableStreaming (Model aiModel LiteLLM)          where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
-instance EnableStreaming (Model aiModel AlibabaCloud)     where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
+instance EnableStreaming (Model aiModel AlibabaCloudTokenPlan)     where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
 
 -- Helper: Get last message from request
 lastMessage :: OpenAIRequest -> Maybe OpenAIMessage
@@ -342,7 +342,7 @@ handleJSONMessage msg req = case msg of
 -- constraining grammar (see 'openAIJSONWithFencedFallback'), the request parameters
 -- alone aren't a reliable signal to the model - restating the requirement in-band
 -- measurably improves compliance. This should not be needed for backends that
--- grammar-enforce @response_format@ (llama.cpp, AlibabaCloud use 'handleJSONMessage'
+-- grammar-enforce @response_format@ (llama.cpp, AlibabaCloudTokenPlan use 'handleJSONMessage'
 -- directly), so it's kept separate rather than folded into the shared encoder.
 handleJSONMessageWithComplianceHint :: forall m. (ProviderRequest m ~ OpenAIRequest) => MessageEncoder m
 handleJSONMessageWithComplianceHint msg req = case msg of

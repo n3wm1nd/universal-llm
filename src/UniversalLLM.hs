@@ -61,7 +61,7 @@ class BaseComposableProvider m where
 
 -- | Routing for a Model via Provider
 -- Provides the canonical composable provider for a Model/Provider combination
--- Usage: route @(GLM5 `Via` AlibabaCloud)
+-- Usage: route @(GLM5 `Via` AlibabaCloudTokenPlan)
 -- This eliminates the need for named provider exports (e.g., glm45AirZAI, claudeSonnet45)
 class Routing m where
   type RoutingState m

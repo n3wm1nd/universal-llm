@@ -51,6 +51,7 @@ library
     UniversalLLM.Models.Minimax.M
     UniversalLLM.Models.OpenAI.GPT
     UniversalLLM.Models.DeepSeek.DeepSeek
+    UniversalLLM.Models.Poolside.Laguna
     UniversalLLM.Models.OpenRouter
     UniversalLLM.Protocols.OpenAI
     UniversalLLM.Protocols.OpenAI.Delta
@@ -142,6 +143,7 @@ test-suite universal-llm-tests
     Models.Minimax.MinimaxM25
     Models.OpenAI.GPT
     Models.DeepSeek.DeepSeek
+    Models.Poolside.Laguna
   autogen-modules: Paths_universal_llm
   other-modules:
     Paths_universal_llm

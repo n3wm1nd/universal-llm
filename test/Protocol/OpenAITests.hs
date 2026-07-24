@@ -205,7 +205,7 @@ jsonMode makeRequest modelName = do
 -- It tests the raw protocol/backend capability in isolation.
 --
 -- __Expected to pass:__ Backends with real grammar-enforced structured output
--- (llama.cpp, AlibabaCloud)
+-- (llama.cpp, AlibabaCloudTokenPlan)
 --
 -- __Expected to fail:__ Backends where @response_format@/@strict: true@ is accepted but
 -- not actually enforced - failing here means the model has no real schema-following
@@ -468,7 +468,7 @@ reasoningViaDetails makeRequest modelName = do
 -- reasoning_content nor reasoning_details
 --
 -- __Expected to pass:__ Models with internal/hidden reasoning (e.g., Kimi K2.5
--- via AlibabaCloud)
+-- via AlibabaCloudTokenPlan)
 --
 -- __Expected to fail:__ Models that expose reasoning in responses
 --

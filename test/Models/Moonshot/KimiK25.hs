@@ -24,11 +24,11 @@ __OpenRouter:__
 
 -}
 
-module Models.Moonshot.KimiK25 (testsOpenRouter, testsAlibabaCloud) where
+module Models.Moonshot.KimiK25 (testsOpenRouter) where
 
 import UniversalLLM (route, via)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
-import UniversalLLM.Providers.OpenAI (OpenRouter(..), AlibabaCloud(..))
+import UniversalLLM.Providers.OpenAI (OpenRouter(..))
 import UniversalLLM.Models.Moonshot.Kimi (KimiK25(..))
 import Protocol.OpenAITests
 import qualified StandardTests as ST
@@ -68,29 +68,3 @@ testsOpenRouter provider = do
     describe "Composable Provider Tests" $
       testModelOffline route (KimiK25 `via` OpenRouter)
         [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
-
--- | Test Kimi K2.5 via AlibabaCloud
-testsAlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
-testsAlibabaCloud provider = do
-  describe "Moonshot AI Kimi K2.5 via AlibabaCloud" $ do
-    describe "Protocol" $ do
-      basicText provider "kimi-k2.5"
-      toolCalling provider "kimi-k2.5"
-      acceptsToolResults provider "kimi-k2.5"
-      acceptsToolResultNoTools provider "kimi-k2.5"
-      acceptsToolResultToolGone provider "kimi-k2.5"
-      acceptsStaleToolInHistory provider "kimi-k2.5"
-      acceptsOldToolCallStillAvailable provider "kimi-k2.5"
-      consecutiveUserMessages provider "kimi-k2.5"
-      startsWithAssistant provider "kimi-k2.5"
-      systemMessageAtStart provider "kimi-k2.5"
-      systemMessageMidConversation provider "kimi-k2.5"
-      multipleSystemMessages provider "kimi-k2.5"
-      -- Kimi K2.5 supports "Deep Thinking" but with hidden reasoning
-      acceptsHiddenReasoning provider "kimi-k2.5"
-      visionPng provider "kimi-k2.5"
-      visionJpeg provider "kimi-k2.5"
-
-    describe "Standard Tests" $
-      testModel route (KimiK25 `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.hiddenReasoning, ST.vision, ST.visionJpeg ]

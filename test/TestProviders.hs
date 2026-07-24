@@ -24,7 +24,7 @@ data Providers = Providers
   , openrouterProvider         :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
   , openrouterStreamingProvider :: TestCache.ResponseProvider OpenAIRequest BSL.ByteString
   , zaiProvider                :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
-  , alibabaCloudCodingProvider  :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
+  , alibabaCloudTokenPlanProvider  :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
   , llamacppProvider           :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
   , llamacppStreamingProvider  :: TestCache.ResponseProvider OpenAIRequest BSL.ByteString
   , openaiCompatProvider       :: TestCache.ResponseProvider OpenAIRequest OpenAIResponse
@@ -78,7 +78,7 @@ buildProviders = do
     , openrouterProvider         = buildOpenRouter mode openrouterApiKey cachePath
     , openrouterStreamingProvider = buildOpenRouterStreaming mode openrouterApiKey cachePath
     , zaiProvider                = buildZAI mode zaiApiKey cachePath
-    , alibabaCloudCodingProvider  = buildAlibabaCloud mode alibabaCloudApiKey cachePath
+    , alibabaCloudTokenPlanProvider  = buildAlibabaCloudTokenPlan mode alibabaCloudApiKey cachePath
     , llamacppProvider            = buildLlamaCpp mode llamacppUrl modelMatches cachePath
     , llamacppStreamingProvider   = buildLlamaCppStreaming mode llamacppUrl modelMatches cachePath
     , openaiCompatProvider        = buildOpenAICompat mode openaiCompatUrl cachePath
@@ -161,10 +161,10 @@ buildZAI mode zaiApiKey cachePath =
       in TestCache.liveMode $ TestHTTP.httpCall endpoint headers
     _ -> TestCache.playbackMode cachePath endpoint
 
-buildAlibabaCloud :: Maybe String -> Maybe String -> TestCache.CachePath
+buildAlibabaCloudTokenPlan :: Maybe String -> Maybe String -> TestCache.CachePath
                   -> TestCache.ResponseProvider OpenAIRequest OpenAIResponse
-buildAlibabaCloud mode alibabaCloudApiKey cachePath =
-  let endpoint = "https://coding-intl.dashscope.aliyuncs.com/v1/chat/completions"
+buildAlibabaCloudTokenPlan mode alibabaCloudApiKey cachePath =
+  let endpoint = "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions"
   in case mode of
     Just "record" | Just apiKey <- alibabaCloudApiKey ->
       let headers = [ ("Content-Type", "application/json")

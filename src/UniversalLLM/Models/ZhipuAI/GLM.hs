@@ -17,12 +17,12 @@ These models can be accessed through multiple providers (llama.cpp, OpenRouter, 
 
 * 'GLM45Air' - GLM-4.5-Air, fast capable model with tool support
 * 'GLM46' - GLM-4.6, improved version via ZAI API
-* 'GLM47' - GLM-4.7, via ZAI, OpenRouter, AlibabaCloud, and llama.cpp
+* 'GLM47' - GLM-4.7, via ZAI, OpenRouter, and llama.cpp
 * 'GLM47Flash' - GLM-4.7-Flash, fast low-cost variant via ZAI, OpenRouter, and llama.cpp
 
-* 'GLM5' - GLM-5, via ZAI API and AlibabaCloud
+* 'GLM5' - GLM-5, via ZAI API
 * 'GLM51' - GLM-5.1, via ZAI API
-* 'GLM52' - GLM-5.2, via ZAI API
+* 'GLM52' - GLM-5.2, via ZAI API and AlibabaCloudTokenPlan
 * 'GLM5Turbo' - GLM-5-Turbo, fast variant via ZAI API
 
 = Provider Support
@@ -32,7 +32,7 @@ GLM models are available through multiple providers:
 - __llama.cpp__: Local inference (llama.cpp handles tool call extraction)
 - __OpenRouter__: Cloud inference (z-ai/glm-4.5-air, z-ai/glm-4.7, z-ai/glm-4.7-flash)
 - __ZAI__: Official Zhipu AI API (api.z.ai)
-- __AlibabaCloud__: Via Alibaba's model marketplace
+- __AlibabaCloudTokenPlan__: Alibaba's Token Plan model marketplace (GLM-5.2 only)
 
 = GLM-Specific Quirks
 
@@ -54,7 +54,7 @@ GLM models have some unique requirements:
    honored, none of the GLM models routed through ZAI (directly or via OpenRouter) claim
    'HasJSON' - claiming it would mean "you get JSON," which is true, but callers of
    'HasJSON' expect "you get JSON matching your schema," which is false here. JSON mode
-   with real, grammar-enforced schema-following works via llama.cpp and AlibabaCloud.
+   with real, grammar-enforced schema-following works via llama.cpp and AlibabaCloudTokenPlan.
 
 These quirks are handled automatically by the composable providers when needed.
 
@@ -100,7 +100,7 @@ module UniversalLLM.Models.ZhipuAI.GLM
 
 import UniversalLLM
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
-import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud(..))
+import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloudTokenPlan(..))
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest(..), OpenAIMessage(..), OpenAIMessageContent(..), OpenAIResponse, enableOpenAIStreaming, isStreamingOpenAIRequest)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -375,7 +375,7 @@ instance Routing (Model GLM5 ZAI) where
 -- GLM-5.2
 --------------------------------------------------------------------------------
 
--- | GLM-5.2 - Latest GLM model (ZAI only)
+-- | GLM-5.2 - Latest GLM model (ZAI, AlibabaCloudTokenPlan)
 data GLM52 = GLM52 deriving (Show, Eq)
 
 instance Provider (Model GLM52 ZAI) where
@@ -397,6 +397,26 @@ instance HasReasoning (Model GLM52 ZAI) where
 instance Routing (Model GLM52 ZAI) where
   type RoutingState (Model GLM52 ZAI) = ((), ((), ()))
   route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM52 ZAI)
+
+--------------------------------------------------------------------------------
+-- GLM-5.2 via AlibabaCloudTokenPlan
+--------------------------------------------------------------------------------
+
+instance ModelName (Model GLM52 AlibabaCloudTokenPlan) where
+  modelName (Model _ _) = "glm-5.2"
+
+instance HasTools (Model GLM52 AlibabaCloudTokenPlan) where
+  withTools = OpenAI.openAITools
+
+instance HasJSON (Model GLM52 AlibabaCloudTokenPlan) where
+  withJSON = OpenAI.openAIJSON
+
+instance HasReasoning (Model GLM52 AlibabaCloudTokenPlan) where
+  withReasoning = OpenAI.openAIReasoning
+
+instance Routing (Model GLM52 AlibabaCloudTokenPlan) where
+  type RoutingState (Model GLM52 AlibabaCloudTokenPlan) = ((), ((), ((), ())))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM52 AlibabaCloudTokenPlan)
 
 --------------------------------------------------------------------------------
 -- GLM-5.1
@@ -478,26 +498,6 @@ instance Routing (Model GLM47 OpenRouter) where
   route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47 OpenRouter)
 
 --------------------------------------------------------------------------------
--- GLM-4.7 via AlibabaCloud
---------------------------------------------------------------------------------
-
-instance ModelName (Model GLM47 AlibabaCloud) where
-  modelName (Model _ _) = "glm-4.7"
-
-instance HasTools (Model GLM47 AlibabaCloud) where
-  withTools = OpenAI.openAITools
-
-instance HasJSON (Model GLM47 AlibabaCloud) where
-  withJSON = OpenAI.openAIJSON
-
-instance HasReasoning (Model GLM47 AlibabaCloud) where
-  withReasoning = OpenAI.openAIReasoning
-
-instance Routing (Model GLM47 AlibabaCloud) where
-  type RoutingState (Model GLM47 AlibabaCloud) = ((), ((), ((), ())))
-  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47 AlibabaCloud)
-
---------------------------------------------------------------------------------
 -- GLM-4.7-Flash
 --------------------------------------------------------------------------------
 
@@ -562,24 +562,3 @@ instance HasJSON (Model GLM47Flash LlamaCpp) where
 instance Routing (Model GLM47Flash LlamaCpp) where
   type RoutingState (Model GLM47Flash LlamaCpp) = ((), ((), ((), ())))
   route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM47Flash LlamaCpp)
-
-
---------------------------------------------------------------------------------
--- GLM-5 via AlibabaCloud
---------------------------------------------------------------------------------
-
-instance ModelName (Model GLM5 AlibabaCloud) where
-  modelName (Model _ _) = "glm-5"
-
-instance HasTools (Model GLM5 AlibabaCloud) where
-  withTools = OpenAI.openAITools
-
-instance HasJSON (Model GLM5 AlibabaCloud) where
-  withJSON = OpenAI.openAIJSON
-
-instance HasReasoning (Model GLM5 AlibabaCloud) where
-  withReasoning = OpenAI.openAIReasoning
-
-instance Routing (Model GLM5 AlibabaCloud) where
-  type RoutingState (Model GLM5 AlibabaCloud) = ((), ((), ((), ())))
-  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model GLM5 AlibabaCloud)

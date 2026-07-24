@@ -30,6 +30,7 @@ import qualified Models.Moonshot.KimiK25
 import qualified Models.Minimax.MinimaxM25
 import qualified Models.OpenAI.GPT
 import qualified Models.DeepSeek.DeepSeek
+import qualified Models.Poolside.Laguna
 import GGUFNames (canonicalizationTests)
 import TestProviders (Providers(..), buildProviders)
 
@@ -47,27 +48,28 @@ main = do
       Models.ZhipuAI.GLM.testsGLM46ZAI (zaiProvider p)
       Models.ZhipuAI.GLM.testsGLM47ZAI (zaiProvider p)
       Models.ZhipuAI.GLM.testsGLM47OpenRouter (openrouterProvider p)
-      Models.ZhipuAI.GLM.testsGLM47AlibabaCloud (alibabaCloudCodingProvider p)
       Models.ZhipuAI.GLM.testsGLM47FlashZAI (zaiProvider p)
       Models.ZhipuAI.GLM.testsGLM47FlashOpenRouter (openrouterProvider p)
       Models.ZhipuAI.GLM.testsGLM47FlashLlamaCpp (llamacppProvider p) "GLM-4.7-Flash"
 
       Models.ZhipuAI.GLM.testsGLM5ZAI (zaiProvider p)
-      Models.ZhipuAI.GLM.testsGLM5AlibabaCloud (alibabaCloudCodingProvider p)
       Models.ZhipuAI.GLM.testsGLM51ZAI (zaiProvider p)
       Models.ZhipuAI.GLM.testsGLM52ZAI (zaiProvider p)
+      Models.ZhipuAI.GLM.testsGLM52AlibabaCloud (alibabaCloudTokenPlanProvider p)
       Models.ZhipuAI.GLM.testsGLM5TurboZAI (zaiProvider p)
       Models.Alibaba.Qwen.testsQwen35_122BOpenRouter (openrouterProvider p)
       Models.Alibaba.Qwen.testsQwen35_122BLlamaCpp (llamacppProvider p) "Qwen3.5-122B"
       Models.Alibaba.Qwen.testsQwen35_40BLlamaCpp (llamacppProvider p) "Qwen3.5-40B"
-      Models.Alibaba.Qwen.testsQwen35PlusAlibabaCloud (alibabaCloudCodingProvider p)
-      Models.Alibaba.Qwen.testsQwen36PlusAlibabaCloud (alibabaCloudCodingProvider p)
       Models.Alibaba.Qwen.testsQwen36PlusOpenRouter (openrouterProvider p)
+      Models.Alibaba.Qwen.testsQwen36FlashOpenRouter (openrouterProvider p)
+      Models.Alibaba.Qwen.testsQwen36FlashAlibabaCloudTokenPlan (alibabaCloudTokenPlanProvider p)
+      Models.Alibaba.Qwen.testsQwen37PlusOpenRouter (openrouterProvider p)
+      Models.Alibaba.Qwen.testsQwen37PlusAlibabaCloudTokenPlan (alibabaCloudTokenPlanProvider p)
       Models.Alibaba.Qwen.testsQwen37MaxOpenRouter (openrouterProvider p)
+      Models.Alibaba.Qwen.testsQwen37MaxAlibabaCloudTokenPlan (alibabaCloudTokenPlanProvider p)
+      Models.Alibaba.Qwen.testsQwen38MaxPreviewAlibabaCloudTokenPlan (alibabaCloudTokenPlanProvider p)
       Models.Alibaba.Qwen.testsQwen3CoderNextLlamaCpp (llamacppProvider p) "Qwen3-Coder-Next"
       Models.Alibaba.Qwen.testsQwen3Coder30bInstructLlamaCpp (llamacppProvider p) "Qwen3-Coder-30B-Instruct"
-      Models.Alibaba.Qwen.testsQwen3CoderNextAlibabaCloud (alibabaCloudCodingProvider p)
-      Models.Alibaba.Qwen.testsQwen3CoderPlusAlibabaCloud (alibabaCloudCodingProvider p)
       Models.Google.Gemini.testsGemini3FlashOpenRouter (openrouterProvider p)
       Models.Google.Gemini.testsGemini3ProOpenRouter (openrouterProvider p)
       Models.Amazon.Nova2Lite.testsOpenRouter (openrouterProvider p)
@@ -82,10 +84,8 @@ main = do
       Models.Anthropic.Claude.testsSonnet5OpenRouter (openrouterProvider p)
       Models.Anthropic.Claude.testsOpus48OpenRouter (openrouterProvider p)
       Models.Moonshot.KimiK25.testsOpenRouter (openrouterProvider p)
-      Models.Moonshot.KimiK25.testsAlibabaCloud (alibabaCloudCodingProvider p)
       Models.Minimax.MinimaxM25.testsOpenRouter (openrouterProvider p)
       Models.Minimax.MinimaxM25.testsLlamaCpp (llamacppProvider p) "MiniMax-M2.5"
-      Models.Minimax.MinimaxM25.testsAlibabaCloud (alibabaCloudCodingProvider p)
       Models.OpenAI.GPT.testsGPTOSSOpenRouter (openrouterProvider p)
       Models.OpenAI.GPT.testsGPTOSS20BOpenRouter (openrouterProvider p)
       Models.OpenAI.GPT.testsGPTOSSLlamaCpp (llamacppProvider p) "gpt-oss-120b"
@@ -95,6 +95,9 @@ main = do
       Models.OpenAI.GPT.testsGPT54OpenRouter (openrouterProvider p)
       Models.DeepSeek.DeepSeek.testsDeepSeekV4FlashOpenRouter (openrouterProvider p)
       Models.DeepSeek.DeepSeek.testsDeepSeekV4ProOpenRouter (openrouterProvider p)
+      Models.DeepSeek.DeepSeek.testsDeepSeekV4ProAlibabaCloudTokenPlan (alibabaCloudTokenPlanProvider p)
+      Models.Poolside.Laguna.testsLagunaS21OpenRouter (openrouterProvider p)
+      Models.Poolside.Laguna.testsLagunaS21LlamaCpp (llamacppProvider p) "Laguna-S-2.1"
 
     describe "Delta" DeltaSpec.spec
     describe "Composable Handlers" ComposableHandlersSpec.spec

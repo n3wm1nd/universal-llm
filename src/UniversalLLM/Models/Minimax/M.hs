@@ -9,7 +9,7 @@ Module: UniversalLLM.Models.Minimax.M
 Description: Production-ready MiniMax model definitions
 
 This module provides tested, production-ready definitions for MiniMax's
-M2.5 model, accessed through OpenRouter, llama.cpp, or AlibabaCloud.
+M2.5 model, accessed through OpenRouter or llama.cpp.
 
 = Available Models
 
@@ -28,17 +28,12 @@ let provider = route
 -- Via llama.cpp
 let model = Model MinimaxM25 LlamaCpp
 let provider = route
-
--- Via AlibabaCloud
-let model = Model MinimaxM25 AlibabaCloud
-let provider = route
 @
 
 = Authentication
 
 - OpenRouter: Set @OPENROUTER_API_KEY@ environment variable
 - LlamaCpp: Set @LLAMACPP_URL@ environment variable
-- AlibabaCloud: Set @ALIBABACLOUD_API_KEY@ environment variable
 -}
 
 module UniversalLLM.Models.Minimax.M
@@ -48,7 +43,7 @@ module UniversalLLM.Models.Minimax.M
 
 import UniversalLLM
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
-import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud(..))
+import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..))
 
 --------------------------------------------------------------------------------
 -- MiniMax M2.5
@@ -94,20 +89,3 @@ instance HasReasoning (Model MinimaxM25 LlamaCpp) where
 instance Routing (Model MinimaxM25 LlamaCpp) where
   type RoutingState (Model MinimaxM25 LlamaCpp) = ((), ((), ()))
   route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model MinimaxM25 LlamaCpp)
-
---------------------------------------------------------------------------------
--- MiniMax M2.5 via AlibabaCloud
---------------------------------------------------------------------------------
-
-instance ModelName (Model MinimaxM25 AlibabaCloud) where
-  modelName (Model _ _) = "MiniMax-M2.5"
-
-instance HasTools (Model MinimaxM25 AlibabaCloud) where
-  withTools = OpenAI.openAITools
-
-instance HasReasoning (Model MinimaxM25 AlibabaCloud) where
-  withReasoning = OpenAI.openAIReasoning
-
-instance Routing (Model MinimaxM25 AlibabaCloud) where
-  type RoutingState (Model MinimaxM25 AlibabaCloud) = ((), ((), ()))
-  route = withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model MinimaxM25 AlibabaCloud)

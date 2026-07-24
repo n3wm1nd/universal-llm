@@ -12,12 +12,12 @@ Test suites for Zhipu AI's GLM model family.
 * GLM 4.5 Air (OpenRouter, llama.cpp, ZAI)
 * GLM 4.5 (ZAI)
 * GLM 4.6 (ZAI)
-* GLM 4.7 (ZAI, OpenRouter, AlibabaCloud)
+* GLM 4.7 (ZAI, OpenRouter)
 * GLM 4.7 Flash (ZAI, OpenRouter, llama.cpp)
 
-* GLM 5 (ZAI, AlibabaCloud)
+* GLM 5 (ZAI)
 * GLM 5.1 (ZAI)
-* GLM 5.2 (ZAI)
+* GLM 5.2 (ZAI, AlibabaCloudTokenPlan)
 * GLM 5-Turbo (ZAI)
 
 = GLM 4.5 Air Provider-Specific Quirks
@@ -41,21 +41,20 @@ module Models.ZhipuAI.GLM
   , testsGLM46ZAI
   , testsGLM47ZAI
   , testsGLM47OpenRouter
-  , testsGLM47AlibabaCloud
   , testsGLM47FlashZAI
   , testsGLM47FlashOpenRouter
   , testsGLM47FlashLlamaCpp
 
   , testsGLM5ZAI
-  , testsGLM5AlibabaCloud
   , testsGLM51ZAI
   , testsGLM52ZAI
+  , testsGLM52AlibabaCloud
   , testsGLM5TurboZAI
   ) where
 
 import UniversalLLM (via, route)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
-import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloud(..))
+import UniversalLLM.Providers.OpenAI (LlamaCpp(..), OpenRouter(..), AlibabaCloudTokenPlan(..))
 import UniversalLLM.Models.ZhipuAI.GLM
   ( GLM45(..)
   , GLM45Air(..)
@@ -289,31 +288,6 @@ testsGLM5ZAI provider = do
       testModel route (GLM5 `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
--- | Test GLM 4.7 via AlibabaCloud
-testsGLM47AlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
-testsGLM47AlibabaCloud provider = do
-  describe "GLM 4.7 via AlibabaCloud" $ do
-    describe "Protocol" $ do
-      basicText provider "glm-4.7"
-      toolCalling provider "glm-4.7"
-      acceptsToolResults provider "glm-4.7"
-      acceptsToolResultNoTools provider "glm-4.7"
-      acceptsToolResultToolGone provider "glm-4.7"
-      acceptsStaleToolInHistory provider "glm-4.7"
-      acceptsOldToolCallStillAvailable provider "glm-4.7"
-      consecutiveUserMessages provider "glm-4.7"
-      startsWithAssistant provider "glm-4.7"
-      systemMessageAtStart provider "glm-4.7"
-      systemMessageMidConversation provider "glm-4.7"
-      multipleSystemMessages provider "glm-4.7"
-      reasoning provider "glm-4.7"
-      -- Note: AlibabaCloud accepts image_url but glm-4.7 does not process images (hallucinates unrelated objects).
-      -- Vision is available in the -v (vision) model variants, not tracked here.
-
-    describe "Standard Tests" $
-      testModel route (GLM47 `via` AlibabaCloud) provider
-        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.json ]
-
 -- | Test GLM 5.1 via ZAI
 -- Note: ZAI accepts the request but the model cannot see image_url content (reports no image attached).
 testsGLM51ZAI :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
@@ -347,27 +321,25 @@ testsGLM5TurboZAI provider = do
       testModel route (GLM5Turbo `via` ZAI) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools ]
 
--- | Test GLM 5 via AlibabaCloud
-testsGLM5AlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
-testsGLM5AlibabaCloud provider = do
-  describe "GLM 5 via AlibabaCloud" $ do
+-- | Test GLM 5.2 via AlibabaCloudTokenPlan
+testsGLM52AlibabaCloud :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsGLM52AlibabaCloud provider = do
+  describe "GLM 5.2 via AlibabaCloudTokenPlan" $ do
     describe "Protocol" $ do
-      basicText provider "glm-5"
-      toolCalling provider "glm-5"
-      acceptsToolResults provider "glm-5"
-      acceptsToolResultNoTools provider "glm-5"
-      acceptsToolResultToolGone provider "glm-5"
-      acceptsStaleToolInHistory provider "glm-5"
-      acceptsOldToolCallStillAvailable provider "glm-5"
-      consecutiveUserMessages provider "glm-5"
-      startsWithAssistant provider "glm-5"
-      systemMessageAtStart provider "glm-5"
-      systemMessageMidConversation provider "glm-5"
-      multipleSystemMessages provider "glm-5"
-      reasoning provider "glm-5"
-      -- Note: AlibabaCloud accepts image_url but glm-5 does not process images (hallucinates unrelated objects).
-      -- Vision is available in the -v (vision) model variants, not tracked here.
+      basicText provider "glm-5.2"
+      toolCalling provider "glm-5.2"
+      acceptsToolResults provider "glm-5.2"
+      acceptsToolResultNoTools provider "glm-5.2"
+      acceptsToolResultToolGone provider "glm-5.2"
+      acceptsStaleToolInHistory provider "glm-5.2"
+      acceptsOldToolCallStillAvailable provider "glm-5.2"
+      consecutiveUserMessages provider "glm-5.2"
+      startsWithAssistant provider "glm-5.2"
+      systemMessageAtStart provider "glm-5.2"
+      systemMessageMidConversation provider "glm-5.2"
+      multipleSystemMessages provider "glm-5.2"
+      reasoning provider "glm-5.2"
 
     describe "Standard Tests" $
-      testModel route (GLM5 `via` AlibabaCloud) provider
+      testModel route (GLM52 `via` AlibabaCloudTokenPlan) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.json ]
