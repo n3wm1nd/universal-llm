@@ -37,10 +37,12 @@ module Models.Anthropic.Claude
   , testsHaiku45
   , testsOpus46
   , testsOpus48
+  , testsOpus5
   , testsFable5
   , testsSonnet46OpenRouter
   , testsSonnet5OpenRouter
   , testsOpus48OpenRouter
+  , testsOpus5OpenRouter
   ) where
 
 import UniversalLLM (route, via)
@@ -56,6 +58,7 @@ import UniversalLLM.Models.Anthropic.Claude
   , ClaudeHaiku45(..)
   , ClaudeOpus46(..)
   , ClaudeOpus48(..)
+  , ClaudeOpus5(..)
   , ClaudeFable5(..)
   )
 import Protocol.AnthropicTests
@@ -284,6 +287,38 @@ testsOpus48 provider = do
         , ST.toolWithName "echo"
         ]
 
+-- | Test Claude Opus 5 via Anthropic API
+--
+-- Opus 5 uses adaptive thinking (always-on) with effort parameter.
+-- Includes both protocol probes (wire format) and standard tests (high-level API).
+testsOpus5 :: ResponseProvider AnthropicRequest AnthropicResponse -> Spec
+testsOpus5 provider = do
+  let oauthProvider isExpected req = provider isExpected (Anthropic.withMagicSystemPrompt req { model = "claude-opus-5" })
+  describe "Claude Opus 5 via Anthropic" $ do
+    describe "Protocol" $ do
+      basicText oauthProvider
+      toolCalling oauthProvider
+      consecutiveUserMessages oauthProvider
+      startsWithAssistant oauthProvider
+      adaptiveReasoning oauthProvider
+      toolCallingWithReasoning oauthProvider
+      visionPng oauthProvider "claude-opus-5"
+      visionJpeg oauthProvider "claude-opus-5"
+      visionMultipleImages oauthProvider "claude-opus-5"
+
+    describe "Standard Tests" $
+      testModel route (ClaudeOpus5 `via` AnthropicOAuth) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
+
+    describe "OAuth Provider Tests" $
+      testModel route (ClaudeOpus5 `via` AnthropicOAuth) provider
+        [ ST.text
+        , ST.tools
+        , ST.toolWithName "grep"
+        , ST.toolWithName "read_file"
+        , ST.toolWithName "echo"
+        ]
+
 -- | Test Claude Fable 5 via Anthropic API
 --
 -- Fable 5 uses adaptive thinking (always-on) and is Anthropic's most capable widely released model.
@@ -438,4 +473,45 @@ testsOpus48OpenRouter provider = do
 
     describe "Composable Provider Tests" $
       testModelOffline route (ClaudeOpus48 `via` OpenRouter)
+        [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
+
+-- | Test Claude Opus 5 via OpenRouter
+--
+-- Same OpenAI-compatible reasoning_details mechanism as 'testsSonnet46OpenRouter'.
+-- No 'UniversalLLM.HasJSON' claim -- see the Haddock above the OpenRouter
+-- instances in the model module.
+testsOpus5OpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsOpus5OpenRouter provider = do
+  describe "Claude Opus 5 via OpenRouter" $ do
+    describe "Protocol" $ do
+      OAI.basicText provider "anthropic/claude-opus-5"
+      OAI.toolCalling provider "anthropic/claude-opus-5"
+      OAI.acceptsToolResultNoTools provider "anthropic/claude-opus-5"
+      OAI.acceptsToolResultToolGone provider "anthropic/claude-opus-5"
+      OAI.acceptsStaleToolInHistory provider "anthropic/claude-opus-5"
+      OAI.acceptsOldToolCallStillAvailable provider "anthropic/claude-opus-5"
+      OAI.consecutiveUserMessages provider "anthropic/claude-opus-5"
+      OAI.startsWithAssistant provider "anthropic/claude-opus-5"
+      -- OAI.rejectsSystemMessageMidConversationAnthropic carried over as a
+      -- pending probe rather than asserted: Opus 48/Sonnet 5 confirmed this
+      -- quirk independently, but it hasn't been run against Opus 5 yet. The
+      -- systemMessagesFirst hoist in the 'Routing' instance is applied
+      -- either way, so ST.systemMessageMidConversation below passes
+      -- regardless of the outcome once recorded.
+      OAI.rejectsSystemMessageMidConversationAnthropic provider "anthropic/claude-opus-5"
+      -- No OAI.reasoningViaDetails / OAI.toolCallingWithReasoning: Claude's
+      -- adaptive reasoning is not deterministically exposed -- see the
+      -- comment on 'testsSonnet46OpenRouter'.
+      OAI.visionPng provider "anthropic/claude-opus-5"
+      OAI.visionJpeg provider "anthropic/claude-opus-5"
+      OAI.visionMultipleImages provider "anthropic/claude-opus-5"
+
+    describe "Standard Tests" $
+      -- ST.systemMessageMidConversation passes here via the model's
+      -- systemMessagesFirst hoist (see the 'Routing' instance).
+      testModel route (ClaudeOpus5 `via` OpenRouter) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.reasoningWithToolsModifiedReasoning, ST.openAIReasoningDetailsPreservation, ST.vision, ST.visionJpeg, ST.visionMultipleImages ]
+
+    describe "Composable Provider Tests" $
+      testModelOffline route (ClaudeOpus5 `via` OpenRouter)
         [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]

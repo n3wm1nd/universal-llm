@@ -20,6 +20,7 @@ These models can be used directly in applications without redefinition.
 * 'ClaudeHaiku45' - Claude Haiku 4.5 with reasoning and tool support
 * 'ClaudeOpus46' - Claude Opus 4.6 with adaptive reasoning and tool support (legacy)
 * 'ClaudeOpus48' - Claude Opus 4.8 with adaptive reasoning and tool support
+* 'ClaudeOpus5' - Claude Opus 5 with adaptive reasoning and tool support
 * 'ClaudeFable5' - Claude Fable 5 with adaptive reasoning and tool support (most capable widely released)
 
 = Usage
@@ -57,6 +58,7 @@ module UniversalLLM.Models.Anthropic.Claude
   , ClaudeHaiku45(..)
   , ClaudeOpus46(..)
   , ClaudeOpus48(..)
+  , ClaudeOpus5(..)
   , ClaudeFable5(..)
   ) where
 
@@ -273,6 +275,37 @@ instance Routing (Model ClaudeOpus48 Anthropic) where
   route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus48 Anthropic)
 
 --------------------------------------------------------------------------------
+-- Claude Opus 5
+--------------------------------------------------------------------------------
+
+-- | Claude Opus 5 - Anthropic's most capable Opus-tier model
+--
+-- Capabilities:
+-- - Adaptive thinking (always-on, via effort parameter)
+-- - Native tool support
+-- - High-quality text generation
+-- - Streaming responses
+-- - Superior reasoning for complex, long-horizon agentic work
+data ClaudeOpus5 = ClaudeOpus5 deriving (Show, Eq)
+
+instance ModelName (Model ClaudeOpus5 Anthropic) where
+  modelName (Model _ _) = "claude-opus-5"
+
+instance HasTools (Model ClaudeOpus5 Anthropic) where
+  withTools = Anthropic.anthropicTools
+
+instance HasReasoning (Model ClaudeOpus5 Anthropic) where
+  type ReasoningState (Model ClaudeOpus5 Anthropic) = Anthropic.AnthropicReasoningState
+  withReasoning = Anthropic.anthropicAdaptiveReasoning
+
+instance HasVision (Model ClaudeOpus5 Anthropic) where
+  withVision = Anthropic.anthropicVision
+
+instance Routing (Model ClaudeOpus5 Anthropic) where
+  type RoutingState (Model ClaudeOpus5 Anthropic) = (Anthropic.AnthropicReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus5 Anthropic)
+
+--------------------------------------------------------------------------------
 -- Claude Fable 5
 --------------------------------------------------------------------------------
 
@@ -416,6 +449,24 @@ instance Routing (Model ClaudeOpus48 AnthropicOAuth) where
   type RoutingState (Model ClaudeOpus48 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ((), ()))))
   route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus48 AnthropicOAuth)
 
+-- OAuth version for ClaudeOpus5 (with adaptive reasoning)
+instance ModelName (Model ClaudeOpus5 AnthropicOAuth) where
+  modelName (Model _ _) = "claude-opus-5"
+
+instance HasTools (Model ClaudeOpus5 AnthropicOAuth) where
+  withTools = Anthropic.anthropicTools
+
+instance HasReasoning (Model ClaudeOpus5 AnthropicOAuth) where
+  type ReasoningState (Model ClaudeOpus5 AnthropicOAuth) = Anthropic.AnthropicReasoningState
+  withReasoning = Anthropic.anthropicAdaptiveReasoning
+
+instance HasVision (Model ClaudeOpus5 AnthropicOAuth) where
+  withVision = Anthropic.anthropicVision
+
+instance Routing (Model ClaudeOpus5 AnthropicOAuth) where
+  type RoutingState (Model ClaudeOpus5 AnthropicOAuth) = (Anthropic.AnthropicReasoningState, ((), ((), ((), ()))))
+  route = withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` Anthropic.anthropicOAuthMagicPrompt `chainProviders` Anthropic.baseComposableProvider @(Model ClaudeOpus5 AnthropicOAuth)
+
 -- OAuth version for ClaudeFable5 (with adaptive reasoning)
 instance ModelName (Model ClaudeFable5 AnthropicOAuth) where
   modelName (Model _ _) = "claude-fable-5"
@@ -526,3 +577,29 @@ instance Routing (Model ClaudeOpus48 OpenRouter) where
   -- (anywhere in the message list) working transparently for callers.
   type RoutingState (Model ClaudeOpus48 OpenRouter) = ((), (OpenAI.OpenRouterReasoningState, ((), ((), ()))))
   route = OpenAI.systemMessagesFirst `chainProviders` withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model ClaudeOpus48 OpenRouter)
+
+-- OpenRouter version for ClaudeOpus5 (with adaptive reasoning)
+instance ModelName (Model ClaudeOpus5 OpenRouter) where
+  modelName (Model _ _) = "anthropic/claude-opus-5"
+
+instance HasTools (Model ClaudeOpus5 OpenRouter) where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning (Model ClaudeOpus5 OpenRouter) where
+  type ReasoningState (Model ClaudeOpus5 OpenRouter) = OpenAI.OpenRouterReasoningState
+  withReasoning = OpenAI.openRouterReasoning
+
+instance HasVision (Model ClaudeOpus5 OpenRouter) where
+  withVision = OpenAI.openAIVision
+
+instance Routing (Model ClaudeOpus5 OpenRouter) where
+  -- systemMessagesFirst: carried over from ClaudeOpus48/ClaudeSonnet5's
+  -- confirmed quirk (rejects a system message directly after a plain
+  -- assistant turn) as a starting assumption, not yet independently
+  -- verified for Opus 5 via
+  -- 'Protocol.OpenAITests.rejectsSystemMessageMidConversationAnthropic'.
+  -- Hoisting all system messages to the front keeps 'SystemText' placement
+  -- (anywhere in the message list) working transparently for callers
+  -- either way.
+  type RoutingState (Model ClaudeOpus5 OpenRouter) = ((), (OpenAI.OpenRouterReasoningState, ((), ((), ()))))
+  route = OpenAI.systemMessagesFirst `chainProviders` withReasoning `chainProviders` withTools `chainProviders` withVision `chainProviders` OpenAI.baseComposableProvider @(Model ClaudeOpus5 OpenRouter)

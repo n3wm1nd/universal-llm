@@ -79,10 +79,12 @@ main = do
       Models.Anthropic.Claude.testsHaiku45 (anthropicOAuthProvider p)
       Models.Anthropic.Claude.testsOpus46 (anthropicOAuthProvider p)
       Models.Anthropic.Claude.testsOpus48 (anthropicOAuthProvider p)
+      Models.Anthropic.Claude.testsOpus5 (anthropicOAuthProvider p)
       Models.Anthropic.Claude.testsFable5 (anthropicOAuthProvider p)
       Models.Anthropic.Claude.testsSonnet46OpenRouter (openrouterProvider p)
       Models.Anthropic.Claude.testsSonnet5OpenRouter (openrouterProvider p)
       Models.Anthropic.Claude.testsOpus48OpenRouter (openrouterProvider p)
+      Models.Anthropic.Claude.testsOpus5OpenRouter (openrouterProvider p)
       Models.Moonshot.KimiK25.testsOpenRouter (openrouterProvider p)
       Models.Minimax.MinimaxM25.testsOpenRouter (openrouterProvider p)
       Models.Minimax.MinimaxM25.testsLlamaCpp (llamacppProvider p) "MiniMax-M2.5"
