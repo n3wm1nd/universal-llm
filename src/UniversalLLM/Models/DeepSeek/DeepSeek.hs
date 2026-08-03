@@ -9,7 +9,8 @@ Module: UniversalLLM.Models.DeepSeek.DeepSeek
 Description: Production-ready DeepSeek V4 model definitions
 
 This module provides tested, production-ready definitions for DeepSeek's
-V4 model family, accessed through OpenRouter and (for V4 Pro) Alibaba's Token Plan.
+V4 model family, accessed through OpenRouter, llama.cpp (V4 Flash only), and
+(for V4 Pro) Alibaba's Token Plan.
 
 = Available Models
 
@@ -25,6 +26,10 @@ import UniversalLLM.Models.DeepSeek.DeepSeek
 let model = Model DeepSeekV4Flash OpenRouter
 let provider = route
 
+-- DeepSeek V4 Flash via llama.cpp (local inference)
+let model = Model DeepSeekV4Flash LlamaCpp
+let provider = route
+
 -- DeepSeek V4 Pro via Alibaba's Token Plan
 let model = Model DeepSeekV4Pro AlibabaCloudTokenPlan
 let provider = route
@@ -34,6 +39,7 @@ let provider = route
 
 - OpenRouter: Set @OPENROUTER_API_KEY@ environment variable
 - AlibabaCloudTokenPlan: Set @ALIBABACLOUD_API_KEY@ environment variable
+- llama.cpp: No auth needed (local)
 -}
 
 module UniversalLLM.Models.DeepSeek.DeepSeek
@@ -44,7 +50,7 @@ module UniversalLLM.Models.DeepSeek.DeepSeek
 
 import UniversalLLM
 import qualified UniversalLLM.Providers.OpenAI as OpenAI
-import UniversalLLM.Providers.OpenAI (OpenRouter(..), AlibabaCloudTokenPlan(..))
+import UniversalLLM.Providers.OpenAI (OpenRouter(..), AlibabaCloudTokenPlan(..), LlamaCpp(..))
 
 --------------------------------------------------------------------------------
 -- DeepSeek V4 Flash
@@ -76,6 +82,26 @@ instance HasJSON (Model DeepSeekV4Flash OpenRouter) where
 instance Routing (Model DeepSeekV4Flash OpenRouter) where
   type RoutingState (Model DeepSeekV4Flash OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
   route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model DeepSeekV4Flash OpenRouter)
+
+--------------------------------------------------------------------------------
+-- DeepSeek V4 Flash via llama.cpp
+--------------------------------------------------------------------------------
+
+instance ModelName (Model DeepSeekV4Flash LlamaCpp) where
+  modelName (Model _ _) = "DeepSeek-V4-Flash"
+
+instance HasTools (Model DeepSeekV4Flash LlamaCpp) where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning (Model DeepSeekV4Flash LlamaCpp) where
+  withReasoning = OpenAI.openAIReasoning
+
+instance HasJSON (Model DeepSeekV4Flash LlamaCpp) where
+  withJSON = OpenAI.openAIJSON
+
+instance Routing (Model DeepSeekV4Flash LlamaCpp) where
+  type RoutingState (Model DeepSeekV4Flash LlamaCpp) = ((), ((), ((), ())))
+  route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model DeepSeekV4Flash LlamaCpp)
 
 --------------------------------------------------------------------------------
 -- DeepSeek V4 Pro

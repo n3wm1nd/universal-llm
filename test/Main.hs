@@ -96,6 +96,7 @@ main = do
       Models.OpenAI.GPT.testsGPT54ProOpenRouter (openrouterProvider p)
       Models.OpenAI.GPT.testsGPT54OpenRouter (openrouterProvider p)
       Models.DeepSeek.DeepSeek.testsDeepSeekV4FlashOpenRouter (openrouterProvider p)
+      Models.DeepSeek.DeepSeek.testsDeepSeekV4FlashLlamaCpp (llamacppProvider p) "DeepSeek-V4-Flash"
       Models.DeepSeek.DeepSeek.testsDeepSeekV4ProOpenRouter (openrouterProvider p)
       Models.DeepSeek.DeepSeek.testsDeepSeekV4ProAlibabaCloudTokenPlan (alibabaCloudTokenPlanProvider p)
       Models.Poolside.Laguna.testsLagunaS21OpenRouter (openrouterProvider p)

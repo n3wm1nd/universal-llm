@@ -9,7 +9,7 @@ Test suites for DeepSeek's V4 model family.
 
 = Models Covered
 
-* DeepSeek V4 Flash (OpenRouter)
+* DeepSeek V4 Flash (OpenRouter, llama.cpp)
 * DeepSeek V4 Pro (OpenRouter, AlibabaCloudTokenPlan)
 
 = Provider-Specific Quirks
@@ -21,23 +21,30 @@ __OpenRouter:__
 __AlibabaCloudTokenPlan:__
   Uses standard openAIReasoning (reasoning_content field)
 
+__llama.cpp:__
+  Uses standard openAIReasoning (reasoning_content field); llama.cpp handles
+  tool call extraction itself.
+
 -}
 
 module Models.DeepSeek.DeepSeek
   ( testsDeepSeekV4FlashOpenRouter
+  , testsDeepSeekV4FlashLlamaCpp
   , testsDeepSeekV4ProOpenRouter
   , testsDeepSeekV4ProAlibabaCloudTokenPlan
   ) where
 
 import UniversalLLM (via, route)
 import UniversalLLM.Protocols.OpenAI (OpenAIRequest, OpenAIResponse)
-import UniversalLLM.Providers.OpenAI (OpenRouter(..), AlibabaCloudTokenPlan(..))
+import UniversalLLM.Providers.OpenAI (OpenRouter(..), AlibabaCloudTokenPlan(..), LlamaCpp(..))
 import UniversalLLM.Models.DeepSeek.DeepSeek (DeepSeekV4Flash(..), DeepSeekV4Pro(..))
 import Protocol.OpenAITests
 import qualified StandardTests as ST
 import qualified ComposableProviderTests as CPT
 import TestCache (ResponseProvider)
 import TestHelpers (testModel, testModelOffline)
+import Data.Text (Text)
+import qualified Data.Text as T
 import Test.Hspec (Spec, describe)
 
 -- | Test DeepSeek V4 Flash via OpenRouter
@@ -67,6 +74,28 @@ testsDeepSeekV4FlashOpenRouter provider = do
     describe "Composable Provider Tests" $
       testModelOffline route (DeepSeekV4Flash `via` OpenRouter)
         [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
+
+-- | Test DeepSeek V4 Flash via llama.cpp
+--
+-- Includes both protocol probes (wire format) and standard tests (high-level API).
+testsDeepSeekV4FlashLlamaCpp :: ResponseProvider OpenAIRequest OpenAIResponse -> Text -> Spec
+testsDeepSeekV4FlashLlamaCpp provider modelName = do
+  describe ("DeepSeek V4 Flash via llama.cpp with " <> T.unpack modelName) $ do
+    describe "Protocol" $ do
+      basicText provider modelName
+      toolCalling provider modelName
+      acceptsToolResults provider modelName
+      acceptsToolResultNoTools provider modelName
+      acceptsToolResultToolGone provider modelName
+      acceptsStaleToolInHistory provider modelName
+      acceptsOldToolCallStillAvailable provider modelName
+      consecutiveUserMessages provider modelName
+      startsWithAssistant provider modelName
+      reasoning provider modelName
+
+    describe "Standard Tests" $
+      testModel route (DeepSeekV4Flash `via` LlamaCpp) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.json ]
 
 -- | Test DeepSeek V4 Pro via OpenRouter
 --
