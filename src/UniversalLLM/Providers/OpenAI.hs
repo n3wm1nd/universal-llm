@@ -276,7 +276,7 @@ instance Provider (Model aiModel AlibabaCloudTokenPlan) where
 instance EnableStreaming (Model aiModel OpenAI)          where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
 instance EnableStreaming (Model aiModel OpenAICompatible) where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
 instance EnableStreaming (Model aiModel OpenRouter)       where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
-instance EnableStreaming (Model aiModel LlamaCpp)         where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
+instance EnableStreaming (Model aiModel LlamaCpp)         where enableStreamingForProtocol = enableLlamaCppPromptProgress . enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
 instance EnableStreaming (Model aiModel Ollama)           where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
 instance EnableStreaming (Model aiModel VLLM)             where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
 instance EnableStreaming (Model aiModel LiteLLM)          where enableStreamingForProtocol = enableOpenAIStreaming; isStreamingRequest = isStreamingOpenAIRequest
