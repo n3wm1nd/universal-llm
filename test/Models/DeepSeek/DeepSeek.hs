@@ -9,7 +9,7 @@ Test suites for DeepSeek's V4 model family.
 
 = Models Covered
 
-* DeepSeek V4 Flash (OpenRouter, llama.cpp)
+* DeepSeek V4 Flash (OpenRouter, llama.cpp, AlibabaCloudTokenPlan)
 * DeepSeek V4 Pro (OpenRouter, AlibabaCloudTokenPlan)
 
 = Provider-Specific Quirks
@@ -30,6 +30,7 @@ __llama.cpp:__
 module Models.DeepSeek.DeepSeek
   ( testsDeepSeekV4FlashOpenRouter
   , testsDeepSeekV4FlashLlamaCpp
+  , testsDeepSeekV4FlashAlibabaCloudTokenPlan
   , testsDeepSeekV4ProOpenRouter
   , testsDeepSeekV4ProAlibabaCloudTokenPlan
   ) where
@@ -95,6 +96,31 @@ testsDeepSeekV4FlashLlamaCpp provider modelName = do
 
     describe "Standard Tests" $
       testModel route (DeepSeekV4Flash `via` LlamaCpp) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.json ]
+
+-- | Test DeepSeek V4 Flash via AlibabaCloudTokenPlan
+--
+-- Includes both protocol probes (wire format) and standard tests (high-level API).
+testsDeepSeekV4FlashAlibabaCloudTokenPlan :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsDeepSeekV4FlashAlibabaCloudTokenPlan provider = do
+  describe "DeepSeek V4 Flash via AlibabaCloudTokenPlan" $ do
+    describe "Protocol" $ do
+      basicText provider "deepseek-v4-flash-0731"
+      toolCalling provider "deepseek-v4-flash-0731"
+      acceptsToolResults provider "deepseek-v4-flash-0731"
+      acceptsToolResultNoTools provider "deepseek-v4-flash-0731"
+      acceptsToolResultToolGone provider "deepseek-v4-flash-0731"
+      acceptsStaleToolInHistory provider "deepseek-v4-flash-0731"
+      acceptsOldToolCallStillAvailable provider "deepseek-v4-flash-0731"
+      consecutiveUserMessages provider "deepseek-v4-flash-0731"
+      startsWithAssistant provider "deepseek-v4-flash-0731"
+      systemMessageAtStart provider "deepseek-v4-flash-0731"
+      systemMessageMidConversation provider "deepseek-v4-flash-0731"
+      multipleSystemMessages provider "deepseek-v4-flash-0731"
+      reasoning provider "deepseek-v4-flash-0731"
+
+    describe "Standard Tests" $
+      testModel route (DeepSeekV4Flash `via` AlibabaCloudTokenPlan) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.json ]
 
 -- | Test DeepSeek V4 Pro via OpenRouter

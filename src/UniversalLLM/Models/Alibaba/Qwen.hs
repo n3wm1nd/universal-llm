@@ -18,15 +18,15 @@ This module provides tested, production-ready definitions for Alibaba's Qwen mod
 * 'Qwen36Flash' - Qwen 3.6 Flash (via OpenRouter and AlibabaCloudTokenPlan)
 * 'Qwen37Plus' - Qwen 3.7 Plus (via OpenRouter and AlibabaCloudTokenPlan)
 * 'Qwen37Max' - Qwen 3.7 Max (via OpenRouter and AlibabaCloudTokenPlan)
-* 'Qwen38MaxPreview' - Qwen 3.8 Max Preview (via AlibabaCloudTokenPlan only, not yet on OpenRouter)
+* 'Qwen38Max' - Qwen 3.8 Max (via OpenRouter and AlibabaCloudTokenPlan)
 
 = Provider Support
 
 Qwen models are currently available through:
 
 - __llama.cpp__: Local inference with native tool support
-- __OpenRouter__: Qwen 3.5 122B, Qwen 3.6 Plus, Qwen 3.6 Flash, Qwen 3.7 Plus, Qwen 3.7 Max
-- __AlibabaCloudTokenPlan__: Qwen 3.6 Flash, Qwen 3.7 Plus, Qwen 3.7 Max, Qwen 3.8 Max Preview
+- __OpenRouter__: Qwen 3.5 122B, Qwen 3.6 Plus, Qwen 3.6 Flash, Qwen 3.7 Plus, Qwen 3.7 Max, Qwen 3.8 Max
+- __AlibabaCloudTokenPlan__: Qwen 3.6 Flash, Qwen 3.7 Plus, Qwen 3.7 Max, Qwen 3.8 Max
 
 Unlike GLM models, Qwen's chat template properly converts XML tool calls to OpenAI format,
 so no special XML parsing is needed.
@@ -49,8 +49,8 @@ let provider = route
 let model = Model Qwen3CoderNext LlamaCpp
 let provider = route
 
--- Qwen 3.8 Max Preview via Alibaba's Token Plan
-let model = Model Qwen38MaxPreview AlibabaCloudTokenPlan
+-- Qwen 3.8 Max via Alibaba's Token Plan
+let model = Model Qwen38Max AlibabaCloudTokenPlan
 let provider = route
 @
 
@@ -69,7 +69,7 @@ module UniversalLLM.Models.Alibaba.Qwen
   , Qwen36Flash(..)
   , Qwen37Plus(..)
   , Qwen37Max(..)
-  , Qwen38MaxPreview(..)
+  , Qwen38Max(..)
   , Qwen3CoderNext(..)
   , Qwen3Coder30bInstruct(..)
     -- * Aliases
@@ -384,32 +384,53 @@ instance Routing (Model Qwen36Flash OpenRouter) where
   route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen36Flash OpenRouter)
 
 --------------------------------------------------------------------------------
--- Qwen 3.8 Max Preview (AlibabaCloudTokenPlan)
+-- Qwen 3.8 Max (AlibabaCloudTokenPlan)
 --------------------------------------------------------------------------------
 
--- | Qwen 3.8 Max Preview - Preview of Alibaba's next frontier model, via Alibaba's Token Plan
+-- | Qwen 3.8 Max - Alibaba's frontier model, via Alibaba's Token Plan
 --
 -- Capabilities:
 -- - Tool calling
 -- - JSON mode
 -- - Reasoning (Deep Thinking)
-data Qwen38MaxPreview = Qwen38MaxPreview deriving (Show, Eq)
+data Qwen38Max = Qwen38Max deriving (Show, Eq)
 
-instance ModelName (Model Qwen38MaxPreview AlibabaCloudTokenPlan) where
-  modelName (Model _ _) = "qwen3.8-max-preview"
+instance ModelName (Model Qwen38Max AlibabaCloudTokenPlan) where
+  modelName (Model _ _) = "qwen3.8-max"
 
-instance HasTools (Model Qwen38MaxPreview AlibabaCloudTokenPlan) where
+instance HasTools (Model Qwen38Max AlibabaCloudTokenPlan) where
   withTools = OpenAI.openAITools
 
-instance HasJSON (Model Qwen38MaxPreview AlibabaCloudTokenPlan) where
+instance HasJSON (Model Qwen38Max AlibabaCloudTokenPlan) where
   withJSON = OpenAI.openAIJSON
 
-instance HasReasoning (Model Qwen38MaxPreview AlibabaCloudTokenPlan) where
+instance HasReasoning (Model Qwen38Max AlibabaCloudTokenPlan) where
   withReasoning = OpenAI.openAIReasoning
 
-instance Routing (Model Qwen38MaxPreview AlibabaCloudTokenPlan) where
-  type RoutingState (Model Qwen38MaxPreview AlibabaCloudTokenPlan) = ((), ((), ((), ())))
-  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen38MaxPreview AlibabaCloudTokenPlan)
+instance Routing (Model Qwen38Max AlibabaCloudTokenPlan) where
+  type RoutingState (Model Qwen38Max AlibabaCloudTokenPlan) = ((), ((), ((), ())))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen38Max AlibabaCloudTokenPlan)
+
+--------------------------------------------------------------------------------
+-- Qwen 3.8 Max via OpenRouter
+--------------------------------------------------------------------------------
+
+instance ModelName (Model Qwen38Max OpenRouter) where
+  modelName (Model _ _) = "qwen/qwen3.8-max"
+
+instance HasTools (Model Qwen38Max OpenRouter) where
+  withTools = OpenAI.openAITools
+
+instance HasJSON (Model Qwen38Max OpenRouter) where
+  withJSON = OpenAI.openAIJSON
+
+instance HasReasoning (Model Qwen38Max OpenRouter) where
+  type ReasoningState (Model Qwen38Max OpenRouter) = OpenAI.OpenRouterReasoningState
+  withReasoning = OpenAI.openRouterReasoning
+
+instance Routing (Model Qwen38Max OpenRouter) where
+  type RoutingState (Model Qwen38Max OpenRouter) = (OpenAI.OpenRouterReasoningState, ((), ((), ())))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model Qwen38Max OpenRouter)
 
 --------------------------------------------------------------------------------
 -- Aliases (Qwen3Coder = latest = Qwen3CoderNext)

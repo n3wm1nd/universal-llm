@@ -10,12 +10,12 @@ Description: Production-ready DeepSeek V4 model definitions
 
 This module provides tested, production-ready definitions for DeepSeek's
 V4 model family, accessed through OpenRouter, llama.cpp (V4 Flash only), and
-(for V4 Pro) Alibaba's Token Plan.
+Alibaba's Token Plan.
 
 = Available Models
 
-* 'DeepSeekV4Flash' - DeepSeek V4 Flash, fast and low-cost variant
-* 'DeepSeekV4Pro' - DeepSeek V4 Pro, high-capability variant
+* 'DeepSeekV4Flash' - DeepSeek V4 Flash, fast and low-cost variant (OpenRouter, llama.cpp, AlibabaCloudTokenPlan)
+* 'DeepSeekV4Pro' - DeepSeek V4 Pro, high-capability variant (OpenRouter, AlibabaCloudTokenPlan)
 
 = Usage
 
@@ -28,6 +28,10 @@ let provider = route
 
 -- DeepSeek V4 Flash via llama.cpp (local inference)
 let model = Model DeepSeekV4Flash LlamaCpp
+let provider = route
+
+-- DeepSeek V4 Flash via Alibaba's Token Plan
+let model = Model DeepSeekV4Flash AlibabaCloudTokenPlan
 let provider = route
 
 -- DeepSeek V4 Pro via Alibaba's Token Plan
@@ -102,6 +106,26 @@ instance HasJSON (Model DeepSeekV4Flash LlamaCpp) where
 instance Routing (Model DeepSeekV4Flash LlamaCpp) where
   type RoutingState (Model DeepSeekV4Flash LlamaCpp) = ((), ((), ((), ())))
   route = withJSON `chainProviders` withReasoning `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model DeepSeekV4Flash LlamaCpp)
+
+--------------------------------------------------------------------------------
+-- DeepSeek V4 Flash via AlibabaCloudTokenPlan
+--------------------------------------------------------------------------------
+
+instance ModelName (Model DeepSeekV4Flash AlibabaCloudTokenPlan) where
+  modelName (Model _ _) = "deepseek-v4-flash-0731"
+
+instance HasTools (Model DeepSeekV4Flash AlibabaCloudTokenPlan) where
+  withTools = OpenAI.openAITools
+
+instance HasReasoning (Model DeepSeekV4Flash AlibabaCloudTokenPlan) where
+  withReasoning = OpenAI.openAIReasoning
+
+instance HasJSON (Model DeepSeekV4Flash AlibabaCloudTokenPlan) where
+  withJSON = OpenAI.openAIJSON
+
+instance Routing (Model DeepSeekV4Flash AlibabaCloudTokenPlan) where
+  type RoutingState (Model DeepSeekV4Flash AlibabaCloudTokenPlan) = ((), ((), ((), ())))
+  route = withReasoning `chainProviders` withJSON `chainProviders` withTools `chainProviders` OpenAI.baseComposableProvider @(Model DeepSeekV4Flash AlibabaCloudTokenPlan)
 
 --------------------------------------------------------------------------------
 -- DeepSeek V4 Pro

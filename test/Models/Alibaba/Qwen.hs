@@ -46,8 +46,9 @@ module Models.Alibaba.Qwen
     -- * Qwen 3.7 Max
   , testsQwen37MaxOpenRouter
   , testsQwen37MaxAlibabaCloudTokenPlan
-    -- * Qwen 3.8 Max Preview
-  , testsQwen38MaxPreviewAlibabaCloudTokenPlan
+    -- * Qwen 3.8 Max
+  , testsQwen38MaxOpenRouter
+  , testsQwen38MaxAlibabaCloudTokenPlan
     -- * Qwen 3 Coder Next
   , testsQwen3CoderNextLlamaCpp
     -- * Qwen 3 Coder 30B Instruct
@@ -64,7 +65,7 @@ import UniversalLLM.Models.Alibaba.Qwen
   , Qwen36Flash(..)
   , Qwen37Plus(..)
   , Qwen37Max(..)
-  , Qwen38MaxPreview(..)
+  , Qwen38Max(..)
   , Qwen3CoderNext(..)
   , Qwen3Coder30bInstruct(..)
   )
@@ -373,30 +374,61 @@ testsQwen36FlashAlibabaCloudTokenPlan provider = do
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.json ]
 
 --------------------------------------------------------------------------------
--- Qwen 3.8 Max Preview (AlibabaCloudTokenPlan)
+-- Qwen 3.8 Max (AlibabaCloudTokenPlan)
 --------------------------------------------------------------------------------
 
-testsQwen38MaxPreviewAlibabaCloudTokenPlan :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
-testsQwen38MaxPreviewAlibabaCloudTokenPlan provider = do
-  describe "Qwen 3.8 Max Preview via AlibabaCloudTokenPlan" $ do
+testsQwen38MaxAlibabaCloudTokenPlan :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsQwen38MaxAlibabaCloudTokenPlan provider = do
+  describe "Qwen 3.8 Max via AlibabaCloudTokenPlan" $ do
     describe "Protocol" $ do
-      basicText provider "qwen3.8-max-preview"
-      toolCalling provider "qwen3.8-max-preview"
-      acceptsToolResults provider "qwen3.8-max-preview"
-      acceptsToolResultNoTools provider "qwen3.8-max-preview"
-      acceptsToolResultToolGone provider "qwen3.8-max-preview"
-      acceptsStaleToolInHistory provider "qwen3.8-max-preview"
-      acceptsOldToolCallStillAvailable provider "qwen3.8-max-preview"
-      consecutiveUserMessages provider "qwen3.8-max-preview"
-      startsWithAssistant provider "qwen3.8-max-preview"
-      systemMessageAtStart provider "qwen3.8-max-preview"
-      systemMessageMidConversation provider "qwen3.8-max-preview"
-      multipleSystemMessages provider "qwen3.8-max-preview"
-      reasoning provider "qwen3.8-max-preview"
+      basicText provider "qwen3.8-max"
+      toolCalling provider "qwen3.8-max"
+      acceptsToolResults provider "qwen3.8-max"
+      acceptsToolResultNoTools provider "qwen3.8-max"
+      acceptsToolResultToolGone provider "qwen3.8-max"
+      acceptsStaleToolInHistory provider "qwen3.8-max"
+      acceptsOldToolCallStillAvailable provider "qwen3.8-max"
+      consecutiveUserMessages provider "qwen3.8-max"
+      startsWithAssistant provider "qwen3.8-max"
+      systemMessageAtStart provider "qwen3.8-max"
+      systemMessageMidConversation provider "qwen3.8-max"
+      multipleSystemMessages provider "qwen3.8-max"
+      reasoning provider "qwen3.8-max"
 
     describe "Standard Tests" $
-      testModel route (Qwen38MaxPreview `via` AlibabaCloudTokenPlan) provider
+      testModel route (Qwen38Max `via` AlibabaCloudTokenPlan) provider
         [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.json ]
+
+--------------------------------------------------------------------------------
+-- Qwen 3.8 Max (OpenRouter)
+--------------------------------------------------------------------------------
+
+testsQwen38MaxOpenRouter :: ResponseProvider OpenAIRequest OpenAIResponse -> Spec
+testsQwen38MaxOpenRouter provider = do
+  describe "Qwen 3.8 Max via OpenRouter" $ do
+    describe "Protocol" $ do
+      basicText provider "qwen/qwen3.8-max"
+      toolCalling provider "qwen/qwen3.8-max"
+      acceptsToolResults provider "qwen/qwen3.8-max"
+      acceptsToolResultNoTools provider "qwen/qwen3.8-max"
+      acceptsToolResultToolGone provider "qwen/qwen3.8-max"
+      acceptsStaleToolInHistory provider "qwen/qwen3.8-max"
+      acceptsOldToolCallStillAvailable provider "qwen/qwen3.8-max"
+      consecutiveUserMessages provider "qwen/qwen3.8-max"
+      startsWithAssistant provider "qwen/qwen3.8-max"
+      reasoningViaDetails provider "qwen/qwen3.8-max"
+      toolCallingWithReasoning provider "qwen/qwen3.8-max"
+      systemMessageAtStart provider "qwen/qwen3.8-max"
+      systemMessageMidConversation provider "qwen/qwen3.8-max"
+      multipleSystemMessages provider "qwen/qwen3.8-max"
+
+    describe "Standard Tests" $
+      testModel route (Qwen38Max `via` OpenRouter) provider
+        [ ST.text, ST.systemMessage, ST.systemMessageMidConversation, ST.multipleSystemPrompts, ST.tools, ST.reasoning, ST.reasoningWithTools, ST.openAIReasoningDetailsPreservation, ST.json ]
+
+    describe "Composable Provider Tests" $
+      testModelOffline route (Qwen38Max `via` OpenRouter)
+        [ CPT.cacheCoherency, CPT.cacheCoherencyWithTools ]
 
 --------------------------------------------------------------------------------
 -- Qwen 3 Coder Next (llama.cpp)

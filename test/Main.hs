@@ -67,7 +67,8 @@ main = do
       Models.Alibaba.Qwen.testsQwen37PlusAlibabaCloudTokenPlan (alibabaCloudTokenPlanProvider p)
       Models.Alibaba.Qwen.testsQwen37MaxOpenRouter (openrouterProvider p)
       Models.Alibaba.Qwen.testsQwen37MaxAlibabaCloudTokenPlan (alibabaCloudTokenPlanProvider p)
-      Models.Alibaba.Qwen.testsQwen38MaxPreviewAlibabaCloudTokenPlan (alibabaCloudTokenPlanProvider p)
+      Models.Alibaba.Qwen.testsQwen38MaxOpenRouter (openrouterProvider p)
+      Models.Alibaba.Qwen.testsQwen38MaxAlibabaCloudTokenPlan (alibabaCloudTokenPlanProvider p)
       Models.Alibaba.Qwen.testsQwen3CoderNextLlamaCpp (llamacppProvider p) "Qwen3-Coder-Next"
       Models.Alibaba.Qwen.testsQwen3Coder30bInstructLlamaCpp (llamacppProvider p) "Qwen3-Coder-30B-Instruct"
       Models.Google.Gemini.testsGemini3FlashOpenRouter (openrouterProvider p)
@@ -97,6 +98,7 @@ main = do
       Models.OpenAI.GPT.testsGPT54OpenRouter (openrouterProvider p)
       Models.DeepSeek.DeepSeek.testsDeepSeekV4FlashOpenRouter (openrouterProvider p)
       Models.DeepSeek.DeepSeek.testsDeepSeekV4FlashLlamaCpp (llamacppProvider p) "DeepSeek-V4-Flash"
+      Models.DeepSeek.DeepSeek.testsDeepSeekV4FlashAlibabaCloudTokenPlan (alibabaCloudTokenPlanProvider p)
       Models.DeepSeek.DeepSeek.testsDeepSeekV4ProOpenRouter (openrouterProvider p)
       Models.DeepSeek.DeepSeek.testsDeepSeekV4ProAlibabaCloudTokenPlan (alibabaCloudTokenPlanProvider p)
       Models.Poolside.Laguna.testsLagunaS21OpenRouter (openrouterProvider p)
