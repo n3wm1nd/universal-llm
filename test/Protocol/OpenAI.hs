@@ -427,17 +427,21 @@ requestWithOldToolCallStillAvailable = mempty
 -- | Create a request with tool result from a previous response
 --
 -- This extracts the assistant message from the response (preserving all fields
--- including reasoning_details), adds a mock tool result, and creates a new request.
+-- including reasoning_details), adds a mock tool result addressed to the real
+-- tool_call_id the model returned, and creates a new request.
 --
 -- Used to test if reasoning/metadata is preserved through tool call chains.
-requestWithToolResult :: OpenAIResponse -> OpenAIRequest
+requestWithToolResult :: HasCallStack => OpenAIResponse -> OpenAIRequest
 requestWithToolResult resp =
   let assistantMsg = getFirstMessage . expectSuccess $ resp
+      callId = case assistantMsg.tool_calls of
+        Just (tc:_) -> tc.callId
+        _ -> error $ "requestWithToolResult: assistant message has no tool_calls, full message: " ++ show assistantMsg
   in mempty
     { messages =
         [ userMessage "Use the get_weather function to check the weather in London."
         , assistantMsg  -- Preserve all fields (including reasoning_details)
-        , toolResponseMessage "call_abc123" "{\"temperature\": 72, \"condition\": \"sunny\"}"
+        , toolResponseMessage callId "{\"temperature\": 72, \"condition\": \"sunny\"}"
         ]
     }
 
